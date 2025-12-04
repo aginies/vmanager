@@ -175,6 +175,10 @@ class VMManagerTUI(App):
     def on_mount(self) -> None:
         """Called when the app is mounted."""
         self.title = "VM Manager"
+        error_footer = self.query_one("#error-footer")
+        error_footer.styles.height = 0
+        error_footer.styles.overflow = "hidden"
+        error_footer.styles.padding = 0
         grid = self.query_one("#grid")
         grid.styles.grid_gutter_vertical = 1
         grid.styles.grid_gutter_horizontal = 1
@@ -227,14 +231,18 @@ class VMManagerTUI(App):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         error_footer = self.query_one("#error-footer", Static)
         error_footer.update(f"[{timestamp}] {message}")
+        error_footer.styles.height = "auto"
+        error_footer.styles.padding = (0, 1)
 
         # Log the error to file
         logging.error(message)
 
         def clear_error():
             error_footer.update("")
+            error_footer.styles.height = 0
+            error_footer.styles.padding = 0
 
-        self.set_timer(5, clear_error)
+        self.set_timer(15, clear_error)
 
     async def on_vm_state_changed(self, message: VMStateChanged) -> None:
         """Called when a VM's state changes."""
@@ -245,9 +253,13 @@ class VMManagerTUI(App):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         error_footer = self.query_one("#error-footer", Static)
         error_footer.update(f"[{timestamp}] {message}")
+        error_footer.styles.height = "auto"
+        error_footer.styles.padding = (0, 1)
 
         def clear_info():
             error_footer.update("")
+            error_footer.styles.height = 0
+            error_footer.styles.padding = 0
 
         self.set_timer(5, clear_info)
 
