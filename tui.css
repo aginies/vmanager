@@ -92,7 +92,15 @@ VMDetailModal {
 
 .info-section {
     height: 40;
-    max-height: 10;
+    max-height: 40;
+    background: $panel;
+    padding: 0 1;
+    border: round $primary;
+    margin-bottom: 1;
+}
+
+.info-details {
+    height: auto;
     background: $panel;
     padding: 0 1;
     border: round $primary;
@@ -107,8 +115,4 @@ VMDetailModal {
 }
 #status-paused {
     color: yellow;
-}
-
-.network-detail {
-    margin-left: 2;
 }

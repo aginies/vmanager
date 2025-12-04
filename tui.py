@@ -6,7 +6,7 @@ from textual.screen import ModalScreen
 from textual import on
 import libvirt
 from vmcard import VMCard, VMStateChanged, VMStartError, VMNameClicked
-from vm_info import get_vm_info, get_status, get_vm_description, get_vm_machine_info, get_vm_firmware_info, get_vm_networks_info, get_vm_network_ip, get_vm_network_dns_gateway_info, get_vm_disks_info
+from vm_info import get_vm_info, get_status, get_vm_description, get_vm_machine_info, get_vm_firmware_info, get_vm_networks_info, get_vm_network_ip, get_vm_network_dns_gateway_info, get_vm_disks_info, get_vm_devices_info
 
 
 class ConnectionModal(ModalScreen):
@@ -63,45 +63,35 @@ class VMDetailModal(ModalScreen):
         with Vertical(id="vm-detail-container"):
             yield Label(f"VM Details: {self.vm_name}", id="title")
 
-            with Grid(id="vm-info-grid"):
-                status = self.vm_info.get("status", "N/A")
-                yield Label("Status:")
+            status = self.vm_info.get("status", "N/A")
+            yield Label("General information", classes="section-title")
+            with ScrollableContainer(classes="info-details"):
                 yield Label(
-                    f"{status}", id=f"status-{status.lower().replace(' ', '-')}"
+                    f"Status: {status}", id=f"status-{status.lower().replace(' ', '-')}"
                 )
-
-                yield Label("CPU:")
-                yield Label(f"{self.vm_info.get('cpu', 'N/A')}")
-
-                yield Label("Memory:")
-                yield Label(f"{self.vm_info.get('memory', 'N/A')} MB")
-
-                yield Label("UUID:")
-                yield Label(f"{self.vm_info.get('uuid', 'N/A')}")
-
+                yield Label(f"CPU: {self.vm_info.get('cpu', 'N/A')}")
+                yield Label(f"Memory: {self.vm_info.get('memory', 'N/A')} MB")
+                yield Label(f"UUID: {self.vm_info.get('uuid', 'N/A')}")
                 if "firmware" in self.vm_info:
-                    yield Label("Firmware:")
-                    yield Label(f"{self.vm_info['firmware']}")
-
+                    yield Label(f"Firmware: {self.vm_info['firmware']}")
                 if "machine_type" in self.vm_info:
-                    yield Label("Machine Type:")
-                    yield Label(f"{self.vm_info['machine_type']}")
+                    yield Label(f"Machine Type: {self.vm_info['machine_type']}")
 
             if self.vm_info.get("disks"):
                 yield Label("Disks", classes="section-title")
-                with ScrollableContainer(classes="info-section"):
+                with ScrollableContainer(classes="info-details"):
                     for disk in self.vm_info["disks"]:
                         yield Static(f"• {disk}")
 
             if self.vm_info.get("networks"):
                 yield Label("Networks", classes="section-title")
-                with ScrollableContainer(classes="info-section"):
+                with ScrollableContainer(classes="info-details"):
                     for network in self.vm_info["networks"]:
                         yield Static(f"• {network}")
 
                     if self.vm_info.get("detail_network"):
                         for netdata in self.vm_info["detail_network"]:
-                            with Vertical(classes="network-detail"):
+                            with Vertical(classes="info-details"):
                                 yield Static(f"  Interface: {netdata.get('interface', 'N/A')} (MAC: {netdata.get('mac', 'N/A')})")
                                 if netdata.get('ipv4'):
                                     for ip in netdata['ipv4']:
@@ -114,7 +104,7 @@ class VMDetailModal(ModalScreen):
                 yield Label("Network DNS & Gateway", classes="section-title")
                 with ScrollableContainer(classes="info-section"):
                     for net_detail in self.vm_info["network_dns_gateway"]:
-                        with Vertical(classes="network-detail"):
+                        with Vertical(classes="info-details"):
                             yield Static(f"  Network: {net_detail.get('network_name', 'N/A')}")
                             if net_detail.get("gateway"):
                                 yield Static(f"    Gateway: {net_detail['gateway']}")
@@ -122,6 +112,16 @@ class VMDetailModal(ModalScreen):
                                 yield Static("    DNS Servers:")
                                 for dns_server in net_detail["dns_servers"]:
                                     yield Static(f"      • {dns_server}")
+
+            if self.vm_info.get("devices"):
+                yield Label("Devices", classes="section-title")
+                with ScrollableContainer(classes="info-details"):
+                    for device_type, device_list in self.vm_info["devices"].items():
+                        if device_list:
+                            yield Static(f"  {device_type.replace('_', ' ').title()}:")
+                            for device in device_list:
+                                detail_str = ", ".join(f"{k}: {v}" for k, v in device.items())
+                                yield Static(f"    • {detail_str}")
 
             with Horizontal(id="detail-button-container"):
                 yield Button("View XML", variant="primary", id="view-xml-btn")
@@ -246,6 +246,7 @@ class VMManagerTUI(App):
                 'detail_network': get_vm_network_ip(domain),
                 'network_dns_gateway': get_vm_network_dns_gateway_info(domain),
                 'disks': get_vm_disks_info(xml_content),
+                'devices': get_vm_devices_info(xml_content),
                 'xml': xml_content,
             }
             self.push_screen(VMDetailModal(message.vm_name, vm_info))
