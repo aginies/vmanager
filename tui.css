@@ -116,3 +116,9 @@ VMDetailModal {
 #status-paused {
     color: yellow;
 }
+
+.error-message {
+    text-align: center;
+    color: red;
+    height: 1;
+}

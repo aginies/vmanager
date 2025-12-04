@@ -5,9 +5,17 @@ from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual import on
 import libvirt
+import logging
+from datetime import datetime
 from vmcard import VMCard, VMStateChanged, VMStartError, VMNameClicked
 from vm_info import get_vm_info, get_status, get_vm_description, get_vm_machine_info, get_vm_firmware_info, get_vm_networks_info, get_vm_network_ip, get_vm_network_dns_gateway_info, get_vm_disks_info, get_vm_devices_info
 
+# Configure logging
+logging.basicConfig(
+    filename='vm_manager_error.log',
+    level=logging.ERROR,
+    format='%(asctime)s - %(message)s'
+)
 
 class ConnectionModal(ModalScreen):
     """Modal screen for entering connection URI."""
@@ -159,6 +167,7 @@ class VMManagerTUI(App):
         with ScrollableContainer(id="vms-container"):
             yield Grid(id="grid")
 
+        yield Static(id="error-footer", classes="error-message")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -188,12 +197,25 @@ class VMManagerTUI(App):
         try:
             self.conn = libvirt.open(uri)
             if self.conn is None:
-                self.sub_title = f"Failed to connect to {uri}"
+                self.show_error_message(f"Failed to connect to {uri}")
             else:
                 self.connection_uri = uri
         except libvirt.libvirtError as e:
-            self.sub_title = f"Connection error: {e}"
+            self.show_error_message(f"Connection error: {e}")
             self.conn = None
+
+    def show_error_message(self, message: str):
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        error_footer = self.query_one("#error-footer", Static)
+        error_footer.update(f"[{timestamp}] {message}")
+
+        # Log the error to file
+        logging.error(message)
+
+        def clear_error():
+            error_footer.update("")
+
+        self.set_timer(5, clear_error)
 
     async def on_vm_state_changed(self, message: VMStateChanged) -> None:
         """Called when a VM's state changes."""
@@ -202,8 +224,7 @@ class VMManagerTUI(App):
 
     async def on_vm_start_error(self, message: VMStartError) -> None:
         """Called when a VM fails to start."""
-        self.sub_title = f"Error starting {message.vm_name}: {message.error_message}"
-        self.set_timer(2, self.update_header)  # Revert header after 5 seconds
+        self.show_error_message(f"Error starting {message.vm_name}: {message.error_message}")
 
     def on_select_changed(self, event: Select.Changed) -> None:
         if event.value == "toggle_description":
@@ -271,7 +292,7 @@ class VMManagerTUI(App):
 
     def update_header(self):
         if not self.conn:
-            self.sub_title = f"Failed to open connection to {self.connection_uri}"
+            self.show_error_message(f"Failed to open connection to {self.connection_uri}")
             return
 
         try:
@@ -296,7 +317,7 @@ class VMManagerTUI(App):
 
             self.sub_title = f"{conn_info}Total VMs: {total_vms}"
         except libvirt.libvirtError:
-            self.sub_title = "Connection lost"
+            self.show_error_message("Connection lost")
             self.conn = None
 
 
@@ -322,7 +343,7 @@ class VMManagerTUI(App):
                     )
                     grid.mount(vm_card)
         except libvirt.libvirtError:
-            self.sub_title = "Connection lost"
+            self.show_error_message("Connection lost")
             self.conn = None
 
 
