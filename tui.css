@@ -45,6 +45,7 @@ Select {
 .disk-info {
     margin: 0 2;
     padding: 0 0;
+    height: 40;
     border-left: round;
 }
 
@@ -55,7 +56,7 @@ VMDetailModal {
 
 #vm-detail-container {
     width: 80;
-    height: auto;
+    height: 60;
     max-height: 90%;
     background: $surface;
     border: thick $primary-lighten-2;
@@ -90,7 +91,7 @@ VMDetailModal {
 }
 
 .info-section {
-    height: auto;
+    height: 40;
     max-height: 10;
     background: $panel;
     padding: 0 1;

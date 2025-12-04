@@ -121,6 +121,7 @@ class VMManagerTUI(App):
     connection_uri = reactive("qemu:///system")
 
     CSS_PATH = "tui.css"
+    CSS_PATH = "vmcard.css"
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""

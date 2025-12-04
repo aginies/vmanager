@@ -59,57 +59,6 @@ class VMCard(Static):
         if self.vm:
             xml_content = self.vm.XMLDesc(0)
 
-    DEFAULT_CSS = """
-    VMCard {
-        width: auto;
-        height: auto;
-        min-height: 60;
-        text-align: center;
-        padding: 0 0;
-        border: panel green;
-        overflow-y: auto;
-    }
-    #name {
-        background: green;
-        color: black;
-        padding: 0 0;
-        text-style: bold;
-        content-align: center middle;
-    }
-    #status {
-        margin: 1 2;
-        padding: 0 0;
-        width: 100%;
-        height: 25%;
-        min-height: 10w;
-        content-align: center middle;
-    }
-    #status.running {
-        background: lightgreen;
-        color: black;
-        border: round lightgreen;
-    }
-    #status.stopped {
-        color: black;
-        background: red;
-        border: round red;
-    }
-    #status.paused {
-        color: black;
-        background: yellow;
-        border: round yellow;
-    }
-    Button {
-        margin: 0 1;
-        padding: 0 0;
-    }
-    #button-container {
-        width: 100%;
-        height: 75%;
-        padding: 0 1;
-        margin-top: 1;
-    }
-    """
 
     def compose(self):
         with Vertical(id="info-container"):
