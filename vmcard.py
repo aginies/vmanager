@@ -181,11 +181,10 @@ class VMCard(Static):
         elif self.status == "Paused":
             left_vertical.mount(Button("Stop", id="stop", variant="error"))
             left_vertical.mount(Button("Resume", id="resume", variant="success"))
- 
+
         right_vertical.mount(Button("View XML", id="xml"))
         if self.status == "Running":
             right_vertical.mount(Button("Connect", id="connect", variant="default"))
-
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "start":
@@ -239,32 +238,6 @@ class VMCard(Static):
             name_widget.add_class("running-name")
             self.update_button_layout()
             self.post_message(VMStateChanged())
-        elif event.button.id == "xml":
-            xml_content = self.vm.XMLDesc(0)
-            with tempfile.NamedTemporaryFile(
-                mode="w+", delete=False, suffix=".xml"
-            ) as tmpfile:
-                tmpfile.write(xml_content)
-                tmpfile.flush()
-                with self.app.suspend():
-                    subprocess.run(["view", tmpfile.name])
-        elif event.button.id == "connect":
-            with self.app.suspend():
-                subprocess.run(
-                    ["virt-viewer", "--connect", "qemu:///system", self.name]
-                )
-        elif event.button.id == "stop":
-            if self.vm.isActive():
-                self.vm.destroy()
-                self.status = "Stopped"
-                status_widget = self.query_one("#status")
-                status_widget.update(f"Status: {self.status}")
-                status_widget.remove_class("running", "paused")
-                status_widget.add_class("stopped")
-                name_widget = self.query_one("#name")
-                name_widget.remove_class("running-name", "paused-name")
-                self.update_button_layout()
-                self.post_message(VMStateChanged())
         elif event.button.id == "xml":
             xml_content = self.vm.XMLDesc(0)
             with tempfile.NamedTemporaryFile(
