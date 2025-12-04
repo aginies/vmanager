@@ -143,7 +143,6 @@ class VMManagerTUI(App):
 
     BINDINGS = []
 
-    show_description = reactive(False)
     connection_uri = reactive("qemu:///system")
     conn = None
 
@@ -155,14 +154,11 @@ class VMManagerTUI(App):
         yield Header()
         yield Select(
             [
-                ("Show All", "show_all"),
-                ("Hide All", "hide_all"),
-                ("Toggle Description", "toggle_description"),
                 ("Change Connection", "change_connection"),
             ],
             id="select",
-            prompt="Display options",
-            allow_blank=False, #True,
+            prompt="Menu",
+            allow_blank=True,
         )
         with ScrollableContainer(id="vms-container"):
             yield Grid(id="grid")
@@ -174,9 +170,9 @@ class VMManagerTUI(App):
         """Called when the app is mounted."""
         self.title = "VM Manager"
         grid = self.query_one("#grid")
-        grid.styles.grid_size_columns = 3
         grid.styles.grid_gutter_vertical = 1
         grid.styles.grid_gutter_horizontal = 1
+        self._update_grid_layout()
         self.connect_libvirt(self.connection_uri)
         self.update_header()
         self.list_vms()
@@ -185,6 +181,23 @@ class VMManagerTUI(App):
         """Called when the app is about to be unloaded."""
         if self.conn:
             self.conn.close()
+
+    def _update_grid_layout(self) -> None:
+        """Update the grid layout based on terminal size."""
+        grid = self.query_one("#grid")
+        width = self.size.width
+        
+        # Define breakpoints for column count
+        if width < 80:
+            grid.styles.grid_size_columns = 1
+        elif width < 120:
+            grid.styles.grid_size_columns = 2
+        else:
+            grid.styles.grid_size_columns = 3
+    
+    def on_resize(self, event) -> None:
+        """Called when the terminal is resized."""
+        self._update_grid_layout()
 
     def connect_libvirt(self, uri: str) -> None:
         """Connects to libvirt."""
@@ -227,13 +240,7 @@ class VMManagerTUI(App):
         self.show_error_message(f"Error starting {message.vm_name}: {message.error_message}")
 
     def on_select_changed(self, event: Select.Changed) -> None:
-        if event.value == "toggle_description":
-            self.show_description = not self.show_description
-        elif event.value == "show_all":
-            self.show_description = True
-        elif event.value == "hide_all":
-            self.show_description = False
-        elif event.value == "change_connection":
+        if event.value == "change_connection":
             self.push_screen(ConnectionModal(), self.handle_connection_result)
             return
 
@@ -334,12 +341,10 @@ class VMManagerTUI(App):
                     vm_card = VMCard(
                         name=domain.name(),
                         status=get_status(domain),
-                        description=get_vm_description(domain),
                         cpu=info[3],
                         memory=info[1] // 1024,  # Convert KiB to MiB
                         vm=domain,
                         color="#323232",
-                        show_description=self.show_description,
                     )
                     grid.mount(vm_card)
         except libvirt.libvirtError:

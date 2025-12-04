@@ -1,7 +1,8 @@
 VMCard {
     width: auto;
     height: auto;
-    min-height: 12;
+    min-width: 60;
+    max-width: 100;
     text-align: center;
     padding: 0 0;
     border: panel green;
@@ -36,8 +37,10 @@ VMCard {
     border: round yellow;
 }
 Button {
+    height: auto;
     margin: 0 1;
     padding: 0 0;
+    overflow-y: auto;
 }
 #button-container {
     width: 100%;
