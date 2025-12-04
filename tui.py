@@ -77,6 +77,11 @@ class VMManagerTUI(App):
         background: $primary;
         color: $text;
     }
+    Select {
+        width: 30;
+        height: 2;
+        margin: 0 0;
+    }
     """
 
     def compose(self) -> ComposeResult:
@@ -169,14 +174,6 @@ class VMManagerTUI(App):
             self.set_timer(5, self.update_header)
             return
             conn.close()
-
-            # Connection successful, update URI
-            self.connection_uri = uri
-            self.refresh_vm_list()
-
-        except libvirt.libvirtError as e:
-            self.sub_title = f"Connection error: {str(e)}"
-            self.set_timer(5, self.update_header)
 
     def refresh_vm_list(self) -> None:
         """Refreshes the list of VMs."""
