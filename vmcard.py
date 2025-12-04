@@ -40,6 +40,16 @@ class SnapshotSuccess(Message):
         self.message = message
 
 
+class VMActionError(Message):
+    """Posted when a generic VM action fails."""
+
+    def __init__(self, vm_name: str, action: str, error_message: str) -> None:
+        super().__init__()
+        self.vm_name = vm_name
+        self.action = action
+        self.error_message = error_message
+
+
 class VMNameClicked(Message):
     """Posted when a VM's name is clicked."""
 
@@ -167,44 +177,70 @@ class VMCard(Static):
 
         elif event.button.id == "stop":
             if self.vm.isActive():
-                self.vm.destroy()
-                self.status = "Stopped"
-                self.query_one("#status").update(f"Status: {self.status}")
-                self.update_button_layout()
-                self.post_message(VMStateChanged())
+                try:
+                    self.vm.destroy()
+                    self.status = "Stopped"
+                    self.query_one("#status").update(f"Status: {self.status}")
+                    self.update_button_layout()
+                    self.post_message(VMStateChanged())
+                except libvirt.libvirtError as e:
+                    self.post_message(
+                        VMActionError(vm_name=self.name, action="stop", error_message=str(e))
+                    )
 
         elif event.button.id == "pause":
             if self.vm.isActive():
-                self.vm.suspend()
-                self.status = "Paused"
+                try:
+                    self.vm.suspend()
+                    self.status = "Paused"
+                    status_widget = self.query_one("#status")
+                    status_widget.update(f"Status: {self.status}")
+                    status_widget.remove_class("running", "stopped")
+                    status_widget.add_class("paused")
+                    self.update_button_layout()
+                    self.post_message(VMStateChanged())
+                except libvirt.libvirtError as e:
+                    self.post_message(
+                        VMActionError(vm_name=self.name, action="pause", error_message=str(e))
+                    )
+        elif event.button.id == "resume":
+            try:
+                self.vm.resume()
+                self.status = "Running"
                 status_widget = self.query_one("#status")
                 status_widget.update(f"Status: {self.status}")
-                status_widget.remove_class("running", "stopped")
-                status_widget.add_class("paused")
+                status_widget.remove_class("stopped", "paused")
+                status_widget.add_class("running")
                 self.update_button_layout()
                 self.post_message(VMStateChanged())
-        elif event.button.id == "resume":
-            self.vm.resume()
-            self.status = "Running"
-            status_widget = self.query_one("#status")
-            status_widget.update(f"Status: {self.status}")
-            status_widget.remove_class("stopped", "paused")
-            status_widget.add_class("running")
-            self.update_button_layout()
-            self.post_message(VMStateChanged())
+            except libvirt.libvirtError as e:
+                self.post_message(
+                    VMActionError(vm_name=self.name, action="resume", error_message=str(e))
+                )
         elif event.button.id == "xml":
-            xml_content = self.vm.XMLDesc(0)
-            with tempfile.NamedTemporaryFile(
-                mode="w+", delete=False, suffix=".xml"
-            ) as tmpfile:
-                tmpfile.write(xml_content)
-                tmpfile.flush()
-                with self.app.suspend():
-                    subprocess.run(["view", tmpfile.name])
+            try:
+                xml_content = self.vm.XMLDesc(0)
+                with tempfile.NamedTemporaryFile(
+                    mode="w+", delete=False, suffix=".xml"
+                ) as tmpfile:
+                    tmpfile.write(xml_content)
+                    tmpfile.flush()
+                    with self.app.suspend():
+                        subprocess.run(["view", tmpfile.name], check=True)
+            except (libvirt.libvirtError, FileNotFoundError, subprocess.CalledProcessError) as e:
+                self.post_message(
+                    VMActionError(vm_name=self.name, action="view XML", error_message=str(e))
+                )
         elif event.button.id == "connect":
-            with self.app.suspend():
-                subprocess.run(
-                    ["virt-viewer", "--connect", self.app.connection_uri, self.name]
+            try:
+                with self.app.suspend():
+                    subprocess.run(
+                        ["virt-viewer", "--connect", self.app.connection_uri, self.name],
+                        check=True
+                    )
+            except (FileNotFoundError, subprocess.CalledProcessError) as e:
+                self.post_message(
+                    VMActionError(vm_name=self.name, action="connect", error_message=str(e))
                 )
         elif event.button.id == "snapshot_take":
 

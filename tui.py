@@ -8,7 +8,7 @@ import libvirt
 import logging
 import subprocess
 from datetime import datetime
-from vmcard import VMCard, VMStateChanged, VMStartError, SnapshotError, SnapshotSuccess, VMNameClicked
+from vmcard import VMCard, VMStateChanged, VMStartError, SnapshotError, SnapshotSuccess, VMNameClicked, VMActionError
 from vm_info import get_vm_info, get_status, get_vm_description, get_vm_machine_info, get_vm_firmware_info, get_vm_networks_info, get_vm_network_ip, get_vm_network_dns_gateway_info, get_vm_disks_info, get_vm_devices_info
 
 # Configure logging
@@ -271,6 +271,10 @@ class VMManagerTUI(App):
         """Called when a snapshot operation succeeds."""
         self.show_info_message(f"Success for {message.vm_name}: {message.message}")
 
+    async def on_vm_action_error(self, message: VMActionError) -> None:
+        """Called when a generic VM action fails."""
+        self.show_error_message(f"Error on VM {message.vm_name} during '{message.action}': {message.error_message}")
+
     async def on_vm_start_error(self, message: VMStartError) -> None:
         """Called when a VM fails to start."""
         self.show_error_message(f"Error starting {message.vm_name}: {message.error_message}")
@@ -326,8 +330,8 @@ class VMManagerTUI(App):
                 'xml': xml_content,
             }
             self.push_screen(VMDetailModal(message.vm_name, vm_info))
-        except libvirt.libvirtError:
-            pass
+        except libvirt.libvirtError as e:
+            self.show_error_message(f"Error getting details for {message.vm_name}: {e}")
 
 
     def handle_connection_result(self, result: str | None) -> None:
