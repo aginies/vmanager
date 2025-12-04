@@ -33,6 +33,7 @@ def get_vm_info(conn):
                 'detail_network': get_vm_network_ip(domain),
                 'network_dns_gateway': get_vm_network_dns_gateway_info(domain),
                 'disks': get_vm_disks_info(xml_content),
+                'devices': get_vm_devices_info(xml_content),
             }
             vm_info_list.append(vm_info)
 
@@ -177,6 +178,98 @@ def get_vm_network_ip(domain) -> list:
         return ip_addresses
     return []
 
+def get_vm_devices_info(xml_content: str) -> dict:
+    """
+    Extracts information about various virtual devices from a VM's XML definition.
+    """
+    devices_info = {
+        'virtiofs': [],
+        'virtio-serial': [],
+        'isa-serial': [],
+        'qemu_guest_agent': [],
+        'spice': [],
+        'usb': [],
+        'random': [],
+        'tpm': [],
+    }
+
+    try:
+        root = ET.fromstring(xml_content)
+        devices = root.find("devices")
+
+        if devices is not None:
+            # virtiofs
+            for fs_elem in devices.findall("./filesystem[@type='mount'][@model='virtiofs']"):
+                source = fs_elem.find('source')
+                target = fs_elem.find('target')
+                if source is not None and target is not None:
+                    devices_info['virtiofs'].append({
+                        'source': source.get('dir'),
+                        'target': target.get('dir')
+                    })
+
+            # virtio-serial and qemu.guest_agent
+            for channel_elem in devices.findall('channel'):
+                channel_type = channel_elem.get('type')
+                if channel_type == 'virtio':
+                    target_elem = channel_elem.find('target')
+                    if target_elem is not None:
+                        name = target_elem.get('name')
+                        if name == 'org.qemu.guest_agent.0':
+                            devices_info['qemu_guest_agent'].append({'type': 'virtio-serial', 'name': name})
+                        else:
+                            devices_info['virtio-serial'].append({'name': name})
+                elif channel_type == 'unix':
+                    target_elem = channel_elem.find('target')
+                    if target_elem is not None and target_elem.get('name') == 'org.qemu.guest_agent.0':
+                        devices_info['qemu_guest_agent'].append({'type': 'unix-channel', 'path': target_elem.get('path')})
+
+            # isa-serial
+            for serial_elem in devices.findall("./serial[@type='isa']"):
+                target_elem = serial_elem.find('target')
+                if target_elem is not None:
+                    port = target_elem.get('port', '0')
+                    devices_info['isa-serial'].append({'port': port})
+
+            # spice
+            graphics_elem = devices.find("./graphics[@type='spice']")
+            if graphics_elem is not None:
+                devices_info['spice'].append({
+                    'port': graphics_elem.get('port'),
+                    'tlsPort': graphics_elem.get('tlsPort'),
+                    'autoport': graphics_elem.get('autoport'),
+                })
+
+            # usb controllers and devices
+            for controller_elem in devices.findall("./controller[@type='usb']"):
+                devices_info['usb'].append({
+                    'type': 'controller',
+                    'model': controller_elem.get('model'),
+                    'index': controller_elem.get('index')
+                })
+            for usb_dev_elem in devices.findall("./hostdev[@type='usb']"):
+                address = usb_dev_elem.find('address')
+                if address is not None:
+                    bus = address.get('bus')
+                    device = address.get('device')
+                    devices_info['usb'].append({'type': 'hostdev', 'bus': bus, 'device': device})
+
+            # random number generator
+            rng_elem = devices.find("./rng")
+            if rng_elem is not None:
+                devices_info['random'].append({'model': rng_elem.get('model')})
+
+            # tpm
+            tpm_elem = devices.find("./tpm")
+            if tpm_elem is not None:
+                model = tpm_elem.get('model')
+                devices_info['tpm'].append({'model': model})
+
+    except ET.ParseError:
+        pass
+
+    return devices_info
+
 def get_vm_disks_info(xml_content: str) ->str:
     """
     Extracts disks info from a VM's XML definition.
@@ -198,3 +291,4 @@ def get_vm_disks_info(xml_content: str) ->str:
         pass  # Failed to get disks, continue without them
 
     return disks
+
