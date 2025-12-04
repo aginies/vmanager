@@ -1,0 +1,47 @@
+SnapshotNameDialog {
+    align: center middle;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+SnapshotNameDialog #dialog {
+    width: 60;
+    height: auto;
+    padding: 1;
+    border: thick $primary;
+    background: $surface;
+}
+
+SnapshotNameDialog #question {
+    margin-bottom: 1;
+}
+
+SnapshotNameDialog Input {
+    margin-bottom: 1;
+}
+
+SnapshotNameDialog #dialog-buttons {
+    width: 100%;
+}
+
+SnapshotNameDialog #dialog-buttons Button {
+    margin-left: 1;
+}
+
+SelectSnapshotDialog {
+    align: center middle;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+SelectSnapshotDialog #dialog {
+    width: 60;
+    padding: 1;
+    border: thick $primary;
+    background: $surface;
+    height: auto;
+}
+
+SelectSnapshotDialog #snapshot-list {
+    margin-bottom: 1;
+    border: round $primary;
+    height: 10;
+}
