@@ -6,6 +6,7 @@ from textual.screen import ModalScreen
 from textual import on
 import libvirt
 from vmcard import VMCard, VMStateChanged, VMStartError, VMNameClicked
+from vm_info import get_vm_info
 
 
 class ConnectionModal(ModalScreen):
@@ -207,82 +208,28 @@ class VMManagerTUI(App):
 
     @on(VMNameClicked)
     async def on_vm_name_clicked(self, message: VMNameClicked) -> None:
-        """Called when a VM name is clicked."""
-        # Get VM details and show modal
         conn = libvirt.open(self.connection_uri)
         if conn is None:
             return
+
         try:
-            domain = conn.lookupByName(message.vm_name)
-            # Gather detailed information
-            info = domain.info()
-
-            # Get machine type and firmware info
-            xml_content = domain.XMLDesc(0)
-            from xmlutil import get_vm_machine_firmware_info
-
-            firmware_info = get_vm_machine_firmware_info(xml_content)
-
-            # Get disk information
-            disks = []
-            try:
-                from xml.etree import ElementTree as ET
-
-                root = ET.fromstring(xml_content)
-                devices = root.find("devices")
-                if devices is not None:
-                    disk_elements = devices.findall("disk")
-                    for disk in disk_elements:
-                        disk_source = disk.find("source")
-                        if disk_source is not None and "file" in disk_source.attrib:
-                            disks.append(disk_source.attrib["file"])
-                        elif disk_source is not None and "dev" in disk_source.attrib:
-                            disks.append(disk_source.attrib["dev"])
-            except:
-                pass  # Failed to get disks, continue without them
-
-            # Get network information
-            networks = []
-            try:
-                from xml.etree import ElementTree as ET
-
-                root = ET.fromstring(xml_content)
-                devices = root.find("devices")
-                if devices is not None:
-                    interface_elements = devices.findall("interface")
-                    for interface in interface_elements:
-                        # Get interface type
-                        interface_type = interface.get("type", "unknown")
-                        # Get source (bridge, network, etc.)
-                        source = interface.find("source")
-                        if source is not None:
-                            if interface_type == "bridge":
-                                bridge_name = source.get("bridge", "unknown")
-                                networks.append(f"bridge: {bridge_name}")
-                            elif interface_type == "network":
-                                network_name = source.get("network", "unknown")
-                                networks.append(f"network: {network_name}")
-                            elif interface_type == "user":
-                                networks.append("user: network")
-                        else:
-                            networks.append(f"{interface_type}: unknown")
-            except:
-                pass  # Failed to get networks, continue without them
-
-            vm_info = {
-                "name": message.vm_name,
-                "status": self.get_status(domain),
-                "cpu": info[3],
-                "memory": info[1] // 1024,
-                "uuid": domain.UUIDString(),
-                "xml": xml_content,
-                "firmware": firmware_info.get("firmware", "N/A"),
-                "machine_type": firmware_info.get("machine_type", "N/A"),
-                "disks": disks,
-                "networks": networks,
-            }
+            vm_info_list = get_vm_info(self.connection_uri)
+            for vm_info in vm_info_list:
+                if vm_info['name'] == message.vm_name:
+                    print(f"Nom: {vm_info['name']}")
+                    print(f"UUID: {vm_info['uuid']}")
+                    print(f"État: {vm_info['status']}")
+                    print(f"Description: {vm_info['description']}")
+                    print(f"CPU: {vm_info['cpu']}")
+                    print(f"Mémoire: {vm_info['memory']} MiB")
+                    #print(f"Type de machine: {vm_info['machine_type']}")
+                    print(f"Firmware: {vm_info['firmware']}")
+                    print(f"Réseaux: {vm_info['networks']}")
+                    print(f"Disques: {vm_info['disks']}")
+                    break
 
             self.push_screen(VMDetailModal(message.vm_name, vm_info))
+
         except libvirt.libvirtError:
             pass
         finally:
