@@ -187,10 +187,14 @@ def get_vm_devices_info(xml_content: str) -> dict:
         'virtio-serial': [],
         'isa-serial': [],
         'qemu_guest_agent': [],
-        'spice': [],
+        'graphics': [],
         'usb': [],
         'random': [],
         'tpm': [],
+        'video': [],
+        'watchdog': [],
+        'input': [],
+        'sound': [],
     }
 
     try:
@@ -231,14 +235,25 @@ def get_vm_devices_info(xml_content: str) -> dict:
                     port = target_elem.get('port', '0')
                     devices_info['isa-serial'].append({'port': port})
 
-            # spice
-            graphics_elem = devices.find("./graphics[@type='spice']")
-            if graphics_elem is not None:
-                devices_info['spice'].append({
-                    'port': graphics_elem.get('port'),
-                    'tlsPort': graphics_elem.get('tlsPort'),
-                    'autoport': graphics_elem.get('autoport'),
-                })
+            # graphics (spice, vnc, etc.)
+            for graphics_elem in devices.findall('graphics'):
+                graphics_type = graphics_elem.get('type')
+                if graphics_type:
+                    detail = {'type': graphics_type}
+                    if graphics_type == 'spice':
+                        detail.update({
+                            'port': graphics_elem.get('port'),
+                            'tlsPort': graphics_elem.get('tlsPort'),
+                            'autoport': graphics_elem.get('autoport'),
+                        })
+                    elif graphics_type == 'vnc':
+                        detail.update({
+                            'port': graphics_elem.get('port'),
+                            'autoport': graphics_elem.get('autoport'),
+                            'display': graphics_elem.get('display'),
+                        })
+                    devices_info['graphics'].append(detail)
+
 
             # usb controllers and devices
             for controller_elem in devices.findall("./controller[@type='usb']"):
@@ -254,6 +269,34 @@ def get_vm_devices_info(xml_content: str) -> dict:
                     device = address.get('device')
                     devices_info['usb'].append({'type': 'hostdev', 'bus': bus, 'device': device})
 
+            # video
+            for video_elem in devices.findall('video'):
+                model_elem = video_elem.find('model')
+                if model_elem is not None:
+                    devices_info['video'].append({
+                        'type': model_elem.get('type'),
+                        'vram': model_elem.get('vram'),
+                        'heads': model_elem.get('heads'),
+                    })
+            # watchdog
+            for watchdog_elem in devices.findall('watchdog'):
+                devices_info['watchdog'].append({
+                    'model': watchdog_elem.get('model'),
+                    'action': watchdog_elem.get('action'),
+                })
+            # input
+            for input_elem in devices.findall('input'):
+                devices_info['input'].append({
+                    'type': input_elem.get('type'),
+                    'bus': input_elem.get('bus'),
+                })
+            # sound
+            for sound_elem in devices.findall('sound'):
+                model_elem = sound_elem.find('model')
+                if model_elem is not None:
+                    devices_info['sound'].append({
+                        'model': model_elem.get('model'),
+                })
             # random number generator
             rng_elem = devices.find("./rng")
             if rng_elem is not None:
@@ -264,6 +307,7 @@ def get_vm_devices_info(xml_content: str) -> dict:
             if tpm_elem is not None:
                 model = tpm_elem.get('model')
                 devices_info['tpm'].append({'model': model})
+
 
     except ET.ParseError:
         pass
