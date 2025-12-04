@@ -6,8 +6,9 @@ from textual.screen import ModalScreen
 from textual import on
 import libvirt
 import logging
+import subprocess
 from datetime import datetime
-from vmcard import VMCard, VMStateChanged, VMStartError, VMNameClicked
+from vmcard import VMCard, VMStateChanged, VMStartError, SnapshotError, SnapshotSuccess, VMNameClicked
 from vm_info import get_vm_info, get_status, get_vm_description, get_vm_machine_info, get_vm_firmware_info, get_vm_networks_info, get_vm_network_ip, get_vm_network_dns_gateway_info, get_vm_disks_info, get_vm_devices_info
 
 # Configure logging
@@ -141,6 +142,7 @@ class VMManagerTUI(App):
         yield Header()
         with Horizontal(classes="top-controls"):
             yield Button("Connection", id="change_connection_button", classes="Buttonpage")
+            yield Button("View Log", id="view_log_button", classes="Buttonpage")
             with Vertical(classes="filter-group"):
                 yield Select(
                     [
@@ -239,6 +241,24 @@ class VMManagerTUI(App):
         self.set_timer(5, self.refresh_vm_list)
         self.set_timer(2, self.update_header)  # Revert header after 5 seconds
 
+    def show_info_message(self, message: str):
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        error_footer = self.query_one("#error-footer", Static)
+        error_footer.update(f"[{timestamp}] {message}")
+
+        def clear_info():
+            error_footer.update("")
+
+        self.set_timer(5, clear_info)
+
+    async def on_snapshot_error(self, message: SnapshotError) -> None:
+        """Called when a snapshot operation fails."""
+        self.show_error_message(f"Snapshot error for {message.vm_name}: {message.error_message}")
+
+    async def on_snapshot_success(self, message: SnapshotSuccess) -> None:
+        """Called when a snapshot operation succeeds."""
+        self.show_info_message(f"Success for {message.vm_name}: {message.message}")
+
     async def on_vm_start_error(self, message: VMStartError) -> None:
         """Called when a VM fails to start."""
         self.show_error_message(f"Error starting {message.vm_name}: {message.error_message}")
@@ -261,6 +281,12 @@ class VMManagerTUI(App):
     @on(Button.Pressed, "#change_connection_button")
     def on_change_connection_button_pressed(self, event: Button.Pressed) -> None:
         self.push_screen(ConnectionModal(), self.handle_connection_result)
+
+    @on(Button.Pressed, "#view_log_button")
+    def on_view_log_button_pressed(self, event: Button.Pressed) -> None:
+        log_file = "vm_manager_error.log"
+        with self.app.suspend():
+            subprocess.run(["view", log_file])
 
     @on(VMNameClicked)
     async def on_vm_name_clicked(self, message: VMNameClicked) -> None:
