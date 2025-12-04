@@ -1,9 +1,31 @@
 from textual.app import App, ComposeResult
-from textual.widgets import Header, Footer, Select, Button
-from textual.containers import ScrollableContainer, Grid, Horizontal
+from textual.widgets import Header, Footer, Select, Button, Input, Label
+from textual.containers import ScrollableContainer, Grid, Horizontal, Vertical
 from textual.reactive import reactive
+from textual.screen import ModalScreen
 import libvirt
 from vmcard import VMCard, VMStateChanged, VMStartError
+
+class ConnectionModal(ModalScreen):
+    """Modal screen for entering connection URI."""
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="connection-dialog"):
+            yield Label("Enter QEMU Connection URI:")
+            yield Input(
+                placeholder="qemu+ssh://user@host/system or qemu:///system",
+                id="uri-input"
+            )
+            with Horizontal():
+                yield Button("Connect", variant="primary", id="connect-btn")
+                yield Button("Cancel", variant="default", id="cancel-btn")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "connect-btn":
+            uri_input = self.query_one("#uri-input", Input)
+            self.dismiss(uri_input.value)
+        elif event.button.id == "cancel-btn":
+            self.dismiss(None)
 
 class VMManagerTUI(App):
     """A Textual application to manage VMs."""
@@ -13,16 +35,45 @@ class VMManagerTUI(App):
     show_description = reactive(False)
     show_machine_type = reactive(False)
     show_firmware = reactive(False)
+    connection_uri = reactive("qemu:///system")
 
-    DEFAULT_CSS = """
+    CSS = """
     #vms-container {
         height: auto;
-    }"""
-    #grid {
-  #      height: auto;
-  #  }
-  #  """
-
+    }
+  ConnectionModal {
+        align: center middle;
+    }
+    
+    #connection-dialog {
+        width: 60;
+        height: auto;
+        border: thick $background 80%;
+        background: $surface;
+        padding: 1 2;
+    }
+    
+    #connection-dialog Label {
+        width: 100%;
+        content-align: center middle;
+        margin-bottom: 1;
+    }
+    
+    #connection-dialog Input {
+        width: 100%;
+        margin-bottom: 1;
+    }
+    
+    #connection-dialog Horizontal {
+        width: 100%;
+        height: auto;
+        align: center middle;
+    }
+    
+    #connection-dialog Button {
+        margin: 0 1;
+    }
+    """
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
@@ -34,6 +85,7 @@ class VMManagerTUI(App):
                 ("Toggle Description", "toggle_description"),
                 ("Toggle Machine Type", "toggle_machine_type"),
                 ("Toggle Firmware", "toggle_firmware"),
+                ("Change Connection", "change_connection"),
             ],
             id="select",
             prompt="Display options",
@@ -65,7 +117,7 @@ class VMManagerTUI(App):
         self.set_timer(5, self.update_header) # Revert header after 5 seconds
 
 
-    async def on_select_changed(self, event: Select.Changed) -> None:
+    def on_select_changed(self, event: Select.Changed) -> None:
         if event.value == "toggle_description":
             self.show_description = not self.show_description
         elif event.value == "toggle_machine_type":
@@ -80,21 +132,53 @@ class VMManagerTUI(App):
             self.show_description = False
             self.show_machine_type = False
             self.show_firmware = False
-        
-        await self.refresh_vm_list()
+        elif event.value == "change_connection":
+            self.push_screen(ConnectionModal(), self.handle_connection_result)
+            return
+ 
+        self.refresh_vm_list()
 
-    async def refresh_vm_list(self) -> None:
+    def handle_connection_result(self, result: str | None) -> None:
+        """Handle the result from the connection modal."""
+        if result:
+            self.change_connection(result)
+
+    def change_connection(self, uri: str) -> None:
+        """Change the connection URI and refresh the VM list."""
+        if not uri or uri.strip() == "":
+            return
+
+        # Test the connection first
+        try:
+            conn = libvirt.open(uri)
+            if conn is None:
+                header = self.query_one(Header)
+                header.sub_title = f"Failed to connect to {uri}"
+                self.set_timer(5, self.update_header)
+                return
+            conn.close()
+
+            # Connection successful, update URI
+            self.connection_uri = uri
+            self.refresh_vm_list()
+
+        except libvirt.libvirtError as e:
+            header = self.query_one(Header)
+            header.sub_title = f"Connection error: {str(e)}"
+            self.set_timer(5, self.update_header)
+
+    def refresh_vm_list(self) -> None:
         """Refreshes the list of VMs."""
         grid = self.query_one("#grid")
-        await grid.remove_children()
+        grid.remove_children()
         self.list_vms()
         self.update_header()
 
     def update_header(self):
         header = self.query_one(Header)
-        conn = libvirt.open('qemu:///system')
+        conn = libvirt.open(self.connection_uri)
         if conn is None:
-            header.sub_title = "Failed to open connection to qemu:///system"
+            header.sub_title = f"Failed to open connection to {self.connection_uri}"
             return
 
         running_vms = 0
@@ -110,8 +194,13 @@ class VMManagerTUI(App):
                     paused_vms += 1
                 else:
                     stopped_vms += 1
+
         total_vms = len(domains) if domains is not None else 0
-        header.sub_title = f"Total VMs: {total_vms} | Running: {running_vms} | Paused: {paused_vms} | Stopped: {stopped_vms}"
+        conn_info = ""
+        if self.connection_uri != "qemu:///system":
+            conn_info = f" [{self.connection_uri}] | "
+
+        header.sub_title = f"{conn_info}Total VMs: {total_vms} | Running: {running_vms} | Paused: {paused_vms} | Stopped: {stopped_vms}"
         conn.close()
 
 
@@ -128,7 +217,7 @@ class VMManagerTUI(App):
         grid = self.query_one("#grid")
         conn = None
         try:
-            conn = libvirt.open('qemu:///system')
+            conn = libvirt.open(self.connection_uri)
             if conn is None:
                 return
 

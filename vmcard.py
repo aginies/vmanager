@@ -67,6 +67,7 @@ class VMCard(Static):
     VMCard {
         width: auto;
         height: auto;
+        min-height: 70;
         text-align: center;
         padding: 0 0;
     }
@@ -103,6 +104,7 @@ class VMCard(Static):
         width: 80%;
         height: 1;
         margin: 0 1;
+        padding: 0 0;
     }
     #button-container {
         margin-top: 1;
