@@ -7,7 +7,6 @@ import tempfile
 import libvirt
 from textual import on
 
-
 class VMStateChanged(Message):
     """Posted when a VM's state changes."""
 
@@ -135,9 +134,7 @@ class VMCard(Static):
                     self.post_message(
                         VMStartError(vm_name=self.name, error_message=str(e))
                     )
-                    # Ensure header is updated on an error
-                    if hasattr(self, "app") and self.app:
-                        self.app.update_header()
+
         elif event.button.id == "stop":
             if self.vm.isActive():
                 self.vm.destroy()
@@ -145,9 +142,7 @@ class VMCard(Static):
                 self.query_one("#status").update(f"Status: {self.status}")
                 self.update_button_layout()
                 self.post_message(VMStateChanged())
-                # Ensure header is updated after VM state change
-                if hasattr(self, "app") and self.app:
-                    self.app.update_header()
+
         elif event.button.id == "pause":
             if self.vm.isActive():
                 self.vm.suspend()

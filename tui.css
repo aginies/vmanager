@@ -109,9 +109,6 @@ VMDetailModal {
     color: yellow;
 }
 
-#detail-button-container {
-    width: 100%;
-    height: auto;
-    align: center middle;
-    padding-top: 1;
+.network-detail {
+    margin-left: 2;
 }

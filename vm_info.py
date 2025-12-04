@@ -5,6 +5,8 @@ import xml.etree.ElementTree as ET
 import os
 import libvirt
 
+
+
 def get_vm_info(connection_uri):
     """
     get all VM info
@@ -30,12 +32,20 @@ def get_vm_info(connection_uri):
                 'machine_type': get_vm_machine_info(xml_content),
                 'firmware': get_vm_firmware_info(xml_content),
                 'networks': get_vm_networks_info(xml_content),
+                'detail_network': get_vm_network_ip(domain),
+                'network_dns_gateway': get_vm_network_dns_gateway_info(domain),
                 'disks': get_vm_disks_info(xml_content),
             }
             vm_info_list.append(vm_info)
 
     conn.close()
     return vm_info_list
+
+def get_vm_network_dns_gateway_info(domain: str):
+    """
+    Extracts DNS and gateway information for networks connected to the VM.
+    """
+    pass
 
 def get_status(domain):
     """
@@ -138,6 +148,38 @@ def get_vm_networks_info(xml_content: str) -> str:
         pass  # Failed to get networks, continue without them
 
     return networks
+
+
+def get_vm_network_ip(domain) -> list:
+    """
+    Retrieves network interface IP addresses for a given VM domain.
+    Requires qemu-guest-agent to be installed and running in the guest VM.
+    Returns a list of dictionaries, where each dictionary represents an interface
+    and contains its MAC address and a list of IP addresses.
+    """
+    if domain.state()[0] == libvirt.VIR_DOMAIN_RUNNING:
+        ip_addresses = []
+        try:
+            addresses = domain.interfaceAddresses(libvirt.VIR_DOMAIN_INTERFACE_ADDRESSES_SRC_LEASE)
+            if addresses:
+                for iface_name, iface_info in addresses.items():
+                    interface_ips = {
+                        'interface': iface_name,
+                        'mac': iface_info['hwaddr'],
+                        'ipv4': [],
+                        'ipv6': []
+                    }
+                    if iface_info['addrs']:
+                        for addr in iface_info['addrs']:
+                            if addr['type'] == libvirt.VIR_IP_ADDR_TYPE_IPV4:
+                                interface_ips['ipv4'].append(f"{addr['addr']}/{addr['prefix']}")
+                            elif addr['type'] == libvirt.VIR_IP_ADDR_TYPE_IPV6:
+                                interface_ips['ipv6'].append(f"{addr['addr']}/{addr['prefix']}")
+                    ip_addresses.append(interface_ips)
+        except libvirt.libvirtError:
+            pass # Return empty list if there's an error or VM is not running
+        return ip_addresses
+    return []
 
 def get_vm_disks_info(xml_content: str) ->str:
     """

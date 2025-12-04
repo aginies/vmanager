@@ -99,6 +99,30 @@ class VMDetailModal(ModalScreen):
                     for network in self.vm_info["networks"]:
                         yield Static(f"• {network}")
 
+                    if self.vm_info.get("detail_network"):
+                        for netdata in self.vm_info["detail_network"]:
+                            with Vertical(classes="network-detail"):
+                                yield Static(f"  Interface: {netdata.get('interface', 'N/A')} (MAC: {netdata.get('mac', 'N/A')})")
+                                if netdata.get('ipv4'):
+                                    for ip in netdata['ipv4']:
+                                        yield Static(f"    IPv4: {ip}")
+                                if netdata.get('ipv6'):
+                                    for ip in netdata['ipv6']:
+                                        yield Static(f"    IPv6: {ip}")
+
+            if self.vm_info.get("network_dns_gateway"):
+                yield Label("Network DNS & Gateway", classes="section-title")
+                with ScrollableContainer(classes="info-section"):
+                    for net_detail in self.vm_info["network_dns_gateway"]:
+                        with Vertical(classes="network-detail"):
+                            yield Static(f"  Network: {net_detail.get('network_name', 'N/A')}")
+                            if net_detail.get("gateway"):
+                                yield Static(f"    Gateway: {net_detail['gateway']}")
+                            if net_detail.get("dns_servers"):
+                                yield Static("    DNS Servers:")
+                                for dns_server in net_detail["dns_servers"]:
+                                    yield Static(f"      • {dns_server}")
+
             with Horizontal(id="detail-button-container"):
                 yield Button("View XML", variant="primary", id="view-xml-btn")
                 yield Button("Close", variant="default", id="close-btn")
@@ -122,6 +146,7 @@ class VMManagerTUI(App):
 
     CSS_PATH = "tui.css"
     CSS_PATH = "vmcard.css"
+    sub_title = reactive("")
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
@@ -154,13 +179,13 @@ class VMManagerTUI(App):
 
     async def on_vm_state_changed(self, message: VMStateChanged) -> None:
         """Called when a VM's state changes."""
-        self.update_header()
-        self.set_timer(2, self.refresh_vm_list)
+        self.set_timer(5, self.refresh_vm_list)
+        self.set_timer(2, self.update_header)  # Revert header after 5 seconds
 
     async def on_vm_start_error(self, message: VMStartError) -> None:
         """Called when a VM fails to start."""
         self.sub_title = f"Error starting {message.vm_name}: {message.error_message}"
-        self.set_timer(5, self.update_header)  # Revert header after 5 seconds
+        self.set_timer(2, self.update_header)  # Revert header after 5 seconds
 
     def on_select_changed(self, event: Select.Changed) -> None:
         if event.value == "toggle_description":
@@ -265,7 +290,7 @@ class VMManagerTUI(App):
         if self.connection_uri != "qemu:///system":
             conn_info = f" [{self.connection_uri}] | "
 
-        self.sub_title = f"{conn_info}Total VMs: {total_vms} | Running: {running_vms} | Paused: {paused_vms} | Stopped: {stopped_vms}"
+        self.sub_title = f"{conn_info}Total VMs: {total_vms}" # | Running: {running_vms} | Paused: {paused_vms} | Stopped: {stopped_vms}"
         conn.close()
 
     def list_vms(self):
