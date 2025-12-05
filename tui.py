@@ -125,8 +125,8 @@ class VMManagerTUI(App):
     """A Textual application to manage VMs."""
 
     BINDINGS = [
-        ("ctrl+p", "next_page", "Next Page"),
-        ("ctrl+n", "previous_page", "Previous Page"),
+        ("n", "next_page", "Next Page"),
+        ("p", "previous_page", "Previous Page"),
     ]
 
     connection_uri = reactive("qemu:///system")
@@ -134,6 +134,7 @@ class VMManagerTUI(App):
     current_page = reactive(0)
     VMS_PER_PAGE = 4
     sort_by = reactive("default")
+    num_pages = reactive(1)
 
     CSS_PATH = ["tui.css", "vmcard.css"]
 
@@ -450,6 +451,7 @@ class VMManagerTUI(App):
             pagination_controls.styles.display = "block"
 
         num_pages = (total_vms + self.VMS_PER_PAGE - 1) // self.VMS_PER_PAGE
+        self.num_pages = num_pages
 
         page_info = self.query_one("#page-info", Label)
         page_info.update(f" Page {self.current_page + 1}/{num_pages} ")
@@ -461,14 +463,18 @@ class VMManagerTUI(App):
         next_button.disabled = self.current_page >= num_pages - 1
 
     @on(Button.Pressed, "#prev-button")
-    def previous_page(self):
-        self.current_page -= 1
-        self.refresh_vm_list()
+    def action_previous_page(self) -> None:
+        """Go to the previous page."""
+        if self.current_page > 0:
+            self.current_page -= 1
+            self.refresh_vm_list()
 
     @on(Button.Pressed, "#next-button")
-    def next_page(self):
-        self.current_page += 1
-        self.refresh_vm_list()
+    def action_next_page(self) -> None:
+        """Go to the next page."""
+        if self.current_page < self.num_pages - 1:
+            self.current_page += 1
+            self.refresh_vm_list()
 
 if __name__ == "__main__":
     app = VMManagerTUI()
