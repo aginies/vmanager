@@ -1,5 +1,5 @@
 from textual.app import App, ComposeResult
-from textual.widgets import Header, Footer, Select, Button, Input, Label, Static, DataTable
+from textual.widgets import Header, Footer, Select, Button, Input, Label, Static, DataTable, Link, TextArea
 from textual.containers import ScrollableContainer, Grid, Horizontal, Vertical
 from textual.reactive import reactive
 from textual.screen import ModalScreen, Screen
@@ -277,7 +277,22 @@ class ServerManagementModal(ModalScreen):
             self.query_one("#edit-server-btn").disabled = True
             self.query_one("#delete-server-btn").disabled = True
 
+class LogModal(ModalScreen):
+    """ Modal Screen to show Log"""
+    def compose(self) -> ComposeResult:
+        with Vertical(id="text-show"):
+            logging.info("View log button clicked")
+            yield Label("Log View", id="title")
+            log_file = "vm_manager.log"
+            text_area = TextArea()
+            text_area.load_text(open(log_file, "r").read())
+            yield text_area
+        with Horizontal():
+            yield Button("Cancel", variant="default", id="cancel-btn", classes="Buttonpage")
 
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "cancel-btn":
+            self.dismiss(None)
 
 class VMDetailModal(ModalScreen):
     """Modal screen to show detailed VM information."""
@@ -395,6 +410,7 @@ class VMManagerTUI(App):
                 yield Button("Select Server", id="select_server_button", classes="Buttonpage")
             yield Button("Filter", id="filter_button", classes="Buttonpage")
             yield Button("View Log", id="view_log_button", classes="Buttonpage")
+            yield Link("About", url="https://github.com/aginies/vmanager")
 
         with Horizontal(id="pagination-controls") as pc:
             pc.styles.display = "none"
@@ -577,8 +593,7 @@ class VMManagerTUI(App):
         """View the application log file."""
         logging.info("View log button clicked")
         log_file = "vm_manager.log"
-        with self.app.suspend():
-            subprocess.run(["view", log_file])
+        self.push_screen(LogModal(), self.handle_log_result)
 
     @on(VMNameClicked)
     async def on_vm_name_clicked(self, message: VMNameClicked) -> None:
@@ -616,6 +631,11 @@ class VMManagerTUI(App):
         if result:
             logging.info(f"Connection URI entered: {result}")
             self.change_connection(result)
+
+    def handle_log_result(self, result: str | None) -> None:
+        """Handle the result from the log view."""
+        if result:
+            logging.info("Log View")
 
     def handle_create_vm_result(self, result: dict | None) -> None:
         """Handle the result from the CreateVMModal and create the VM."""

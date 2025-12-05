@@ -415,9 +415,6 @@ class VMCard(Static):
         """Handle clicks on the CPU/Memory info part of the VM card."""
         self.post_message(VMNameClicked(vm_name=self.name))
 
-
-
-
 class SnapshotNameDialog(Screen):
     """A dialog to ask for a snapshot name."""
 
