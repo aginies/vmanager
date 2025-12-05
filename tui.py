@@ -14,9 +14,9 @@ from config import load_config, save_config
 
 # Configure logging
 logging.basicConfig(
-    filename='vm_manager_error.log',
-    level=logging.ERROR,
-    format='%(asctime)s - %(message)s'
+    filename='vm_manager.log',
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
 class ConnectionModal(ModalScreen):
@@ -441,6 +441,7 @@ class VMManagerTUI(App):
         self.set_timer(2, self.update_header)  # Revert header after 5 seconds
 
     def show_info_message(self, message: str):
+        logging.info(message)
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         error_footer = self.query_one("#error-footer", Static)
         error_footer.update(f"[{timestamp}] {message}")
@@ -473,12 +474,14 @@ class VMManagerTUI(App):
     @on(Button.Pressed, "#filter_button")
     def action_filter_view(self) -> None:
         """Filter the VM list."""
+        logging.info("Filter button clicked")
         self.push_screen(FilterModal(), self.handle_filter_result)
 
     def handle_filter_result(self, result: str | None) -> None:
         """Handle the result from the filter modal."""
         if result:
             sort_key = result.replace("sort_", "")
+            logging.info(f"Filter changed to {sort_key}")
             if self.sort_by != sort_key:
                 self.sort_by = sort_key
                 self.current_page = 0
@@ -487,32 +490,38 @@ class VMManagerTUI(App):
     @on(Button.Pressed, "#select_server_button")
     def action_select_server(self) -> None:
         """Select a server to connect to."""
+        logging.info("Select server button clicked")
         if self.servers:
             self.push_screen(ServerSelectionModal(self.servers), self.handle_server_selection_result)
 
     def handle_server_selection_result(self, uri: str | None) -> None:
         """Handle the result from the server selection modal."""
         if uri:
+            logging.info(f"Server selected: {uri}")
             self.change_connection(uri)
 
     @on(Button.Pressed, "#manage_servers_button")
     def action_manage_server(self) -> None:
         """Manage the list of servers."""
+        logging.info("Manage servers button clicked")
         self.push_screen(ServerManagementModal(self.servers), self.reload_servers)
 
     @on(Button.Pressed, "#change_connection_button")
     def on_change_connection_button_pressed(self, event: Button.Pressed) -> None:
+        logging.info("Change connection button clicked")
         self.push_screen(ConnectionModal(), self.handle_connection_result)
 
     @on(Button.Pressed, "#view_log_button")
     def action_view_log(self) -> None:
         """View the application log file."""
-        log_file = "vm_manager_error.log"
+        logging.info("View log button clicked")
+        log_file = "vm_manager.log"
         with self.app.suspend():
             subprocess.run(["view", log_file])
 
     @on(VMNameClicked)
     async def on_vm_name_clicked(self, message: VMNameClicked) -> None:
+        logging.info(f"VM name clicked: {message.vm_name}")
         if not self.conn:
             return
 
@@ -544,10 +553,12 @@ class VMManagerTUI(App):
     def handle_connection_result(self, result: str | None) -> None:
         """Handle the result from the connection modal."""
         if result:
+            logging.info(f"Connection URI entered: {result}")
             self.change_connection(result)
 
     def change_connection(self, uri: str) -> None:
         """Change the connection URI and refresh the VM list."""
+        logging.info(f"Changing connection to {uri}")
         if not uri or uri.strip() == "":
             return
 
@@ -675,6 +686,7 @@ class VMManagerTUI(App):
     @on(Button.Pressed, "#prev-button")
     def action_previous_page(self) -> None:
         """Go to the previous page."""
+        logging.info("Previous page button clicked")
         if self.current_page > 0:
             self.current_page -= 1
             self.refresh_vm_list()
@@ -682,6 +694,7 @@ class VMManagerTUI(App):
     @on(Button.Pressed, "#next-button")
     def action_next_page(self) -> None:
         """Go to the next page."""
+        logging.info("Next page button clicked")
         if self.current_page < self.num_pages - 1:
             self.current_page += 1
             self.refresh_vm_list()

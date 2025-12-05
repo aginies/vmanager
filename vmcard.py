@@ -6,6 +6,7 @@ from textual.screen import Screen
 import subprocess
 import tempfile
 import libvirt
+import logging
 from textual import on
 
 
@@ -163,6 +164,7 @@ class VMCard(Static):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "start":
+            logging.info(f"Attempting to start VM: {self.name}")
             if not self.vm.isActive():
                 try:
                     self.vm.create()
@@ -173,6 +175,7 @@ class VMCard(Static):
                     status_widget.add_class("running")
                     self.update_button_layout()
                     self.post_message(VMStateChanged())
+                    logging.info(f"Successfully started VM: {self.name}")
 
                 except libvirt.libvirtError as e:
                     self.post_message(
@@ -180,6 +183,7 @@ class VMCard(Static):
                     )
 
         elif event.button.id == "stop":
+            logging.info(f"Attempting to stop VM: {self.name}")
             if self.vm.isActive():
                 try:
                     self.vm.destroy()
@@ -187,12 +191,14 @@ class VMCard(Static):
                     self.query_one("#status").update(f"Status: {self.status}")
                     self.update_button_layout()
                     self.post_message(VMStateChanged())
+                    logging.info(f"Successfully stopped VM: {self.name}")
                 except libvirt.libvirtError as e:
                     self.post_message(
                         VMActionError(vm_name=self.name, action="stop", error_message=str(e))
                     )
 
         elif event.button.id == "pause":
+            logging.info(f"Attempting to pause VM: {self.name}")
             if self.vm.isActive():
                 try:
                     self.vm.suspend()
@@ -203,11 +209,13 @@ class VMCard(Static):
                     status_widget.add_class("paused")
                     self.update_button_layout()
                     self.post_message(VMStateChanged())
+                    logging.info(f"Successfully paused VM: {self.name}")
                 except libvirt.libvirtError as e:
                     self.post_message(
                         VMActionError(vm_name=self.name, action="pause", error_message=str(e))
                     )
         elif event.button.id == "resume":
+            logging.info(f"Attempting to resume VM: {self.name}")
             try:
                 self.vm.resume()
                 self.status = "Running"
@@ -217,11 +225,13 @@ class VMCard(Static):
                 status_widget.add_class("running")
                 self.update_button_layout()
                 self.post_message(VMStateChanged())
+                logging.info(f"Successfully resumed VM: {self.name}")
             except libvirt.libvirtError as e:
                 self.post_message(
                     VMActionError(vm_name=self.name, action="resume", error_message=str(e))
                 )
         elif event.button.id == "xml":
+            logging.info(f"Attempting to view XML for VM: {self.name}")
             try:
                 xml_content = self.vm.XMLDesc(0)
                 with tempfile.NamedTemporaryFile(
@@ -231,23 +241,26 @@ class VMCard(Static):
                     tmpfile.flush()
                     with self.app.suspend():
                         subprocess.run(["view", tmpfile.name], check=True)
+                logging.info(f"Successfully viewed XML for VM: {self.name}")
             except (libvirt.libvirtError, FileNotFoundError, subprocess.CalledProcessError) as e:
                 self.post_message(
                     VMActionError(vm_name=self.name, action="view XML", error_message=str(e))
                 )
         elif event.button.id == "connect":
+            logging.info(f"Attempting to connect to VM: {self.name}")
             try:
                 with self.app.suspend():
                     subprocess.run(
                         ["virt-viewer", "--connect", self.app.connection_uri, self.name],
                         check=True
                     )
+                logging.info(f"Successfully connected to VM: {self.name}")
             except (FileNotFoundError, subprocess.CalledProcessError) as e:
                 self.post_message(
                     VMActionError(vm_name=self.name, action="connect", error_message=str(e))
                 )
         elif event.button.id == "snapshot_take":
-
+            logging.info(f"Attempting to take snapshot for VM: {self.name}")
             def handle_snapshot_name(name: str | None) -> None:
                 if name:
                     xml = f"<domainsnapshot><name>{name}</name></domainsnapshot>"
@@ -268,6 +281,7 @@ class VMCard(Static):
             self.app.push_screen(SnapshotNameDialog(), handle_snapshot_name)
 
         elif event.button.id == "snapshot_restore":
+            logging.info(f"Attempting to restore snapshot for VM: {self.name}")
             snapshots = self.vm.listAllSnapshots(0)
             if not snapshots:
                 self.post_message(
@@ -305,6 +319,7 @@ class VMCard(Static):
                                 message=f"Restored to snapshot '{snapshot_name}'.",
                             )
                         )
+                        logging.info(f"Successfully restored snapshot '{snapshot_name}' for VM: {self.name}")
                     except libvirt.libvirtError as e:
                         self.post_message(
                             SnapshotError(vm_name=self.name, error_message=str(e))
@@ -313,6 +328,7 @@ class VMCard(Static):
             self.app.push_screen(SelectSnapshotDialog(snapshots, "Select snapshot to restore:"), restore_snapshot)
 
         elif event.button.id == "snapshot_delete":
+            logging.info(f"Attempting to delete snapshot for VM: {self.name}")
             snapshots = self.vm.listAllSnapshots(0)
             if not snapshots:
                 self.post_message(
@@ -334,6 +350,7 @@ class VMCard(Static):
                             )
                         )
                         self.update_button_layout()
+                        logging.info(f"Successfully deleted snapshot '{snapshot_name}' for VM: {self.name}")
                     except libvirt.libvirtError as e:
                         self.post_message(
                             SnapshotError(vm_name=self.name, error_message=str(e))

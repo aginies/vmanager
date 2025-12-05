@@ -72,7 +72,7 @@ When you run the application, you'll see:
 - **Delete Snapshot**: Delete an existing snapshot.
 - **View XML**: Display the VM's XML configuration in a temporary file
 - **Connect**: Launch virt-viewer to connect to the VM
-- **View Log**: Open the `vm_manager_error.log` file for inspection.
+- **View Log**: Open the `vm_manager.log` file for inspection.
 
 ### Connection Management
 
@@ -104,7 +104,7 @@ This file contains the main `VMManagerTUI` class which implements the applicatio
 - Handles snapshot error and success messages, displaying them in a dynamically resizing footer.
 - Display options for showing/hiding VM details
 - Provides functionality to view the application's error log file.
-- Errors during connection or VM operations are logged to `vm_manager_error.log` for later review.
+- Errors during connection or VM operations are logged to `vm_manager.log` for later review.
 
 ### vm_info.py
 
