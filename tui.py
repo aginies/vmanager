@@ -1,3 +1,5 @@
+import os
+import sys
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, Select, Button, Input, Label, Static, DataTable, Link, TextArea
 from textual.containers import ScrollableContainer, Grid, Horizontal, Vertical
@@ -407,36 +409,40 @@ class VMManagerTUI(App):
         error_footer.styles.height = 0
         error_footer.styles.overflow = "hidden"
         error_footer.styles.padding = 0
-        self._update_vms_container_layout()
+        vms_container = self.query_one("#vms-container")
+        #self._update_vms_container_layout()
+        vms_container.styles.grid_size_columns = 2
         if not self.servers:
             self.query_one("#select_server_button", Button).display = False
         self.connect_libvirt(self.connection_uri)
         self.update_header()
         self.list_vms()
 
+    def _update_vms_container_layout(self) -> None:
+        """Update the VM cards container layout based on terminal size."""
+        vms_container = self.query_one("#vms-container")
+        width = self.size.width
+
+        # Define breakpoints for column count
+        if width < 47:
+            vms_container.styles.grid_size_columns = 1
+        elif width < 88:
+            vms_container.styles.grid_size_columns = 2
+        elif width < 120:
+            vms_container.styles.grid_size_columns = 3
+        else:
+            vms_container.styles.grid_size_columns = 4
+
+    #def on_resize(self, event) -> None:
+    #    """Called when the terminal is resized."""
+    #    self._update_vms_container_layout()
+
+
     def on_unload(self) -> None:
         """Called when the app is about to be unloaded."""
         if self.conn:
             self.conn.close()
 
-    def _update_vms_container_layout(self) -> None:
-        """Update the VM cards container layout based on terminal size."""
-        vms_container = self.query_one("#vms-container")
-        width = self.size.width
-        
-        # Define breakpoints for column count
-        if width < 64:
-            vms_container.styles.grid_size_columns = 1
-        elif width < 82:
-            vms_container.styles.grid_size_columns = 2
-        elif width < 122:
-            vms_container.styles.grid_size_columns = 3
-        else:
-            vms_container.styles.grid_size_columns = 4
-
-    def on_resize(self, event) -> None:
-        """Called when the terminal is resized."""
-        self._update_vms_container_layout()
 
     def connect_libvirt(self, uri: str) -> None:
         """Connects to libvirt."""
@@ -740,5 +746,10 @@ class VMManagerTUI(App):
         self.exit()
 
 if __name__ == "__main__":
+    terminal_size = os.get_terminal_size()
+    if terminal_size.lines < 34:
+        print(f"Terminal height is too small ({terminal_size.lines} lines). Please resize to at least 34 lines.")
+        sys.exit(1)
+
     app = VMManagerTUI()
     app.run()

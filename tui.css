@@ -1,13 +1,15 @@
 /* Styles for VMManagerTUI */
 #vms-container {
-    height: auto;
-    width: auto;
+    height: 1000;
+    width: 84;
+    max-height: 92vh;
     /*overflow-y: scroll;
     overflow-x: scroll;*/
-    grid-rows: 40vh;
-    grid-gutter: 0 0;
-    grid-columns: 98vh; /*100%; /*80vh;*/
+    grid-rows: 13;
+    grid-gutter: 1 1;
     layout: grid;
+    overflow: auto;
+    padding: 1 1;
 }
 #connection-dialog {
     width: 60;
