@@ -83,6 +83,59 @@ class RenameServerModal(ModalScreen):
             self.dismiss(None)
 
 
+class ServerSelectionModal(ModalScreen):
+    """Modal screen for selecting a server."""
+
+    def __init__(self, servers: list) -> None:
+        super().__init__()
+        self.servers = servers
+        self.selected_uri = None
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="server-selection-dialog"):
+            yield Label("Select Server")
+            with ScrollableContainer():
+                yield DataTable(id="server-select-table")
+            with Horizontal():
+                yield Button("Select", id="select-btn", variant="primary", disabled=True)
+                yield Button("Cancel", id="cancel-btn")
+
+    def on_mount(self) -> None:
+        table = self.query_one(DataTable)
+        table.add_column("Name", key="name")
+        table.add_column("URI", key="uri")
+        for server in self.servers:
+            table.add_row(server['name'], server['uri'], key=server['uri'])
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        self.selected_uri = event.row_key.value
+        self.query_one("#select-btn").disabled = False
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "select-btn":
+            self.dismiss(self.selected_uri)
+        elif event.button.id == "cancel-btn":
+            self.dismiss(None)
+
+
+class FilterModal(ModalScreen):
+    """Modal screen for selecting a filter."""
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="filter-dialog"):
+            yield Label("Filter by Status")
+            yield Button("All", id="sort_default", variant="primary")
+            yield Button("Running", id="sort_running")
+            yield Button("Paused", id="sort_paused")
+            yield Button("Stopped", id="sort_stopped")
+            yield Button("Cancel", id="cancel-btn")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "cancel-btn":
+            self.dismiss(None)
+        else:
+            self.dismiss(event.button.id)
+
 
 class ServerManagementModal(ModalScreen):
     """Modal screen for managing servers."""
@@ -263,28 +316,8 @@ class VMManagerTUI(App):
             yield Button("Manage Servers", id="manage_servers_button", classes="Buttonpage")
             yield Button("View Log", id="view_log_button", classes="Buttonpage")
             if self.servers:
-                yield Select(
-                    [(server['name'], server['uri']) for server in self.servers],
-                    id="server_select",
-                    prompt="Select Server",
-                    allow_blank=False,
-                    value=self.connection_uri,
-                    classes="Button",
-                )
-
-            with Vertical(classes="filter-group"):
-                yield Select(
-                    [
-                        ("Filter: All", "sort_default"),
-                        ("Filter: Running", "sort_running"),
-                        ("Filter: Paused", "sort_paused"),
-                        ("Filter: Stopped", "sort_stopped"),
-                    ],
-                    id="status_filter_select",
-                    prompt="Filter by status",
-                    allow_blank=False,
-                    classes="Button",
-                )
+                yield Button("Select Server", id="select_server_button", classes="Buttonpage")
+            yield Button("Filter", id="filter_button", classes="Buttonpage")
 
         with Horizontal(id="pagination-controls") as pc:
             pc.styles.display = "none"
@@ -305,8 +338,9 @@ class VMManagerTUI(App):
         self.servers = new_servers
         self.config['servers'] = new_servers
         save_config(self.config)
-        server_select = self.query_one("#server_select", Select)
-        server_select.set_options([(s['name'], s['uri']) for s in self.servers])
+        # Re-compose is complex, for now we assume the app might need a restart
+        # to see the button if servers are added from an empty state.
+        # A better solution would be to dynamically add/remove the button.
 
 
     def on_mount(self) -> None:
@@ -320,6 +354,8 @@ class VMManagerTUI(App):
         grid.styles.grid_gutter_vertical = 1
         grid.styles.grid_gutter_horizontal = 1
         self._update_grid_layout()
+        if not self.servers:
+            self.query_one("#select_server_button", Button).display = False
         self.connect_libvirt(self.connection_uri)
         self.update_header()
         self.list_vms()
@@ -416,25 +452,28 @@ class VMManagerTUI(App):
         """Called when a VM fails to start."""
         self.show_error_message(f"Error starting {message.vm_name}: {message.error_message}")
 
-    def on_select_changed(self, event: Select.Changed) -> None:
-        if event.value is not None:
-            if event.select.id == "server_select":
-                self.change_connection(str(event.value))
-            elif event.select.id == "status_filter_select":
-                if str(event.value).startswith("sort_"):
-                    sort_key = str(event.value).replace("sort_", "")
-                    if self.sort_by != sort_key:
-                        self.sort_by = sort_key
-                        self.current_page = 0
-                        self.refresh_vm_list()
-        else:
-            if event.select.id == "status_filter_select":
-                # Selection cleared
-                if self.sort_by != "default":
-                    self.sort_by = "default"
-                    self.current_page = 0
-                    self.refresh_vm_list()
-    
+    @on(Button.Pressed, "#filter_button")
+    def on_filter_button_pressed(self, event: Button.Pressed) -> None:
+        self.push_screen(FilterModal(), self.handle_filter_result)
+
+    def handle_filter_result(self, result: str | None) -> None:
+        """Handle the result from the filter modal."""
+        if result:
+            sort_key = result.replace("sort_", "")
+            if self.sort_by != sort_key:
+                self.sort_by = sort_key
+                self.current_page = 0
+                self.refresh_vm_list()
+
+    @on(Button.Pressed, "#select_server_button")
+    def on_select_server_button_pressed(self, event: Button.Pressed) -> None:
+        self.push_screen(ServerSelectionModal(self.servers), self.handle_server_selection_result)
+
+    def handle_server_selection_result(self, uri: str | None) -> None:
+        """Handle the result from the server selection modal."""
+        if uri:
+            self.change_connection(uri)
+
     @on(Button.Pressed, "#manage_servers_button")
     def on_manage_servers_button_pressed(self, event: Button.Pressed) -> None:
         self.push_screen(ServerManagementModal(self.servers), self.reload_servers)

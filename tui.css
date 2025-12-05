@@ -29,6 +29,51 @@ ConnectionModal {
 #connection-dialog Button {
     margin: 0 1;
 }
+
+FilterModal {
+    align: center middle;
+}
+
+#filter-dialog {
+    width: 40;
+    height: auto;
+    border: thick $background 80%;
+    background: $surface;
+    padding: 1 2;
+}
+
+#filter-dialog Label {
+    width: 100%;
+    content-align: center middle;
+    margin-bottom: 1;
+}
+
+#filter-dialog Button {
+    width: 100%;
+    margin-bottom: 1;
+}
+
+ServerManagementModal {
+    align: center middle;
+}
+#server-management-dialog {
+    width: 80;
+    height: 25;
+    border: thick $background 80%;
+    background: $surface;
+    padding: 1 2;
+}
+ServerSelectionModal {
+    align: center middle;
+}
+#server-selection-dialog {
+    width: 80;
+    height: 25;
+    border: thick $background 80%;
+    background: $surface;
+    padding: 1 2;
+}
+
 Header {
     background: $primary;
     color: $text;
