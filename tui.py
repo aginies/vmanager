@@ -344,10 +344,10 @@ class VMManagerTUI(App):
         with Horizontal(classes="top-controls"):
             yield Button("Connection", id="change_connection_button", classes="Buttonpage")
             yield Button("Manage Servers", id="manage_servers_button", classes="Buttonpage")
-            yield Button("View Log", id="view_log_button", classes="Buttonpage")
             if self.servers:
                 yield Button("Select Server", id="select_server_button", classes="Buttonpage")
             yield Button("Filter", id="filter_button", classes="Buttonpage")
+            yield Button("View Log", id="view_log_button", classes="Buttonpage")
 
         with Horizontal(id="pagination-controls") as pc:
             pc.styles.display = "none"
