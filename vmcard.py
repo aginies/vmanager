@@ -271,6 +271,7 @@ class VMCard(Static):
 class SnapshotNameDialog(Screen):
     """A dialog to ask for a snapshot name."""
 
+    BINDINGS = [("escape", "cancel_modal", "Cancel")]
     CSS_PATH = "snapshot.css"
 
     def compose(self):
@@ -292,11 +293,16 @@ class SnapshotNameDialog(Screen):
             self.dismiss(input_widget.value)
         else:
             self.dismiss(None)
+    
+    def action_cancel_modal(self) -> None:
+        """Cancel the modal."""
+        self.dismiss(None)
 
 
 class SelectSnapshotDialog(Screen[str]):
     """A dialog to select a snapshot from a list."""
 
+    BINDINGS = [("escape", "cancel_modal", "Cancel")]
     CSS_PATH = "snapshot.css"
 
     def __init__(self, snapshots: list, prompt: str) -> None:
@@ -322,3 +328,7 @@ class SelectSnapshotDialog(Screen[str]):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "cancel":
             self.dismiss(None)
+    
+    def action_cancel_modal(self) -> None:
+        """Cancel the modal."""
+        self.dismiss(None)

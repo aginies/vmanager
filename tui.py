@@ -24,6 +24,8 @@ logging.basicConfig(
 class ConnectionModal(ModalScreen):
     """Modal screen for entering connection URI."""
 
+    BINDINGS = [("escape", "cancel_modal", "Cancel")]
+
     def compose(self) -> ComposeResult:
         with Vertical(id="connection-dialog"):
             yield Label("Enter QEMU Connection URI:")
@@ -42,8 +44,14 @@ class ConnectionModal(ModalScreen):
         elif event.button.id == "cancel-btn":
             self.dismiss(None)
 
+    def action_cancel_modal(self) -> None:
+        """Cancel the modal."""
+        self.dismiss(None)
+
 class AddServerModal(ModalScreen):
     """Modal screen for adding a new server."""
+
+    BINDINGS = [("escape", "cancel_modal", "Cancel")]
 
     def compose(self) -> ComposeResult:
         with Vertical(id="add-server-dialog"):
@@ -62,8 +70,14 @@ class AddServerModal(ModalScreen):
         elif event.button.id == "cancel-btn":
             self.dismiss(None)
 
+    def action_cancel_modal(self) -> None:
+        """Cancel the modal."""
+        self.dismiss(None)
+
 class EditServerModal(ModalScreen):
     """Modal screen for editing a server."""
+
+    BINDINGS = [("escape", "cancel_modal", "Cancel")]
 
     def __init__(self, server_name: str, server_uri: str) -> None:
         super().__init__()
@@ -87,8 +101,14 @@ class EditServerModal(ModalScreen):
         elif event.button.id == "cancel-btn":
             self.dismiss(None)
 
+    def action_cancel_modal(self) -> None:
+        """Cancel the modal."""
+        self.dismiss(None)
+
 class ServerSelectionModal(ModalScreen):
     """Modal screen for selecting a server."""
+
+    BINDINGS = [("escape", "cancel_modal", "Cancel")]
 
     def __init__(self, servers: list) -> None:
         super().__init__()
@@ -123,10 +143,15 @@ class ServerSelectionModal(ModalScreen):
         elif event.button.id == "cancel-btn":
             self.dismiss(None)
 
+    def action_cancel_modal(self) -> None:
+        """Cancel the modal."""
+        self.dismiss(None)
+
 
 class FilterModal(ModalScreen):
     """Modal screen for selecting a filter."""
 
+    BINDINGS = [("escape", "cancel_modal", "Cancel")]
     CSS_PATH = "tui.css"
 
     def compose(self) -> ComposeResult:
@@ -144,9 +169,15 @@ class FilterModal(ModalScreen):
         else:
             self.dismiss(event.button.id)
 
+    def action_cancel_modal(self) -> None:
+        """Cancel the modal."""
+        self.dismiss(None)
+
 
 class CreateVMModal(ModalScreen):
     """Modal screen for creating a new VM."""
+
+    BINDINGS = [("escape", "cancel_modal", "Cancel")]
 
     def compose(self) -> ComposeResult:
         with Vertical(id="create-vm-dialog"):
@@ -170,9 +201,15 @@ class CreateVMModal(ModalScreen):
         elif event.button.id == "cancel-btn":
             self.dismiss(None)
 
+    def action_cancel_modal(self) -> None:
+        """Cancel the modal."""
+        self.dismiss(None)
+
 
 class ServerManagementModal(ModalScreen):
     """Modal screen for managing servers."""
+
+    BINDINGS = [("escape", "close_modal", "Close")]
 
     def __init__(self, servers: list) -> None:
         super().__init__()
@@ -241,9 +278,16 @@ class ServerManagementModal(ModalScreen):
             self.selected_row = None
             self.query_one("#edit-server-btn").disabled = True
             self.query_one("#delete-server-btn").disabled = True
+    
+    def action_close_modal(self) -> None:
+        """Close the modal."""
+        self.dismiss(self.servers)
 
 class LogModal(ModalScreen):
     """ Modal Screen to show Log"""
+
+    BINDINGS = [("escape", "cancel_modal", "Cancel")]
+    
     def compose(self) -> ComposeResult:
         with Vertical(id="text-show"):
             logging.info("View log button clicked")
@@ -258,10 +302,15 @@ class LogModal(ModalScreen):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "cancel-btn":
             self.dismiss(None)
+    
+    def action_cancel_modal(self) -> None:
+        """Cancel the modal."""
+        self.dismiss(None)
 
 class VMDetailModal(ModalScreen):
     """Modal screen to show detailed VM information."""
 
+    BINDINGS = [("escape", "close_modal", "Close")]
     CSS_PATH = "tui.css"
 
     def __init__(self, vm_name: str, vm_info: dict) -> None:
@@ -339,14 +388,16 @@ class VMDetailModal(ModalScreen):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "close-btn":
             self.dismiss()
+    
+    def action_close_modal(self) -> None:
+        """Close the modal."""
+        self.dismiss()
 
 class VMManagerTUI(App):
     """A Textual application to manage VMs."""
 
     BINDINGS = [
-        ("ctrl+p", "next_page", "Next Page"),
-        ("ctrl+n", "previous_page", "Previous Page"),
-        ("v", "view_log", "View Log"),
+        ("v", "view_log", "Log"),
         ("f", "filter_view", "Filter"),
         ("s", "select_server", "Select Server"),
         ("m", "manage_server", "Manage Servers"),
@@ -373,7 +424,7 @@ class VMManagerTUI(App):
             #yield Button("Create VM", id="create_vm_button", classes="Buttonpage")
             if self.servers:
                 yield Button("Select Server", id="select_server_button", classes="Buttonpage")
-            yield Button("Filter", id="filter_button", classes="Buttonpage")
+            yield Button("Filter VM", id="filter_button", classes="Buttonpage")
             yield Button("View Log", id="view_log_button", classes="Buttonpage")
             yield Link("About", url="https://github.com/aginies/vmanager")
 
