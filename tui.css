@@ -66,10 +66,10 @@ ErrorModal {
 }
 #filter-dialog {
     width: 40;
-    height: auto;
-    border: round green 80%;
+    height: 40vh; 
+    border: round green;
     background: $surface;
-    padding: 1 2;
+    padding: 0 0;
 }
 
 #filter-dialog Label {
@@ -92,6 +92,23 @@ ErrorModal {
     margin-bottom: 1;
 }
 
+#server-selection-dialog {
+    width: 80;
+    height: 50vh;
+    border: panel green;
+    background: $background;
+    padding: 1 2;
+}
+#server-selection-dialog Label {
+    width: 100%;
+    content-align: center middle;
+    margin-bottom: 1;
+}
+
+#server-selection-dialog Button {
+    margin: 0 1;
+}
+
 #server-management-dialog {
     width: 60;
     height: 20;
@@ -99,14 +116,6 @@ ErrorModal {
     background: $background;
     padding: 1 2;
 }
-#server-selection-dialog {
-    width: 80;
-    height: auto;
-    border: round green;
-    background: $surface;
-    padding: 1 2;
-}
-
 #edit-server-dialog {
     width: 60;
     height: auto;
