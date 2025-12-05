@@ -1,43 +1,37 @@
 VMCard {
-    width: auto;
-    height: auto;
     text-align: center;
     padding: 0 0;
-    border: panel green;
-    overflow-y: auto;
+    border: none; /*panel green;*/
     margin: 0 0;
 }
 #name {
     background: green;
     color: black;
-    padding: 1 1;
+    padding: 0 0;
     text-style: bold;
     content-align: center middle;
-    border: none;
+    border: round green;
 }
 #status {
     margin: 0 2;
-    padding: 0 1;
+    padding: 0 0;
     text-style: bold;
-    height: 8vh; /* 3vh; */
-    min-height: 8vh; /* 3vh; */
+    height: 3vh; /* 3vh; */
+    min-height: 3vh; /* 3vh; */
     content-align: center middle;
-    border: round; /*hidden; */
+    border: hidden; /*hidden; */
 }
 #status.running {
     background: lightgreen;
     color: black;
-    border: round lightgreen;
 }
 #status.stopped {
     color: black;
     background: red;
-    border: round red;
 }
 #status.paused {
     color: black;
     background: yellow;
-    border: round yellow;
 }
 Button {
     height: 3vh; /*3vh; */
@@ -51,7 +45,6 @@ Button {
     width: 15%; /*5vh; */
     margin: 0 1;
     padding: 0 0;
-    overflow-y: auto;
     border: hidden;
 }
 
@@ -63,5 +56,30 @@ Button {
 #status-cpu-mem {
     width: 100%;
     height: 100%;
+    padding: 0 1;
+}
+/* Custom button styles */
+#pause {
+    background: #FFA500; /* Orange */
+    color: white;
+    height: 5vh;
+    padding: 0 1;
+}
+#snapshot_take {
+    background: #00008B; /* Dark blue */
+    color: white;
+    height: 5vh;
+    padding: 0 1;
+}
+#snapshot_restore {
+    background: #0000FF; /* Blue */
+    color: white;
+    height: 5vh;
+    padding: 0 1;
+}
+#connect {
+    background: #FF00FF; /* Magenta */
+    color: white;
+    height: 5vh;
     padding: 0 1;
 }
