@@ -60,25 +60,28 @@ class AddServerModal(ModalScreen):
         elif event.button.id == "cancel-btn":
             self.dismiss(None)
 
-class RenameServerModal(ModalScreen):
-    """Modal screen for renaming a server."""
+class EditServerModal(ModalScreen):
+    """Modal screen for editing a server."""
 
-    def __init__(self, old_name: str) -> None:
+    def __init__(self, server_name: str, server_uri: str) -> None:
         super().__init__()
-        self.old_name = old_name
+        self.server_name = server_name
+        self.server_uri = server_uri
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="rename-server-dialog"):
-            yield Label(f"Rename Server: {self.old_name}")
-            yield Input(placeholder="New Server Name", id="new-server-name-input")
+        with Vertical(id="edit-server-dialog"):
+            yield Label("Edit Server")
+            yield Input(value=self.server_name, id="server-name-input")
+            yield Input(value=self.server_uri, id="server-uri-input")
             with Horizontal():
                 yield Button("Save", variant="primary", id="save-btn", classes="Buttonpage")
                 yield Button("Cancel", variant="default", id="cancel-btn", classes="Buttonpage")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "save-btn":
-            name_input = self.query_one("#new-server-name-input", Input)
-            self.dismiss(name_input.value)
+            name_input = self.query_one("#server-name-input", Input)
+            uri_input = self.query_one("#server-uri-input", Input)
+            self.dismiss((name_input.value, uri_input.value))
         elif event.button.id == "cancel-btn":
             self.dismiss(None)
 
@@ -97,8 +100,8 @@ class ServerSelectionModal(ModalScreen):
             with ScrollableContainer():
                 yield DataTable(id="server-select-table")
             with Horizontal():
-                yield Button("Select", id="select-btn", variant="primary", disabled=True)
-                yield Button("Cancel", id="cancel-btn")
+                yield Button("Select", id="select-btn", variant="primary", disabled=True, classes="Buttonpage")
+                yield Button("Cancel", id="cancel-btn", classes="Buttonpage")
 
     def on_mount(self) -> None:
         table = self.query_one(DataTable)
@@ -124,11 +127,11 @@ class FilterModal(ModalScreen):
     def compose(self) -> ComposeResult:
         with Vertical(id="filter-dialog"):
             yield Label("Filter by Status")
-            yield Button("All", id="sort_default", variant="primary")
-            yield Button("Running", id="sort_running")
-            yield Button("Paused", id="sort_paused")
-            yield Button("Stopped", id="sort_stopped")
-            yield Button("Cancel", id="cancel-btn")
+            yield Button("All", id="sort_default", variant="primary", classes="Buttonpage")
+            yield Button("Running", id="sort_running", classes="Buttonpage")
+            yield Button("Paused", id="sort_paused", classes="Buttonpage")
+            yield Button("Stopped", id="sort_stopped", classes="Buttonpage")
+            yield Button("Cancel", id="cancel-btn", classes="close-button")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "cancel-btn":
@@ -151,21 +154,23 @@ class ServerManagementModal(ModalScreen):
             with ScrollableContainer():
                 yield DataTable(id="server-table")
             with Horizontal():
-                yield Button("Add", id="add-server-btn", classes="Buttonpage")
-                yield Button("Edit", id="rename-server-btn", disabled=True, classes="Buttonpage")
-                yield Button("Delete", id="delete-server-btn", disabled=True, variant="error", classes="Buttonpage")
-            yield Button("Close", id="close-btn", classes="Buttonpage")
+                yield Button("Add", id="add-server-btn", classes="add-button")
+                yield Button("Edit", id="edit-server-btn", disabled=True, classes="edit-button")
+                yield Button("Delete", id="delete-server-btn", disabled=True, variant="error", classes="delete-button")
+            yield Button("Close", id="close-btn", classes="close-button")
 
     def on_mount(self) -> None:
         table = self.query_one(DataTable)
+        table.cursor_type = "row"
         table.add_column("Name", key="name")
         table.add_column("URI", key="uri")
         for server in self.servers:
             table.add_row(server['name'], server['uri'], key=server['uri'])
+        table.focus()
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         self.selected_row = event.cursor_row
-        self.query_one("#rename-server-btn").disabled = False
+        self.query_one("#edit-server-btn").disabled = False
         self.query_one("#delete-server-btn").disabled = False
 
     def _reload_table(self):
@@ -186,22 +191,24 @@ class ServerManagementModal(ModalScreen):
                     save_config(self.app.config)
                     self._reload_table()
             self.app.push_screen(AddServerModal(), add_server_callback)
-        elif event.button.id == "rename-server-btn" and self.selected_row is not None:
-            old_name = self.servers[self.selected_row]['name']
-            def rename_server_callback(new_name):
-                if new_name:
+        elif event.button.id == "edit-server-btn" and self.selected_row is not None:
+            server_to_edit = self.servers[self.selected_row]
+            def edit_server_callback(result):
+                if result:
+                    new_name, new_uri = result
                     self.servers[self.selected_row]['name'] = new_name
+                    self.servers[self.selected_row]['uri'] = new_uri
                     self.app.config['servers'] = self.servers
                     save_config(self.app.config)
                     self._reload_table()
-            self.app.push_screen(RenameServerModal(old_name), rename_server_callback)
+            self.app.push_screen(EditServerModal(server_to_edit['name'], server_to_edit['uri']), edit_server_callback)
         elif event.button.id == "delete-server-btn" and self.selected_row is not None:
             del self.servers[self.selected_row]
             self.app.config['servers'] = self.servers
             save_config(self.app.config)
             self._reload_table()
             self.selected_row = None
-            self.query_one("#rename-server-btn").disabled = True
+            self.query_one("#edit-server-btn").disabled = True
             self.query_one("#delete-server-btn").disabled = True
 
 
@@ -294,6 +301,9 @@ class VMManagerTUI(App):
         ("ctrl+p", "next_page", "Next Page"),
         ("ctrl+n", "previous_page", "Previous Page"),
         ("v", "view_log", "View Log"),
+        ("f", "filter_view", "Filter"),
+        ("s", "select_server", "Select Server"),
+        ("m", "manage_server", "Manage Servers"),
         ("q", "quit", "Quit"),
     ]
 

@@ -32,6 +32,8 @@ ConnectionModal {
 
 FilterModal {
     align: center middle;
+    height: auto;
+    border: round green;
 }
 
 #filter-dialog {
@@ -72,6 +74,35 @@ ServerSelectionModal {
     border: thick $background 80%;
     background: $surface;
     padding: 1 2;
+}
+
+#edit-server-dialog {
+    width: 60;
+    height: auto;
+    border: thick $background 80%;
+    background: $surface;
+    padding: 1 2;
+}
+
+#edit-server-dialog Label {
+    width: 100%;
+    content-align: center middle;
+    margin-bottom: 1;
+}
+
+#edit-server-dialog Input {
+    width: 100%;
+    margin-bottom: 1;
+}
+
+#edit-server-dialog Horizontal {
+    width: 100%;
+    height: auto;
+    align: center middle;
+}
+
+#edit-server-dialog Button {
+    margin: 0 1;
 }
 
 Header {
@@ -170,11 +201,43 @@ VMDetailModal {
     color: red;
     height: 1;
 }
-
+Button {
+    height: 3vh; /*3vh; */
+    width: 100%; /*5vh; */
+    margin: 1 1;
+    padding: 0 0;
+    border: hidden;
+}
+.Buttonpage {
+    height: auto;
+    margin: 0 1;
+    padding: 1 1;
+    color: white;
+    background: grey;
+    border: round;
+}
 .close-button {
     height: 4vh;
     color: white;
     background: blue;
     border: hidden;
     margin-bottom: 1;
+}
+.delete-button {
+    height: 4vh;
+    width: 25%; /*5vh; */
+    color: white;
+    background: red;
+}
+.edit-button {
+    height: 4vh;
+    width: 25%; /*5vh; */
+    color: white;
+    background: green;
+}
+.add-button {
+    height: 4vh;
+    width: 25%; /*5vh; */
+    color: white;
+    background: green;
 }
