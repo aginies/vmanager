@@ -1,4 +1,4 @@
-# VM Manager
+# Rainbow V Manager
 
 A Textual-based TUI (Terminal User Interface) application for managing QEMU/KVM virtual machines.
 
