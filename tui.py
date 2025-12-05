@@ -353,12 +353,13 @@ class VMManagerTUI(App):
             pc.styles.display = "none"
             pc.styles.align_horizontal = "center"
             pc.styles.height = "auto"
-            pc.styles.padding_top = 1
-            yield Button("Previous", id="prev-button", variant="primary", classes="Buttonpage")
-            yield Label("", id="page-info")
-            yield Button("Next", id="next-button", variant="primary", classes="Buttonpage")
+            pc.styles.padding_bottom = 0
+            yield Button("Previous", id="prev-button", variant="primary", classes="ctrlpage")
+            yield Label("", id="page-info", classes="ctrlpage")
+            yield Button("Next", id="next-button", variant="primary", classes="ctrlpage")
 
-        with ScrollableContainer(id="vms-container"):
+        #with ScrollableContainer(id="vms-container"):
+        with Vertical(id="vms-container"):
             pass # VMCard will be directly mounted here
 
         yield Static(id="error-footer", classes="error-message")
@@ -403,9 +404,9 @@ class VMManagerTUI(App):
         elif width < 96:
             vms_container.styles.grid_size_columns = 2
         elif width < 126:
-            vms_container.styles.grid_size_columns = 4
+            vms_container.styles.grid_size_columns = 3
         else:
-            vms_container.styles.grid_size_columns = 5
+            vms_container.styles.grid_size_columns = 4
     
     def on_resize(self, event) -> None:
         """Called when the terminal is resized."""
@@ -661,6 +662,7 @@ class VMManagerTUI(App):
         except libvirt.libvirtError:
             self.show_error_message("Connection lost")
             self.conn = None
+
     def update_pagination_controls(self, total_vms: int):
         pagination_controls = self.query_one("#pagination-controls")
         if total_vms <= self.VMS_PER_PAGE:

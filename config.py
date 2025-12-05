@@ -3,7 +3,7 @@ import yaml
 from pathlib import Path
 
 DEFAULT_CONFIG = {
-    'VMS_PER_PAGE': 4,
+    'VMS_PER_PAGE': 6,
     'servers': [
         {'name': 'Localhost', 'uri': 'qemu:///system'},
     ]

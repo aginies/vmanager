@@ -249,12 +249,10 @@ class VMCard(Static):
         elif event.button.id == "connect":
             logging.info(f"Attempting to connect to VM: {self.name}")
             try:
-                with self.app.suspend():
-                    subprocess.run(
-                        ["virt-viewer", "--connect", self.app.connection_uri, self.name],
-                        check=True
-                    )
-                logging.info(f"Successfully connected to VM: {self.name}")
+                subprocess.Popen(
+                    ["virt-viewer", "--connect", self.app.connection_uri, self.name],
+                )
+                logging.info(f"Successfully launched virt-viewer for VM: {self.name}")
             except (FileNotFoundError, subprocess.CalledProcessError) as e:
                 self.post_message(
                     VMActionError(vm_name=self.name, action="connect", error_message=str(e))

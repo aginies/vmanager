@@ -1,18 +1,22 @@
 /* Styles for VMManagerTUI */
 #vms-container {
     height: auto;
+    width: auto;
     overflow-y: scroll;
-    grid-rows: 28vh; /* Approximate height for VMCard */
-    grid-columns: 80vh; /* Approximate height for VMCard */
+    overflow-x: scroll;
+    grid-rows: 28vh;
+    grid-gutter: 0 0;
+    grid-columns: 80vh;
     layout: grid;
 }
 ConnectionModal {
     align: center middle;
+    border: round red 80%;
 }
 #connection-dialog {
     width: 60;
     height: auto;
-    border: thick $background 80%;
+    border: round $background 80%;
     background: $surface;
     padding: 1 2;
 }
@@ -44,7 +48,7 @@ ErrorModal {
 #error-dialog {
     width: 60;
     height: auto;
-    border: thick $background 80%;
+    border: round $background 80%;
     background: $surface;
     padding: 1 2;
 }
@@ -71,7 +75,7 @@ ErrorModal {
 #filter-dialog {
     width: 40;
     height: auto;
-    border: thick $background 80%;
+    border: round $background 80%;
     background: $surface;
     padding: 1 2;
 }
@@ -95,14 +99,13 @@ ErrorModal {
     margin-bottom: 1;
 }
 
-
 ServerManagementModal {
     align: center middle;
 }
 #server-management-dialog {
     width: 80;
     height: 25;
-    border: thick $background 80%;
+    border: round $background 80%;
     background: $surface;
     padding: 1 2;
 }
@@ -112,7 +115,7 @@ ServerSelectionModal {
 #server-selection-dialog {
     width: 80;
     height: 25;
-    border: thick $background 80%;
+    border: round $background 80%;
     background: $surface;
     padding: 1 2;
 }
@@ -120,7 +123,7 @@ ServerSelectionModal {
 #edit-server-dialog {
     width: 60;
     height: auto;
-    border: thick $background 80%;
+    border: round $background 80%;
     background: $surface;
     padding: 1 2;
 }
@@ -168,15 +171,19 @@ Select {
 
 /* Styles for VMDetailModal */
 VMDetailModal {
+    height: 60;
     align: center middle;
 }
 
+SnapshotNameDialog{
+    align: center middle;
+}
 #vm-detail-container {
     width: 80;
     height: 60;
     max-height: 90%;
     background: $surface;
-    border: thick $primary-lighten-2;
+    border: round $primary-lighten-2;
     padding: 1;
     overflow: auto;
 }
@@ -251,11 +258,19 @@ Button {
 }
 .Buttonpage {
     height: auto;
-    margin: 0 1;
+    margin: 0 0;
     padding: 1 1;
     color: white;
     background: black;
     border: round;
+}
+.ctrlpage {
+    height: 4vh;
+    width: auto;
+    margin: 0 0;
+    padding: 0 0;
+    color: white;
+    background: $background;
 }
 
 .delete-button {

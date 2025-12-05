@@ -5,10 +5,17 @@ VMCard {
     margin: 0 0;
 }
 #name {
-    background: green;
-    color: black;
+    background: $background;
+    color: white;
     padding: 0 0;
     text-style: bold;
+    content-align: center middle;
+    border: round green;
+}
+#info-container {
+    background: $background;
+    color: white;
+    padding: 0 0;
     content-align: center middle;
     border: round green;
 }
