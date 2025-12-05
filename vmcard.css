@@ -42,7 +42,7 @@ VMCard {
 Button {
     height: 3vh; /*3vh; */
     width: 100%; /*5vh; */
-    margin: 1 1;
+    margin: 0 1;
     padding: 0 0;
     border: hidden;
 }

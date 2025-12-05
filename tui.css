@@ -32,10 +32,38 @@ ConnectionModal {
 
 FilterModal {
     align: center middle;
-    height: auto;
-    border: round green;
 }
 
+ErrorModal {
+    align: center middle;
+}
+#error-dialog {
+    width: 60;
+    height: auto;
+    border: thick $background 80%;
+    background: $surface;
+    padding: 1 2;
+}
+
+#error-dialog Label {
+    width: 100%;
+    content-align: center middle;
+    margin-bottom: 1;
+    text-style: bold;
+    color: red; /* Error label should be red */
+}
+
+#error-dialog Static {
+    width: 100%;
+    margin-bottom: 1;
+    color: red; /* Error message text should be red */
+}
+
+#error-dialog Button {
+    margin: 0 1;
+    width: auto;
+    align: center middle;
+}
 #filter-dialog {
     width: 40;
     height: auto;
@@ -54,6 +82,15 @@ FilterModal {
     width: 100%;
     margin-bottom: 1;
 }
+
+.close-button {
+    height: 4vh;
+    color: white;
+    background: blue;
+    border: hidden;
+    margin-bottom: 1;
+}
+
 
 ServerManagementModal {
     align: center middle;
@@ -213,16 +250,10 @@ Button {
     margin: 0 1;
     padding: 1 1;
     color: white;
-    background: grey;
+    background: black;
     border: round;
 }
-.close-button {
-    height: 4vh;
-    color: white;
-    background: blue;
-    border: hidden;
-    margin-bottom: 1;
-}
+
 .delete-button {
     height: 4vh;
     width: 25%; /*5vh; */
