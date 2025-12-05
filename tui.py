@@ -125,8 +125,10 @@ class VMManagerTUI(App):
     """A Textual application to manage VMs."""
 
     BINDINGS = [
-        ("n", "next_page", "Next Page"),
-        ("p", "previous_page", "Previous Page"),
+        ("ctrl+p", "next_page", "Next Page"),
+        ("ctrl+n", "previous_page", "Previous Page"),
+        ("v", "view_log", "View Log"),
+        ("q", "quit", "Quit"),
     ]
 
     connection_uri = reactive("qemu:///system")
@@ -300,7 +302,8 @@ class VMManagerTUI(App):
         self.push_screen(ConnectionModal(), self.handle_connection_result)
 
     @on(Button.Pressed, "#view_log_button")
-    def on_view_log_button_pressed(self, event: Button.Pressed) -> None:
+    def action_view_log(self) -> None:
+        """View the application log file."""
         log_file = "vm_manager_error.log"
         with self.app.suspend():
             subprocess.run(["view", log_file])
@@ -475,6 +478,10 @@ class VMManagerTUI(App):
         if self.current_page < self.num_pages - 1:
             self.current_page += 1
             self.refresh_vm_list()
+
+    def action_quit(self) -> None:
+        """Quit the application."""
+        self.exit()
 
 if __name__ == "__main__":
     app = VMManagerTUI()
