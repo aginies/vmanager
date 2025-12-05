@@ -690,63 +690,65 @@ class VMManagerTUI(App):
             return
 
         try:
-            domains = self.conn.listAllDomains(0)
-            if domains is not None:
-                if self.sort_by != "default":
-                    if self.sort_by == "running":
-                        domains = [
-                            d
-                            for d in domains
-                            if d.info()[0] == libvirt.VIR_DOMAIN_RUNNING
-                        ]
-                    elif self.sort_by == "paused":
-                        domains = [
-                            d
-                            for d in domains
-                            if d.info()[0] == libvirt.VIR_DOMAIN_PAUSED
-                        ]
-                    elif self.sort_by == "stopped":
-                        domains = [
-                            d
-                            for d in domains
-                            if d.info()[0]
-                            not in [
-                                libvirt.VIR_DOMAIN_RUNNING,
-                                libvirt.VIR_DOMAIN_PAUSED,
-                            ]
-                        ]
+            all_domains = self.conn.listAllDomains(0) or []
+            total_vms_unfiltered = len(all_domains)
 
-                total_vms = len(domains)
-                self.update_pagination_controls(total_vms)
+            domains_to_display = all_domains
+            if self.sort_by != "default":
+                if self.sort_by == "running":
+                    domains_to_display = [
+                        d
+                        for d in all_domains
+                        if d.info()[0] == libvirt.VIR_DOMAIN_RUNNING
+                    ]
+                elif self.sort_by == "paused":
+                    domains_to_display = [
+                        d
+                        for d in all_domains
+                        if d.info()[0] == libvirt.VIR_DOMAIN_PAUSED
+                    ]
+                elif self.sort_by == "stopped":
+                    domains_to_display = [
+                        d
+                        for d in all_domains
+                        if d.info()[0]
+                        not in [
+                            libvirt.VIR_DOMAIN_RUNNING,
+                            libvirt.VIR_DOMAIN_PAUSED,
+                        ]
+                    ]
 
-                start_index = self.current_page * self.VMS_PER_PAGE
-                end_index = start_index + self.VMS_PER_PAGE
-                paginated_domains = domains[start_index:end_index]
+            total_filtered_vms = len(domains_to_display)
+            self.update_pagination_controls(total_filtered_vms, total_vms_unfiltered)
 
-                for domain in paginated_domains:
-                    info = domain.info()
-                    vm_card = VMCard(
-                        name=domain.name(),
-                        status=get_status(domain),
-                        cpu=info[3],
-                        memory=info[1] // 1024,  # Convert KiB to MiB
-                        vm=domain,
-                        color="#323232",
-                    )
-                    vms_container.mount(vm_card)
+            start_index = self.current_page * self.VMS_PER_PAGE
+            end_index = start_index + self.VMS_PER_PAGE
+            paginated_domains = domains_to_display[start_index:end_index]
+
+            for domain in paginated_domains:
+                info = domain.info()
+                vm_card = VMCard(
+                    name=domain.name(),
+                    status=get_status(domain),
+                    cpu=info[3],
+                    memory=info[1] // 1024,  # Convert KiB to MiB
+                    vm=domain,
+                    color="#323232",
+                )
+                vms_container.mount(vm_card)
         except libvirt.libvirtError:
             self.show_error_message("Connection lost")
             self.conn = None
 
-    def update_pagination_controls(self, total_vms: int):
+    def update_pagination_controls(self, total_filtered_vms: int, total_vms_unfiltered: int):
         pagination_controls = self.query_one("#pagination-controls")
-        if total_vms <= self.VMS_PER_PAGE:
+        if total_vms_unfiltered <= self.VMS_PER_PAGE:
             pagination_controls.styles.display = "none"
             return
         else:
             pagination_controls.styles.display = "block"
 
-        num_pages = (total_vms + self.VMS_PER_PAGE - 1) // self.VMS_PER_PAGE
+        num_pages = (total_filtered_vms + self.VMS_PER_PAGE - 1) // self.VMS_PER_PAGE
         self.num_pages = num_pages
 
         page_info = self.query_one("#page-info", Label)
