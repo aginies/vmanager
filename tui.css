@@ -258,3 +258,32 @@ Button {
     padding-top: 0;
     padding-bottom: 0;
 }
+
+#add-disk-dialog {
+    width: auto;
+    height: auto;
+    max-width: 60;
+    max-height: 80vh;
+    border: round green;
+    background: $surface;
+    padding: 1 2;
+    align: center middle;
+}
+#add-disk-dialog Label {
+    width: 100%;
+    content-align: center middle;
+    margin-bottom: 1;
+}
+#add-disk-dialog Input,
+#add-disk-dialog Select {
+    width: 100%;
+    margin-bottom: 1;
+}
+#add-disk-dialog Horizontal {
+    width: 100%;
+    height: auto;
+    align: center middle;
+}
+#add-disk-dialog Button {
+    margin: 0 1;
+}
