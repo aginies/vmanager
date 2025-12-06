@@ -459,15 +459,14 @@ class ServerPrefModal(BaseModal[None]):
                             yield Input(placeholder="IPv4 Network (e.g., 192.168.100.0/24)", id="net-ip-input")
                             with Horizontal(id="dhcp-checkbox-horizontal"):
                                 yield Checkbox("Enable DHCPv4", id="dhcp-checkbox", value=True)
-                                yield Input(placeholder="DHCP Start (e.g., 192.168.100.100)", id="dhcp-start-input", classes="dhcp-input")
-                                yield Input(placeholder="DHCP End (e.g., 192.168.100.254)", id="dhcp-end-input", classes="dhcp-input")
-                            with Horizontal(id="dns-domain-radio"):
-                                yield RadioSet(
-                                    RadioButton("Network Name (e.g., nat_net)", id="dns-use-net-name", value=True),
-                                    RadioButton("Custom Domain", id="dns-use-custom"),
-                                    id="dns-domain-radioset"
-                                )
-                                yield Input(placeholder="Custom DNS Domain", id="dns-domain-input", classes="dns-domain-input")
+                            with Vertical(id="dhcp-options"):
+                                with Horizontal(id="dhcp-inputs-horizontal"):
+                                    yield Input(placeholder="DHCP Start (e.g., 192.168.100.100)", id="dhcp-start-input", classes="dhcp-input")
+                                    yield Input(placeholder="DHCP End (e.g., 192.168.100.254)", id="dhcp-end-input", classes="dhcp-input")
+                            with RadioSet(id="dns-domain-radioset"):
+                                yield RadioButton("Use Network Name for DNS Domain", id="dns-use-net-name", value=True)
+                                yield RadioButton("Use Custom DNS Domain", id="dns-use-custom")
+                            yield Input(placeholder="Custom DNS Domain", id="dns-custom-domain-input", classes="hidden")
                             yield Button("Create Network", variant="primary", id="create-net-btn")
 
             with Horizontal(id="server-pref-buttons"):
@@ -491,11 +490,11 @@ class ServerPrefModal(BaseModal[None]):
     @on(DataTable.CellSelected, "#existing-networks-table")
     def on_network_table_cell_selected(self, event: DataTable.CellSelected) -> None:
         table = self.query_one("#existing-networks-table", DataTable)
-                row_key = event.row_key.value
-                column_key = event.column_key.value
-                network_name = str(row_key) # network_name will be a string
+        row_key = event.row_key.value
+        column_key = event.column_key.value
+        network_name = str(row_key) # network_name will be a string
         
-                if column_key == "name":            # Show network details
+        if column_key == "name": # Show network details
             try:
                 net = self.app.conn.networkLookupByName(network_name)
                 xml = net.XMLDesc(0)
