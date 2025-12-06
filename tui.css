@@ -336,6 +336,12 @@ VirshShellScreen {
     height: 5;
     border: round $primary;
 }
+.net-forward-input {
+    border: hidden;
+    height: 4;
+    width: 50%;
+    margin: 0 0;
+}
 .create-network-form {
     background: $surface;
     border: round $primary;

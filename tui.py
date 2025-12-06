@@ -468,7 +468,7 @@ class ServerPrefModal(BaseModal[None]):
                         yield Label("Create New NAT Network", classes="section-title")
                         with Vertical(id="create-network-form"):
                             yield Input(placeholder="Network Name (e.g., nat_net)", id="net-name-input")
-                            yield Select(interface_options, prompt="Select Forward Interface", id="net-forward-input")
+                            yield Select(interface_options, prompt="Select Forward Interface", id="net-forward-input", classes="net-forward-input")
                             yield Input(placeholder="IPv4 Network (e.g., 192.168.100.0/24)", id="net-ip-input")
                             yield Checkbox("Enable DHCPv4", id="dhcp-checkbox", value=True)
                             with Vertical(id="dhcp-inputs-horizontal"):
