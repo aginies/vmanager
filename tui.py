@@ -12,7 +12,7 @@ from textual.screen import ModalScreen
 from textual import on
 import libvirt
 from vmcard import VMCard, VMNameClicked
-from vm_info import get_status, get_vm_description, get_vm_machine_info, get_vm_firmware_info, get_vm_networks_info, get_vm_network_ip, get_vm_network_dns_gateway_info, get_vm_disks_info, get_vm_devices_info, add_disk, remove_disk, set_vcpu, set_memory, get_supported_machine_types, set_machine_type, list_networks, create_nat_network
+from vm_info import get_status, get_vm_description, get_vm_machine_info, get_vm_firmware_info, get_vm_networks_info, get_vm_network_ip, get_vm_network_dns_gateway_info, get_vm_disks_info, get_vm_devices_info, add_disk, remove_disk, set_vcpu, set_memory, get_supported_machine_types, set_machine_type, list_networks, create_nat_network, get_host_network_interfaces
 from config import load_config, save_config
 
 # Configure logging
@@ -210,7 +210,7 @@ class ServerManagementModal(ModalScreen):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="server-management-dialog"):
-            yield Label("Server Management")
+            yield Label("Server List Management")
             with ScrollableContainer():
                 yield DataTable(id="server-table")
             with Horizontal():
@@ -444,30 +444,38 @@ class ServerPrefModal(BaseModal[None]):
                 with TabPane("Storage", id="tab-storage"):
                     yield Label("Storage settings... WIP")
                 with TabPane("Network", id="tab-network"):
+                    host_interfaces = get_host_network_interfaces()
+                    if not host_interfaces:
+                        host_interfaces = [("No interfaces found", "")]
+                    interface_options = [(iface, iface) for iface in host_interfaces]
+
                     with ScrollableContainer():
                         yield Label("Existing Networks", classes="section-title")
                         yield DataTable(id="existing-networks-table")
                         yield Label("Create New NAT Network", classes="section-title")
                         with Vertical(id="create-network-form"):
                             yield Input(placeholder="Network Name (e.g., nat_net)", id="net-name-input")
-                            yield Input(placeholder="Forward Interface (e.g., eth0)", id="net-forward-input")
+                            yield Select(interface_options, prompt="Select Forward Interface", id="net-forward-input")
                             yield Input(placeholder="IPv4 Network (e.g., 192.168.100.0/24)", id="net-ip-input")
                             with Horizontal(id="dhcp-checkbox-horizontal"):
                                 yield Checkbox("Enable DHCPv4", id="dhcp-checkbox", value=True)
-                            with Vertical(id="dhcp-options"):
-                                with Horizontal(id="dhcp-inputs-horizontal"):
-                                    yield Input(placeholder="DHCP Start IP", id="dhcp-start-input")
-                                    yield Input(placeholder="DHCP End IP", id="dhcp-end-input")
-                            with RadioSet(id="dns-domain-radioset"):
-                                yield RadioButton("Use Network Name for DNS Domain", id="dns-use-net-name", value=True)
-                                yield RadioButton("Use Custom DNS Domain", id="dns-use-custom")
-                            yield Input(placeholder="Custom DNS Domain", id="dns-custom-domain-input", classes="hidden")
-                            yield Button("Create Network", id="create-net-btn", variant="primary")
+                                yield Input(placeholder="DHCP Start (e.g., 192.168.100.100)", id="dhcp-start-input", classes="dhcp-input")
+                                yield Input(placeholder="DHCP End (e.g., 192.168.100.254)", id="dhcp-end-input", classes="dhcp-input")
+                            with Horizontal(id="dns-domain-radio"):
+                                yield RadioSet(
+                                    RadioButton("Network Name (e.g., nat_net)", id="dns-use-net-name", value=True),
+                                    RadioButton("Custom Domain", id="dns-use-custom"),
+                                    id="dns-domain-radioset"
+                                )
+                                yield Input(placeholder="Custom DNS Domain", id="dns-domain-input", classes="dns-domain-input")
+                            yield Button("Create Network", variant="primary", id="create-net-btn")
 
             with Horizontal(id="server-pref-buttons"):
                 yield Button("Close", variant="default", id="close-btn", classes="Buttonpage")
 
     def on_mount(self) -> None:
+        table = self.query_one("#existing-networks-table", DataTable)
+        table.cursor_type = "cell"
         self._load_networks()
 
     def _load_networks(self):
@@ -478,7 +486,34 @@ class ServerPrefModal(BaseModal[None]):
         table.add_column("Active", key="active")
         networks = list_networks(self.app.conn)
         for net in networks:
-            table.add_row(net['name'], net['mode'], "Yes" if net['active'] else "No")
+            table.add_row(net['name'], net['mode'], "Yes" if net['active'] else "No", key=net['name'])
+
+    @on(DataTable.CellSelected, "#existing-networks-table")
+    def on_network_table_cell_selected(self, event: DataTable.CellSelected) -> None:
+        table = self.query_one("#existing-networks-table", DataTable)
+                row_key = event.row_key.value
+                column_key = event.column_key.value
+                network_name = str(row_key) # network_name will be a string
+        
+                if column_key == "name":            # Show network details
+            try:
+                net = self.app.conn.networkLookupByName(network_name)
+                xml = net.XMLDesc(0)
+                self.app.push_screen(NetworkDetailModal(network_name, xml))
+            except libvirt.libvirtError as e:
+                self.app.show_error_message(f"Error getting network details: {e}")
+
+        elif str(column_key) == "active":
+            # Toggle network state
+            try:
+                net = self.app.conn.networkLookupByName(network_name)
+                if net.isActive():
+                    net.destroy()
+                else:
+                    net.create()
+                self._load_networks()
+            except libvirt.libvirtError as e:
+                self.app.show_error_message(f"Error toggling network state: {e}")
 
     @on(Checkbox.Changed, "#dhcp-checkbox")
     def on_dhcp_checkbox_changed(self, event: Checkbox.Changed) -> None:
@@ -502,7 +537,8 @@ class ServerPrefModal(BaseModal[None]):
             self.dismiss(None)
         elif event.button.id == "create-net-btn":
             name = self.query_one("#net-name-input", Input).value
-            forward = self.query_one("#net-forward-input", Input).value
+            forward_select = self.query_one("#net-forward-input", Select)
+            forward = forward_select.value
             ip = self.query_one("#net-ip-input", Input).value
             dhcp = self.query_one("#dhcp-checkbox", Checkbox).value
             dhcp_start = self.query_one("#dhcp-start-input", Input).value
@@ -511,7 +547,7 @@ class ServerPrefModal(BaseModal[None]):
             domain_radio = self.query_one("#dns-domain-radioset", RadioSet).pressed_button.id
             domain_name = name
             if domain_radio == "dns-use-custom":
-                domain_name = self.query_one("#dns-custom-domain-input", Input).value
+                domain_name = self.query_one("#dns-domain-input", Input).value
 
             try:
                 # Validate network address
@@ -729,6 +765,29 @@ class VMDetailModal(ModalScreen):
     def action_close_modal(self) -> None:
         """Close the modal."""
         self.dismiss()
+
+class NetworkDetailModal(BaseModal[None]):
+    """Modal screen to show detailed network information."""
+
+    def __init__(self, network_name: str, network_xml: str) -> None:
+        super().__init__()
+        self.network_name = network_name
+        self.network_xml = network_xml
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="network-detail-dialog"):
+            yield Label(f"Network Details: {self.network_name}", id="title")
+            with ScrollableContainer():
+                text_area = TextArea(self.network_xml, language="xml", read_only=True)
+                text_area.styles.height = "auto"
+                yield text_area
+            with Horizontal():
+                yield Button("Close", variant="default", id="close-btn", classes="Buttonpage")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "close-btn":
+            self.dismiss(None)
+
 
 class VMManagerTUI(App):
     """A Textual application to manage VMs."""

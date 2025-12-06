@@ -6,6 +6,7 @@ import os
 import libvirt
 import string
 import subprocess
+import secrets
 
 def get_vm_info(conn):
     """
@@ -552,17 +553,18 @@ def create_nat_network(conn, name, forward_dev, ip_network, dhcp_enabled, dhcp_s
 
     import ipaddress
     net = ipaddress.ip_network(ip_network)
+    generated_mac = generate_mac_address()
 
     xml = f"""
 <network>
   <name>{name}</name>
-  <forward mode='nat'>
+  <forward mode='nat' dev='{forward_dev}'>
     <nat>
       <port start='1024' end='65535'/>
     </nat>
   </forward>
   <bridge name='{name}' stp='on' delay='0'/>
-  <mac address='52:54:00:..:..:..'/>
+  <mac address='{generated_mac}'/>
   <domain name='{domain_name}'/>
   <ip address='{net.network_address + 1}' netmask='{net.netmask}'>
 """
@@ -580,3 +582,39 @@ def create_nat_network(conn, name, forward_dev, ip_network, dhcp_enabled, dhcp_s
     net = conn.networkDefineXML(xml)
     net.create()
     net.setAutostart(True)
+
+def get_host_network_interfaces():
+    """
+    Retrieves a list of network interface names available on the host.
+    """
+    try:
+        # Use 'ip -o link show' to list interfaces and awk to extract names
+        result = subprocess.run(
+            ['ip', '-o', 'link', 'show'],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        interfaces = []
+        for line in result.stdout.splitlines():
+            parts = line.split(': ')
+            if len(parts) > 1:
+                # The interface name is the second part
+                interface_name = parts[1].split('@')[0]  # Handle interfaces like 'eth0@if10'
+                if interface_name != 'lo':  # Exclude loopback interface
+                    interfaces.append(interface_name)
+        return interfaces
+    except subprocess.CalledProcessError as e:
+        print(f"Error getting network interfaces: {e}")
+        return []
+    except FileNotFoundError:
+        print("Error: 'ip' command not found. Please ensure iproute2 is installed.")
+        return []
+
+def generate_mac_address():
+    """Generates a random MAC address."""
+    mac = [ 0x52, 0x54, 0x00,
+            secrets.randbelow(0x7f),
+            secrets.randbelow(0xff),
+            secrets.randbelow(0xff) ]
+    return ':'.join(map(lambda x: "%02x" % x, mac))
