@@ -4,8 +4,8 @@ lib to get all VM info
 import xml.etree.ElementTree as ET
 import os
 import libvirt
-
-
+import string
+import subprocess
 
 def get_vm_info(conn):
     """
@@ -38,6 +38,113 @@ def get_vm_info(conn):
             vm_info_list.append(vm_info)
 
     return vm_info_list
+
+def add_disk(domain, disk_path, device_type='disk', create=False, size_gb=10, disk_format='qcow2'):
+    """
+    Adds a disk to a VM. Can optionally create a new disk image.
+    device_type can be 'disk' or 'cdrom'
+    """
+    if not domain:
+        raise ValueError("Invalid domain object.")
+
+    # Determine target device
+    xml_desc = domain.XMLDesc(0)
+    root = ET.fromstring(xml_desc)
+    
+    if device_type == 'disk':
+        bus = 'virtio'
+        prefix = 'vd'
+        dev_letters = string.ascii_lowercase
+    elif device_type == 'cdrom':
+        bus = 'sata'
+        prefix = 'sd'
+        dev_letters = string.ascii_lowercase
+    else:
+        raise ValueError(f"Unsupported device type: {device_type}")
+
+    used_devs = [
+        target.get("dev")
+        for target in root.findall(".//disk/target")
+        if target.get("dev")
+    ]
+    
+    target_dev = ""
+    for letter in dev_letters:
+        dev = f"{prefix}{letter}"
+        if dev not in used_devs:
+            target_dev = dev
+            break
+    
+    if not target_dev:
+        raise Exception("No available device slots for new disk.")
+
+    if create:
+        try:
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(disk_path), exist_ok=True)
+            subprocess.run(['qemu-img', 'create', '-f', disk_format, disk_path, f'{size_gb}G'], check=True)
+        except (subprocess.CalledProcessError, FileNotFoundError, OSError) as e:
+            raise Exception(f"Failed to create disk image: {e}")
+
+    if device_type == 'disk':
+        disk_xml = f"""
+        <disk type='file' device='disk'>
+            <driver name='qemu' type='{disk_format}'/>
+            <source file='{disk_path}'/>
+            <target dev='{target_dev}' bus='{bus}'/>
+        </disk>
+        """
+    else: # cdrom
+        disk_xml = f"""
+        <disk type='file' device='cdrom'>
+            <driver name='qemu' type='raw'/>
+            <source file='{disk_path}'/>
+            <target dev='{target_dev}' bus='{bus}'/>
+            <readonly/>
+        </disk>
+        """
+
+    flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
+    if domain.isActive():
+        flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
+        
+    domain.attachDeviceFlags(disk_xml, flags)
+    return target_dev
+
+def remove_disk(domain, disk_dev_path):
+    """
+    Removes a disk from a VM based on its device path (e.g. /path/to/disk.img) or device name (vda)
+    """
+    if not domain:
+        raise ValueError("Invalid domain object.")
+
+    xml_desc = domain.XMLDesc(0)
+    root = ET.fromstring(xml_desc)
+    
+    disk_to_remove_xml = None
+    for disk in root.findall(".//disk[@device='disk'] | .//disk[@device='cdrom']"):
+        source = disk.find("source")
+        target = disk.find("target")
+        
+        match = False
+        if source is not None and source.get("file") == disk_dev_path:
+            match = True
+        elif target is not None and target.get("dev") == disk_dev_path:
+            match = True
+
+        if match:
+            disk_to_remove_xml = ET.tostring(disk, encoding="unicode")
+            break
+            
+    if not disk_to_remove_xml:
+        raise Exception(f"Disk with device path or name '{disk_dev_path}' not found.")
+
+    flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
+    if domain.isActive():
+        flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
+        
+    domain.detachDeviceFlags(disk_to_remove_xml, flags)
+
 
 def get_vm_network_dns_gateway_info(domain: str):
     """
@@ -336,3 +443,80 @@ def get_vm_disks_info(xml_content: str) ->str:
 
     return disks
 
+def set_vcpu(domain, vcpu_count: int):
+    """
+    Sets the number of virtual CPUs for a VM.
+    """
+    if not domain:
+        raise ValueError("Invalid domain object.")
+    
+    flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
+    if domain.isActive():
+        flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
+        
+    domain.setVcpusFlags(vcpu_count, flags)
+
+def set_memory(domain, memory_mb: int):
+    """
+    Sets the memory for a VM in megabytes.
+    """
+    if not domain:
+        raise ValueError("Invalid domain object.")
+        
+    memory_kb = memory_mb * 1024
+    
+    flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
+    if domain.isActive():
+        flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
+
+    domain.setMemoryFlags(memory_kb, flags)
+
+def get_supported_machine_types(conn, domain):
+    """
+    Returns a list of supported machine types for the domain's architecture.
+    """
+    if not conn or not domain:
+        return []
+    
+    try:
+        # Get domain architecture
+        domain_xml = domain.XMLDesc(0)
+        domain_root = ET.fromstring(domain_xml)
+        arch_elem = domain_root.find(".//os/type")
+        arch = arch_elem.get('arch') if arch_elem is not None else 'x86_64' # default
+
+        # Get capabilities
+        caps_xml = conn.getCapabilities()
+        caps_root = ET.fromstring(caps_xml)
+        
+        # Find machines for that arch
+        machines = [m.text for m in caps_root.findall(f".//guest/arch[@name='{arch}']/machine")]
+        return sorted(list(set(machines)))
+    except (libvirt.libvirtError, ET.ParseError) as e:
+        print(f"Error getting machine types: {e}")
+        return []
+
+def set_machine_type(domain, new_machine_type):
+    """
+    Sets the machine type for a VM.
+    The VM must be stopped.
+    """
+    if not domain:
+        raise ValueError("Invalid domain object.")
+        
+    if domain.isActive():
+        raise libvirt.libvirtError("VM must be stopped to change machine type.")
+        
+    xml_desc = domain.XMLDesc(0)
+    root = ET.fromstring(xml_desc)
+    
+    type_elem = root.find(".//os/type")
+    if type_elem is None:
+        raise Exception("Could not find OS type element in VM XML.")
+        
+    type_elem.set('machine', new_machine_type)
+    
+    new_xml_desc = ET.tostring(root, encoding='unicode')
+    
+    conn = domain.connect()
+    conn.defineXML(new_xml_desc)
