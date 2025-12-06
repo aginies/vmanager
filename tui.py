@@ -4,7 +4,7 @@ import logging
 from typing import TypeVar
 
 from textual.app import App, ComposeResult
-from textual.widgets import Header, Footer, Select, Button, Input, Label, Static, DataTable, Link, TextArea, ListView, ListItem, Checkbox
+from textual.widgets import Header, Footer, Select, Button, Input, Label, Static, DataTable, Link, TextArea, ListView, ListItem, Checkbox, RadioButton, RadioSet
 from textual.containers import ScrollableContainer, Horizontal, Vertical
 from textual.reactive import reactive
 from textual.screen import ModalScreen
@@ -129,25 +129,41 @@ class ServerSelectionModal(BaseModal[str | None]):
             self.dismiss(None)
 
 
-class FilterModal(BaseModal[str | None]):
+class FilterModal(BaseModal[dict | None]):
     """Modal screen for selecting a filter."""
 
     CSS_PATH = "tui.css"
 
+    def __init__(self, current_search: str = "", current_status: str = "default") -> None:
+        super().__init__()
+        self.current_search = current_search
+        self.current_status = current_status
+
     def compose(self) -> ComposeResult:
         with Vertical(id="filter-dialog", classes="FilterModal"):
-            yield Label("Filter by Status")
-            yield Button("All", id="sort_default", variant="primary", classes="Buttonpage")
-            yield Button("Running", id="sort_running", classes="Buttonpage")
-            yield Button("Paused", id="sort_paused", classes="Buttonpage")
-            yield Button("Stopped", id="sort_stopped", classes="Buttonpage")
-            yield Button("Cancel", id="cancel-btn", classes="close-button")
+            yield Label("Filter by Name:")
+            yield Input(placeholder="Enter VM name...", id="search-input", value=self.current_search)
+            yield Label("Filter by Status:")
+            with RadioSet(id="status-radioset"):
+                yield RadioButton("All", id="status_default", value=self.current_status == "default")
+                yield RadioButton("Running", id="status_running", value=self.current_status == "running")
+                yield RadioButton("Paused", id="status_paused", value=self.current_status == "paused")
+                yield RadioButton("Stopped", id="status_stopped", value=self.current_status == "stopped")
+            yield Button("Apply", id="apply-btn", variant="success")
+            yield Button("Cancel", id="cancel-btn")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "cancel-btn":
             self.dismiss(None)
-        else:
-            self.dismiss(event.button.id)
+        elif event.button.id == "apply-btn":
+            search_text = self.query_one("#search-input", Input).value
+            radioset = self.query_one(RadioSet)
+            status_button = radioset.pressed_button
+            status = "default"
+            if status_button:
+                status = status_button.id.replace("status_", "")
+
+            self.dismiss({'status': status, 'search': search_text})
 
 
 class CreateVMModal(BaseModal[dict | None]):
@@ -613,6 +629,7 @@ class VMManagerTUI(App):
     current_page = reactive(0)
     VMS_PER_PAGE = config.get('VMS_PER_PAGE', 4)
     sort_by = reactive("default")
+    search_text = reactive("")
     num_pages = reactive(1)
 
     CSS_PATH = ["tui.css", "vmcard.css"]
@@ -726,15 +743,22 @@ class VMManagerTUI(App):
     @on(Button.Pressed, "#filter_button")
     def action_filter_view(self) -> None:
         """Filter the VM list."""
-        self.push_screen(FilterModal(), self.handle_filter_result)
+        self.push_screen(FilterModal(current_search=self.search_text, current_status=self.sort_by), self.handle_filter_result)
 
-    def handle_filter_result(self, result: str | None) -> None:
+    def handle_filter_result(self, result: dict | None) -> None:
         """Handle the result from the filter modal."""
         if result:
-            sort_key = result.replace("sort_", "")
-            logging.info(f"Filter changed to {sort_key}")
-            if self.sort_by != sort_key:
-                self.sort_by = sort_key
+            new_status = result.get('status', 'default')
+            new_search = result.get('search', '')
+
+            logging.info(f"Filter changed to status={new_status}, search='{new_search}'")
+
+            status_changed = self.sort_by != new_status
+            search_changed = self.search_text != new_search
+
+            if status_changed or search_changed:
+                self.sort_by = new_status
+                self.search_text = new_search
                 self.current_page = 0
                 self.refresh_vm_list()
 
@@ -929,6 +953,11 @@ class VMManagerTUI(App):
                             libvirt.VIR_DOMAIN_PAUSED,
                         ]
                     ]
+
+            if self.search_text:
+                domains_to_display = [
+                    d for d in domains_to_display if self.search_text.lower() in d.name().lower()
+                ]
 
             total_filtered_vms = len(domains_to_display)
             self.update_pagination_controls(total_filtered_vms, total_vms_unfiltered)
