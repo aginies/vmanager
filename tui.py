@@ -1,17 +1,18 @@
 import os
 import sys
 import logging
+import ipaddress
 from typing import TypeVar
 
 from textual.app import App, ComposeResult
-from textual.widgets import Header, Footer, Select, Button, Input, Label, Static, DataTable, Link, TextArea, ListView, ListItem, Checkbox, RadioButton, RadioSet
+from textual.widgets import Header, Footer, Select, Button, Input, Label, Static, DataTable, Link, TextArea, ListView, ListItem, Checkbox, RadioButton, RadioSet, TabbedContent, TabPane
 from textual.containers import ScrollableContainer, Horizontal, Vertical
 from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual import on
 import libvirt
 from vmcard import VMCard, VMNameClicked
-from vm_info import get_status, get_vm_description, get_vm_machine_info, get_vm_firmware_info, get_vm_networks_info, get_vm_network_ip, get_vm_network_dns_gateway_info, get_vm_disks_info, get_vm_devices_info, add_disk, remove_disk, set_vcpu, set_memory, get_supported_machine_types, set_machine_type
+from vm_info import get_status, get_vm_description, get_vm_machine_info, get_vm_firmware_info, get_vm_networks_info, get_vm_network_ip, get_vm_network_dns_gateway_info, get_vm_disks_info, get_vm_devices_info, add_disk, remove_disk, set_vcpu, set_memory, get_supported_machine_types, set_machine_type, list_networks, create_nat_network
 from config import load_config, save_config
 
 # Configure logging
@@ -431,6 +432,119 @@ class SelectMachineTypeModal(BaseModal[str | None]):
         if event.button.id == "cancel-btn":
             self.dismiss(None)
 
+class ServerPrefModal(BaseModal[None]):
+    """Modal screen for server preferences."""
+
+    CSS_PATH = "tui.css"
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="server-pref-dialog", classes="ServerPrefModal"):
+            yield Label("Server Preferences", id="server-pref-title")
+            with TabbedContent(id="server-pref-tabs"):
+                with TabPane("Storage", id="tab-storage"):
+                    yield Label("Storage settings will go here.")
+                with TabPane("Network", id="tab-network"):
+                    with ScrollableContainer():
+                        yield Label("Existing Networks", classes="section-title")
+                        yield DataTable(id="existing-networks-table")
+                        yield Label("Create New NAT Network", classes="section-title")
+                        with Vertical(id="create-network-form"):
+                            yield Input(placeholder="Network Name (e.g., nat_net)", id="net-name-input")
+                            yield Input(placeholder="Forward Interface (e.g., eth0)", id="net-forward-input")
+                            yield Input(placeholder="IPv4 Network (e.g., 192.168.100.0/24)", id="net-ip-input")
+                            with Horizontal(id="dhcp-checkbox-horizontal"):
+                                yield Checkbox("Enable DHCPv4", id="dhcp-checkbox", value=True)
+                            with Vertical(id="dhcp-options"):
+                                with Horizontal(id="dhcp-inputs-horizontal"):
+                                    yield Input(placeholder="DHCP Start IP", id="dhcp-start-input")
+                                    yield Input(placeholder="DHCP End IP", id="dhcp-end-input")
+                            with RadioSet(id="dns-domain-radioset"):
+                                yield RadioButton("Use Network Name for DNS Domain", id="dns-use-net-name", value=True)
+                                yield RadioButton("Use Custom DNS Domain", id="dns-use-custom")
+                            yield Input(placeholder="Custom DNS Domain", id="dns-custom-domain-input", classes="hidden")
+                            yield Button("Create Network", id="create-net-btn", variant="primary")
+
+            with Horizontal(id="server-pref-buttons"):
+                yield Button("Close", variant="default", id="close-btn", classes="Buttonpage")
+
+    def on_mount(self) -> None:
+        self._load_networks()
+
+    def _load_networks(self):
+        table = self.query_one("#existing-networks-table", DataTable)
+        table.clear()
+        table.add_column("Name", key="name")
+        table.add_column("Mode", key="mode")
+        table.add_column("Active", key="active")
+        networks = list_networks(self.app.conn)
+        for net in networks:
+            table.add_row(net['name'], net['mode'], "Yes" if net['active'] else "No")
+
+    @on(Checkbox.Changed, "#dhcp-checkbox")
+    def on_dhcp_checkbox_changed(self, event: Checkbox.Changed) -> None:
+        dhcp = self.query_one("#dhcp-checkbox", Checkbox).value
+        dhcp_options = self.query_one("#dhcp-options")
+        if dhcp:
+            dhcp_options.remove_class("hidden")
+        else:
+            dhcp_options.add_class("hidden")
+
+    @on(RadioSet.Changed, "#dns-domain-radioset")
+    def on_dns_domain_radioset_changed(self, event: RadioSet.Changed) -> None:
+        custom_domain_input = self.query_one("#dns-custom-domain-input")
+        if event.pressed.id == "dns-use-custom":
+            custom_domain_input.remove_class("hidden")
+        else:
+            custom_domain_input.add_class("hidden")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "close-btn":
+            self.dismiss(None)
+        elif event.button.id == "create-net-btn":
+            name = self.query_one("#net-name-input", Input).value
+            forward = self.query_one("#net-forward-input", Input).value
+            ip = self.query_one("#net-ip-input", Input).value
+            dhcp = self.query_one("#dhcp-checkbox", Checkbox).value
+            dhcp_start = self.query_one("#dhcp-start-input", Input).value
+            dhcp_end = self.query_one("#dhcp-end-input", Input).value
+            
+            domain_radio = self.query_one("#dns-domain-radioset", RadioSet).pressed_button.id
+            domain_name = name
+            if domain_radio == "dns-use-custom":
+                domain_name = self.query_one("#dns-custom-domain-input", Input).value
+
+            try:
+                # Validate network address
+                ip_network = ipaddress.ip_network(ip, strict=False)
+
+                if dhcp:
+                    # Validate DHCP start and end IPs
+                    dhcp_start_ip = ipaddress.ip_address(dhcp_start)
+                    dhcp_end_ip = ipaddress.ip_address(dhcp_end)
+
+                    # Check if DHCP IPs are within the network
+                    if dhcp_start_ip not in ip_network:
+                        self.app.show_error_message(f"DHCP start IP {dhcp_start_ip} is not in the network {ip_network}")
+                        return
+                    if dhcp_end_ip not in ip_network:
+                        self.app.show_error_message(f"DHCP end IP {dhcp_end_ip} is not in the network {ip_network}")
+                        return
+                    if dhcp_start_ip >= dhcp_end_ip:
+                        self.app.show_error_message("DHCP start IP must be before the end IP.")
+                        return
+
+            except ValueError as e:
+                self.app.show_error_message(f"Invalid IP address or network: {e}")
+                return
+
+            try:
+                create_nat_network(self.app.conn, name, forward, ip, dhcp, dhcp_start, dhcp_end, domain_name)
+                self.app.show_success_message(f"Network {name} created successfully.")
+                self._load_networks()
+            except Exception as e:
+                self.app.show_error_message(f"Error creating network: {e}")
+
+
 class VMDetailModal(ModalScreen):
     """Modal screen to show detailed VM information."""
 
@@ -623,7 +737,8 @@ class VMManagerTUI(App):
         ("v", "view_log", "Log"),
         ("f", "filter_view", "Filter"),
         ("s", "select_server", "Select Server"),
-        ("m", "manage_server", "Manage Servers"),
+        ("p", "server_preferences", "Server Pref"),
+        ("m", "manage_server", "Servers List"),
         ("q", "quit", "Quit"),
     ]
 
@@ -643,7 +758,8 @@ class VMManagerTUI(App):
         """Create child widgets for the app."""
         yield Header()
         with Horizontal(classes="top-controls"):
-            yield Button("Manage Servers", id="manage_servers_button", classes="Buttonpage")
+            yield Button("Server Pref", id="server_preferences_button", classes="Buttonpage")
+            yield Button("Servers List", id="manage_servers_button", classes="Buttonpage")
             #yield Button("Create VM", id="create_vm_button", classes="Buttonpage")
             if self.servers:
                 yield Button("Select Server", id="select_server_button", classes="Buttonpage")
@@ -793,6 +909,11 @@ class VMManagerTUI(App):
         """View the application log file."""
         log_file = "vm_manager.log"
         self.push_screen(LogModal(), self.handle_log_result)
+
+    @on(Button.Pressed, "#server_preferences_button")
+    def action_server_preferences(self) -> None:
+        """Show server preferences modal."""
+        self.push_screen(ServerPrefModal())
 
     @on(VMNameClicked)
     async def on_vm_name_clicked(self, message: VMNameClicked) -> None:

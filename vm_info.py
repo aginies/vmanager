@@ -520,3 +520,63 @@ def set_machine_type(domain, new_machine_type):
     
     conn = domain.connect()
     conn.defineXML(new_xml_desc)
+
+def list_networks(conn):
+    """
+    Lists all networks.
+    """
+    if not conn:
+        return []
+
+    networks = []
+    for net in conn.listAllNetworks():
+        xml_desc = net.XMLDesc(0)
+        root = ET.fromstring(xml_desc)
+        
+        forward_elem = root.find('forward')
+        mode = forward_elem.get('mode') if forward_elem is not None else 'isolated'
+        
+        networks.append({
+            'name': net.name(),
+            'mode': mode,
+            'active': net.isActive(),
+        })
+    return networks
+
+def create_nat_network(conn, name, forward_dev, ip_network, dhcp_enabled, dhcp_start, dhcp_end, domain_name):
+    """
+    Creates a new NAT network.
+    """
+    if not conn:
+        raise ValueError("Invalid libvirt connection.")
+
+    import ipaddress
+    net = ipaddress.ip_network(ip_network)
+
+    xml = f"""
+<network>
+  <name>{name}</name>
+  <forward mode='nat'>
+    <nat>
+      <port start='1024' end='65535'/>
+    </nat>
+  </forward>
+  <bridge name='{name}' stp='on' delay='0'/>
+  <mac address='52:54:00:..:..:..'/>
+  <domain name='{domain_name}'/>
+  <ip address='{net.network_address + 1}' netmask='{net.netmask}'>
+"""
+    if dhcp_enabled:
+        xml += f"""
+    <dhcp>
+      <range start='{dhcp_start}' end='{dhcp_end}'/>
+    </dhcp>
+"""
+    xml += """
+  </ip>
+</network>
+"""
+
+    net = conn.networkDefineXML(xml)
+    net.create()
+    net.setAutostart(True)

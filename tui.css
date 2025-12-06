@@ -279,3 +279,83 @@ Button {
     align: center middle;
 }
 
+/* Styles for ServerPrefModal */
+.ServerPrefModal {
+    align: center middle;
+}
+
+#server-pref-dialog {
+    width: 90%;
+    max-width: 100;
+    height: auto;
+    background: $surface;
+    border: panel $primary;
+    padding: 1;
+    align: center middle;
+}
+
+#dhcp-inputs-horizontal Input {
+    width: 1fr;
+}
+
+#server-pref-title {
+    content-align: center middle;
+    text-style: bold;
+    margin-bottom: 1;
+    color: $text;
+}
+
+#server-pref-tabs {
+    height: 1fr;
+    border: round $primary;
+    padding: 0 1;
+}
+
+#server-pref-buttons {
+    width: 100%;
+    height: auto;
+    align: center middle;
+    margin-top: 1;
+}
+
+#tab-storage, #tab-network {
+    align: left top;
+    overflow-y: auto;
+}
+
+#create-network-form {
+    height: auto;
+    max-height: 1fr;
+    max-width: 1fr;
+    background: $panel;
+    border: round $primary;
+    margin-top: 0;
+}
+
+#create-network-form Input {
+    margin-bottom: 0;
+}
+
+#dhcp-checkbox-horizontal {
+    margin-bottom: 0;
+}
+
+#dhcp-options {
+    margin-top: 0;
+    /* Other styles for dhcp-options */
+    border: hidden;
+}
+
+#dns-domain-radioset {
+    margin-top: 0;
+    border: hidden;
+}
+
+.hidden {
+    display: none;
+}
+
+#existing-networks-table {
+    height: 5;
+    border: round $primary;
+}
