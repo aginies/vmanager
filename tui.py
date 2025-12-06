@@ -106,7 +106,8 @@ class ServerSelectionModal(BaseModal[str | None]):
             with ScrollableContainer():
                 yield DataTable(id="server-select-table")
             with Horizontal():
-                yield Button("Select", id="select-btn", variant="primary", disabled=True, classes="Buttonpage")
+                yield Button("Connect", id="select-btn", variant="primary", disabled=True, classes="Buttonpage")
+                yield Button("Custom URL", id="custom-conn-btn", classes="Buttonpage")
                 yield Button("Cancel", id="cancel-btn", classes="Buttonpage")
 
     def on_mount(self) -> None:
@@ -127,6 +128,11 @@ class ServerSelectionModal(BaseModal[str | None]):
             self.dismiss(self.selected_uri)
         elif event.button.id == "cancel-btn":
             self.dismiss(None)
+        elif event.button.id == "custom-conn-btn":
+            def connection_callback(uri: str | None):
+                if uri:
+                    self.dismiss(uri)
+            self.app.push_screen(ConnectionModal(), connection_callback)
 
 
 class FilterModal(BaseModal[dict | None]):
@@ -637,7 +643,6 @@ class VMManagerTUI(App):
         """Create child widgets for the app."""
         yield Header()
         with Horizontal(classes="top-controls"):
-            yield Button("Connection", id="change_connection_button", classes="Buttonpage")
             yield Button("Manage Servers", id="manage_servers_button", classes="Buttonpage")
             #yield Button("Create VM", id="create_vm_button", classes="Buttonpage")
             if self.servers:
@@ -783,10 +788,6 @@ class VMManagerTUI(App):
         logging.info("Create VM button clicked")
         self.push_screen(CreateVMModal(), self.handle_create_vm_result)
 
-    @on(Button.Pressed, "#change_connection_button")
-    def on_change_connection_button_pressed(self, event: Button.Pressed) -> None:
-        self.push_screen(ConnectionModal(), self.handle_connection_result)
-
     @on(Button.Pressed, "#view_log_button")
     def action_view_log(self) -> None:
         """View the application log file."""
@@ -823,12 +824,6 @@ class VMManagerTUI(App):
         except libvirt.libvirtError as e:
             self.show_error_message(f"Error getting details for {message.vm_name}: {e}")
 
-
-    def handle_connection_result(self, result: str | None) -> None:
-        """Handle the result from the connection modal."""
-        if result:
-            logging.info(f"Connection URI entered: {result}")
-            self.change_connection(result)
 
     def handle_log_result(self, result: str | None) -> None:
         """Handle the result from the log view."""
