@@ -18,6 +18,39 @@ class VMNameClicked(Message):
         self.vm_name = vm_name
 
 
+class ConfirmationDialog(Screen):
+    """A dialog to confirm an action."""
+
+    BINDINGS = [("escape", "cancel_modal", "Cancel")]
+    CSS_PATH = "snapshot.css"
+
+    def __init__(self, prompt: str) -> None:
+        super().__init__()
+        self.prompt = prompt
+
+    def compose(self):
+        yield Vertical(
+            Label(self.prompt, id="question"),
+            Vertical(
+                Button("Yes", variant="error", id="yes"),
+                Button("No", variant="primary", id="no"),
+                id="dialog-buttons",
+            ),
+            id="dialog",
+            classes="info-container",
+        )
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "yes":
+            self.dismiss(True)
+        else:
+            self.dismiss(False)
+
+    def action_cancel_modal(self) -> None:
+        """Cancel the modal."""
+        self.dismiss(False)
+
+
 class VMCard(Static):
     name = reactive("")
     status = reactive("")
@@ -84,7 +117,7 @@ class VMCard(Static):
         delete_button = self.query_one("#delete", Button)
         connect_button = self.query_one("#connect", Button)
         restore_button = self.query_one("#snapshot_restore", Button)
-        delete_button = self.query_one("#snapshot_delete", Button)
+        snapshot_delete_button = self.query_one("#snapshot_delete", Button)
 
         is_stopped = self.status == "Stopped"
         is_running = self.status == "Running"
@@ -98,7 +131,7 @@ class VMCard(Static):
         resume_button.display = is_paused
         connect_button.display = is_running
         restore_button.display = has_snapshots
-        delete_button.display = has_snapshots
+        snapshot_delete_button.display = has_snapshots
 
     def _update_status_styling(self):
         status_widget = self.query_one("#status")
@@ -246,28 +279,41 @@ class VMCard(Static):
 
             def delete_snapshot(snapshot_name: str | None) -> None:
                 if snapshot_name:
-                    try:
-                        snapshot = self.vm.snapshotLookupByName(snapshot_name, 0)
-                        snapshot.delete(0)
-                        self.app.show_success_message(f"Snapshot '{snapshot_name}' deleted successfully.")
-                        self.update_button_layout()
-                        logging.info(f"Successfully deleted snapshot '{snapshot_name}' for VM: {self.name}")
-                    except libvirt.libvirtError as e:
-                        self.app.show_error_message(f"Error on VM {self.name} during 'snapshot delete': {e}")
+                    def on_confirm(confirmed: bool) -> None:
+                        if confirmed:
+                            try:
+                                snapshot = self.vm.snapshotLookupByName(snapshot_name, 0)
+                                snapshot.delete(0)
+                                self.app.show_success_message(f"Snapshot '{snapshot_name}' deleted successfully.")
+                                self.update_button_layout()
+                                logging.info(f"Successfully deleted snapshot '{snapshot_name}' for VM: {self.name}")
+                            except libvirt.libvirtError as e:
+                                self.app.show_error_message(f"Error on VM {self.name} during 'snapshot delete': {e}")
+
+                    self.app.push_screen(
+                        ConfirmationDialog(f"Are you sure you want to delete snapshot '{snapshot_name}'?"), on_confirm
+                    )
 
             self.app.push_screen(SelectSnapshotDialog(snapshots, "Select snapshot to delete:"), delete_snapshot)
 
-        elif event.button.id == "delete_vm":
+        elif event.button.id == "delete":
             logging.info(f"Attempting to delete VM: {self.name}")
-            try:
-                if self.vm.isActive():
-                    self.vm.destroy() # Shut down the VM first if it's active
-                self.vm.undefine() # Undefine the VM
-                self.app.show_success_message(f"VM '{self.name}' deleted successfully.")
-                self.app.refresh_vm_list()
-                logging.info(f"Successfully deleted VM: {self.name}")
-            except libvirt.libvirtError as e:
-                self.app.show_error_message(f"Error on VM {self.name} during 'delete VM': {e}")
+
+            def on_confirm(confirmed: bool) -> None:
+                if confirmed:
+                    try:
+                        if self.vm.isActive():
+                            self.vm.destroy() # Shut down the VM first if it's active
+                        self.vm.undefine() # Undefine the VM
+                        self.app.show_success_message(f"VM '{self.name}' deleted successfully.")
+                        self.app.refresh_vm_list()
+                        logging.info(f"Successfully deleted VM: {self.name}")
+                    except libvirt.libvirtError as e:
+                        self.app.show_error_message(f"Error on VM {self.name} during 'delete VM': {e}")
+
+            self.app.push_screen(
+                ConfirmationDialog(f"Are you sure you want to delete VM '{self.name}'?"), on_confirm
+            )
 
     @on(Click, "#cpu-mem-info")
     def on_click_cpu_mem_info(self) -> None:

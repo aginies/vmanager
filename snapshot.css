@@ -45,3 +45,33 @@ SelectSnapshotDialog #snapshot-list {
     border: round green;
     height: 10;
 }
+
+ConfirmationDialog {
+    align: center middle;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+ConfirmationDialog #dialog {
+    width: 60;
+    height: 30;
+    padding: 1;
+    border: round $error;
+    background: $surface;
+}
+
+ConfirmationDialog #question {
+    margin-bottom: 1;
+    content-align: center middle;
+    width: 100%;
+}
+
+ConfirmationDialog #dialog-buttons {
+    width: 100%;
+    align: center middle;
+    margin-top: 1;
+}
+
+ConfirmationDialog #dialog-buttons Button {
+    margin-left: 2;
+    margin-right: 2;
+}
