@@ -1,6 +1,6 @@
 # Rainbow V Manager
 
-A Textual-based TUI (Terminal User Interface) application for managing QEMU/KVM virtual machines.
+A Textual-based TUI (Terminal User Interface) application for managing QEMU/KVM virtual machines using the libvirt python API.
 
 ## Overview
 
@@ -18,6 +18,7 @@ its **risky** to use it.
 General capabilities:
 - List and manage QEMU/KVM virtual machines
 - Dynamic error messages
+- direct virsh command on the server connected
 
 Vm cards:
 - User configuration file for server list in **~/.config/vmanager/config.yaml**
@@ -71,11 +72,11 @@ When you run the application, you'll see:
    - Current connection URI
 
 2. **Top Controls**: Provides global actions and filtering options:
-   - **Connection** button to change the connection URI
-   - **Manage Servers**: Server management list, add, edit, delete
-   - **Select Server**: connect to a server in the list
+   - **Server Pref** configure network and storage (WIP)
+   - **Server List**: Server management list, add, edit, delete
+   - **Select Server**: connect to a server in the list, or via input
+   - **Filter VM** to sort VMs by name and status (All, Running, Paused, Stopped)
    - **View Log** button to open the application's error log file
-   - **Filter menu** to sort VMs by status (All, Running, Paused, Stopped)
 
 3. **VM Cards**: Each VM is displayed in a card with:
    - VM name
@@ -106,9 +107,10 @@ When you run the application, you'll see:
 ### Connection Management
 
 To change the connection URI:
-1. Select "Connection" from the top controls.
-2. Enter a QEMU connection URI (e.g., `qemu+ssh://user@host/system` or `qemu:///system`)
-3. Click "Connect"
+1. Select "Select Server" from the top controls.
+2. Clicl on "Custom URL"
+3. Enter a QEMU connection URI (e.g., `qemu+ssh://user@host/system` or `qemu:///system`)
+4. Click "Connect"
 
 ## TODO
 
