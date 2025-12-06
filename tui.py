@@ -441,8 +441,6 @@ class ServerPrefModal(BaseModal[None]):
         with Vertical(id="server-pref-dialog", classes="ServerPrefModal"):
             yield Label("Server Preferences", id="server-pref-title")
             with TabbedContent(id="server-pref-tabs"):
-                with TabPane("Storage", id="tab-storage"):
-                    yield Label("Storage settings... WIP")
                 with TabPane("Network", id="tab-network"):
                     host_interfaces = get_host_network_interfaces()
                     if not host_interfaces:
@@ -454,7 +452,7 @@ class ServerPrefModal(BaseModal[None]):
 
                     with ScrollableContainer():
                         yield Label("Existing Networks", classes="section-title")
-                        yield DataTable(id="existing-networks-table")
+                        yield ListView(id="existing-networks-list")
                         yield Label("Create New NAT Network", classes="section-title")
                         with Vertical(id="create-network-form"):
                             yield Input(placeholder="Network Name (e.g., nat_net)", id="net-name-input")
@@ -471,51 +469,34 @@ class ServerPrefModal(BaseModal[None]):
                                 yield RadioButton("Use Custom DNS Domain", id="dns-use-custom")
                             yield Input(placeholder="Custom DNS Domain", id="dns-custom-domain-input", classes="hidden")
                             yield Button("Create Network", variant="primary", id="create-net-btn")
+                with TabPane("Storage", id="tab-storage"):
+                    yield Label("Storage settings... WIP")
 
             with Horizontal(id="server-pref-buttons"):
                 yield Button("Close", variant="default", id="close-btn", classes="Buttonpage")
 
     def on_mount(self) -> None:
-        table = self.query_one("#existing-networks-table", DataTable)
-        table.cursor_type = "cell"
         self._load_networks()
 
     def _load_networks(self):
-        table = self.query_one("#existing-networks-table", DataTable)
-        table.clear()
-        table.add_column("Name", key="name")
-        table.add_column("Mode", key="mode")
-        table.add_column("Active", key="active")
+        network_list = self.query_one("#existing-networks-list", ListView)
+        network_list.clear()
         networks = list_networks(self.app.conn)
         for net in networks:
-            table.add_row(net['name'], net['mode'], "Yes" if net['active'] else "No", key=net['name'])
+            network_list.append(ListItem(Label(net['name'])))
+        network_list.focus()
 
-    @on(DataTable.CellSelected, "#existing-networks-table")
-    def on_network_table_cell_selected(self, event: DataTable.CellSelected) -> None:
-        table = self.query_one("#existing-networks-table", DataTable)
-        row_key = event.row_key.value
-        column_key = event.column_key.value
-        network_name = str(row_key) # network_name will be a string
-        
-        if column_key == "name": # Show network details
-            try:
-                net = self.app.conn.networkLookupByName(network_name)
-                xml = net.XMLDesc(0)
-                self.app.push_screen(NetworkDetailModal(network_name, xml))
-            except libvirt.libvirtError as e:
-                self.app.show_error_message(f"Error getting network details: {e}")
+    @on(ListView.Selected, "#existing-networks-list")
+    def on_list_view_selected(self, event: ListView.Selected) -> None:
+        network_name = str(event.item.query_one(Label).renderable)
+        try:
+            net = self.app.conn.networkLookupByName(network_name)
+            xml = net.XMLDesc(0)
+            self.app.push_screen(NetworkDetailModal(network_name, xml))
+        except libvirt.libvirtError as e:
+            self.app.show_error_message(f"Error getting network details: {e}")
 
-        elif str(column_key) == "active":
-            # Toggle network state
-            try:
-                net = self.app.conn.networkLookupByName(network_name)
-                if net.isActive():
-                    net.destroy()
-                else:
-                    net.create()
-                self._load_networks()
-            except libvirt.libvirtError as e:
-                self.app.show_error_message(f"Error toggling network state: {e}")
+
 
     @on(Checkbox.Changed, "#dhcp-checkbox")
     def on_dhcp_checkbox_changed(self, event: Checkbox.Changed) -> None:
