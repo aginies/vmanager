@@ -379,7 +379,7 @@ class RemoveDiskModal(ModalScreen):
                 id="remove-disk-list"
             )
             with Horizontal():
-                yield Button("Remove", variant="error", id="remove-btn", classes="Buttonpage")
+                yield Button("Remove", variant="error", id="remove-btn", classes="Buttonpage delete-button")
                 yield Button("Cancel", variant="default", id="cancel-btn", classes="Buttonpage")
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
