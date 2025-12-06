@@ -22,24 +22,25 @@
 #filter-dialog {
     width: 40;
     height: auto; 
-    border: panel green;
+    border: panel $primary;
     align: center middle;
     background: $surface;
-    padding: 0 0;
+    padding: 1 2;
 }
 
 #server-management-dialog, #server-selection-dialog {
     width: 60;
     height: 20;
-    border: panel green;
+    border: panel $primary;
     background: $background;
     padding: 1 2;
 }
 #edit-server-dialog {
     width: 60;
     height: auto;
-    border: round green 80%;
+    border: panel $primary;
     background: $surface;
+    padding: 1 2;
 }
 
 #connection-dialog Label,
@@ -130,7 +131,7 @@ VMDetailModal {
     width: 100%;
     height: 90%;
     background: $surface;
-    border: round green;
+    border: round $primary;
     padding: 1;
     overflow: auto;
 }
@@ -265,7 +266,7 @@ Button {
     height: auto;
     max-width: 60;
     max-height: 80vh;
-    border: round green;
+    border: round $primary;
     background: $surface;
     padding: 1 2;
     align: center middle;
