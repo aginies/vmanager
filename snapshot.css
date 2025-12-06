@@ -53,7 +53,7 @@ ConfirmationDialog {
 
 ConfirmationDialog #dialog {
     width: 60;
-    height: 30;
+    height: 10;
     padding: 1;
     border: round $error;
     background: $surface;
@@ -62,7 +62,6 @@ ConfirmationDialog #dialog {
 ConfirmationDialog #question {
     margin-bottom: 1;
     content-align: center middle;
-    width: 100%;
 }
 
 ConfirmationDialog #dialog-buttons {
@@ -72,6 +71,6 @@ ConfirmationDialog #dialog-buttons {
 }
 
 ConfirmationDialog #dialog-buttons Button {
-    margin-left: 2;
-    margin-right: 2;
+    margin-left: 1;
+    margin-right: 1;
 }
