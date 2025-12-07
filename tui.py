@@ -13,7 +13,7 @@ from textual.screen import ModalScreen
 from textual import on
 import libvirt
 from vmcard import VMCard, VMNameClicked, ConfirmationDialog
-from vm_info import get_status, get_vm_description, get_vm_machine_info, get_vm_firmware_info, get_vm_networks_info, get_vm_network_ip, get_vm_network_dns_gateway_info, get_vm_disks_info, get_vm_devices_info, add_disk, remove_disk, set_vcpu, set_memory, get_supported_machine_types, set_machine_type, list_networks, create_nat_network, get_host_network_interfaces
+from vm_info import get_status, get_vm_description, get_vm_machine_info, get_vm_firmware_info, get_vm_networks_info, get_vm_network_ip, get_vm_network_dns_gateway_info, get_vm_disks_info, get_vm_devices_info, add_disk, remove_disk, set_vcpu, set_memory, get_supported_machine_types, set_machine_type, list_networks, create_nat_network, get_host_network_interfaces, enable_disk, disable_disk
 from config import load_config, save_config
 
 # Configure logging
@@ -357,6 +357,34 @@ class AddDiskModal(BaseModal[dict | None]):
             self.dismiss(None)
 
 
+class SelectDiskModal(BaseModal[str | None]):
+    """Modal screen for selecting a disk from a list."""
+
+    def __init__(self, disks: list[str], prompt: str) -> None:
+        super().__init__()
+        self.disks = disks
+        self.prompt = prompt
+        self.selected_disk = None
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="select-disk-dialog"):
+            yield Label(self.prompt)
+            with ScrollableContainer():
+                yield ListView(
+                    *[ListItem(Label(disk)) for disk in self.disks],
+                    id="disk-selection-list"
+                )
+            yield Button("Cancel", variant="error", id="cancel")
+
+    def on_list_view_selected(self, event: ListView.Selected) -> None:
+        self.selected_disk = str(event.item.query_one(Label).renderable)
+        self.dismiss(self.selected_disk)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "cancel":
+            self.dismiss(None)
+
+
 class RemoveDiskModal(BaseModal[str | None]):
     """Modal screen for removing a disk."""
 
@@ -630,16 +658,40 @@ class VMDetailModal(ModalScreen):
 
             yield Label("Disks", classes="section-title")
             with ScrollableContainer(classes="info-details"):
-                disks = self.vm_info.get("disks", [])
-                self.disk_list_view = ListView(*[ListItem(Label(disk)) for disk in disks])
-                num_disks = len(disks)
+                disks_info = self.vm_info.get("disks", [])
+                
+                disk_items = []
+                for disk in disks_info:
+                    path = disk.get('path', 'N/A')
+                    status = disk.get('status', 'unknown')
+                    label = f"{path}"
+                    if status == 'disabled':
+                        label += " (disabled)"
+                    disk_items.append(ListItem(Label(label)))
+
+                self.disk_list_view = ListView(*disk_items)
+                num_disks = len(disks_info)
                 self.disk_list_view.styles.height = num_disks if num_disks > 0 else 1
-                if not disks:
+                if not disks_info:
                     self.disk_list_view.append(ListItem(Label("No disks found.")))
                 yield self.disk_list_view
             with Horizontal():
                 yield Button("Add Disk", id="detail_add_disk")
-                yield Button("Remove Disk", id="detail_remove_disk")
+
+                has_enabled_disks = any(d['status'] == 'enabled' for d in disks_info)
+                has_disabled_disks = any(d['status'] == 'disabled' for d in disks_info)
+
+                remove_button = Button("Remove Disk", id="detail_remove_disk")
+                disable_button = Button("Disable Disk", id="detail_disable_disk")
+                enable_button = Button("Enable Disk", id="detail_enable_disk")
+
+                remove_button.display = has_enabled_disks
+                disable_button.display = has_enabled_disks
+                enable_button.display = has_disabled_disks
+
+                yield remove_button
+                yield disable_button
+                yield enable_button
 
 
             if self.vm_info.get("networks"):
@@ -688,15 +740,34 @@ class VMDetailModal(ModalScreen):
     def _update_disk_list(self):
         self.disk_list_view.clear()
         new_xml = self.domain.XMLDesc(0)
-        disks = get_vm_disks_info(new_xml)
-        if disks:
-            for disk in disks:
-                self.disk_list_view.append(ListItem(Label(disk)))
+        disks_info = get_vm_disks_info(new_xml)
+        self.vm_info['disks'] = disks_info  # Update the stored info
+
+        disk_items = []
+        for disk in disks_info:
+            path = disk.get('path', 'N/A')
+            status = disk.get('status', 'unknown')
+            label = f"{path}"
+            if status == 'disabled':
+                label += " (disabled)"
+            disk_items.append(ListItem(Label(label)))
+
+        if disk_items:
+            for item in disk_items:
+                self.disk_list_view.append(item)
         else:
             self.disk_list_view.append(ListItem(Label("No disks found.")))
 
-        num_disks = len(disks)
+        num_disks = len(disks_info)
         self.disk_list_view.styles.height = num_disks if num_disks > 0 else 1
+
+        # Update button visibility
+        has_enabled_disks = any(d['status'] == 'enabled' for d in disks_info)
+        has_disabled_disks = any(d['status'] == 'disabled' for d in disks_info)
+
+        self.query_one("#detail_remove_disk", Button).display = has_enabled_disks
+        self.query_one("#detail_disable_disk", Button).display = has_enabled_disks
+        self.query_one("#detail_enable_disk", Button).display = has_disabled_disks
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "close-btn":
@@ -719,7 +790,11 @@ class VMDetailModal(ModalScreen):
                         self.app.show_error_message(f"Error adding disk: {e}")
             self.app.push_screen(AddDiskModal(), add_disk_callback)
         elif event.button.id == "detail_remove_disk":
-            disks = get_vm_disks_info(self.domain.XMLDesc(0))
+            enabled_disks = [d['path'] for d in self.vm_info.get("disks", []) if d['status'] == 'enabled']
+            if not enabled_disks:
+                self.app.show_error_message("No enabled disks to remove.")
+                return
+                
             def remove_disk_callback(disk_to_remove):
                 if disk_to_remove:
                     try:
@@ -728,7 +803,39 @@ class VMDetailModal(ModalScreen):
                         self._update_disk_list()
                     except Exception as e:
                         self.app.show_error_message(f"Error removing disk: {e}")
-            self.app.push_screen(RemoveDiskModal(disks), remove_disk_callback)
+            self.app.push_screen(RemoveDiskModal(enabled_disks), remove_disk_callback)
+        elif event.button.id == "detail_disable_disk":
+            enabled_disks = [d['path'] for d in self.vm_info.get("disks", []) if d['status'] == 'enabled']
+            if not enabled_disks:
+                self.app.show_error_message("No enabled disks to disable.")
+                return
+
+            def disable_disk_callback(disk_to_disable):
+                if disk_to_disable:
+                    try:
+                        disable_disk(self.domain, disk_to_disable)
+                        self.app.show_success_message(f"Disk {disk_to_disable} disabled.")
+                        self._update_disk_list()
+                    except (libvirt.libvirtError, ValueError, Exception) as e:
+                        self.app.show_error_message(f"Error disabling disk: {e}")
+
+            self.app.push_screen(SelectDiskModal(enabled_disks, "Select disk to disable:"), disable_disk_callback)
+        elif event.button.id == "detail_enable_disk":
+            disabled_disks = [d['path'] for d in self.vm_info.get("disks", []) if d['status'] == 'disabled']
+            if not disabled_disks:
+                self.app.show_error_message("No disabled disks to enable.")
+                return
+
+            def enable_disk_callback(disk_to_enable):
+                if disk_to_enable:
+                    try:
+                        enable_disk(self.domain, disk_to_enable)
+                        self.app.show_success_message(f"Disk {disk_to_enable} enabled.")
+                        self._update_disk_list()
+                    except (libvirt.libvirtError, ValueError, Exception) as e:
+                        self.app.show_error_message(f"Error enabling disk: {e}")
+            
+            self.app.push_screen(SelectDiskModal(disabled_disks, "Select disk to enable:"), enable_disk_callback)
 
         elif event.button.id == "edit-cpu":
             def edit_cpu_callback(new_cpu_count):

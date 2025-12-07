@@ -252,7 +252,7 @@ Button {
     background: green;
 }
 
-#detail_add_disk, #detail_remove_disk {
+#detail_add_disk, #detail_remove_disk, #detail_disable_disk, #detail_enable_disk {
     width: 1fr;
 }
 
@@ -276,7 +276,8 @@ Button {
 
 #add-disk-dialog,
 #remove-disk-dialog,
-#select-machine-type-dialog {
+#select-machine-type-dialog,
+#select-disk-dialog {
     width: auto;
     height: auto;
     max-width: 90; /* Increased from 60 */
@@ -293,7 +294,7 @@ Button {
     border: round $primary;
 }
 
-#machine-type-list {
+#machine-type-list, #disk-selection-list {
     background: $surface;
     height: 1fr; /* Make height flexible within ScrollableContainer */
     border: round $primary;
