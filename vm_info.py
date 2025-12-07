@@ -422,27 +422,144 @@ def get_vm_devices_info(xml_content: str) -> dict:
 
     return devices_info
 
-def get_vm_disks_info(xml_content: str) ->str:
+VMANAGER_NS = "http://github.com/aginies/vmanager"
+ET.register_namespace("vmanager", VMANAGER_NS)
+
+def _get_vmanager_metadata(root):
+    metadata_elem = root.find('metadata')
+    if metadata_elem is None:
+        metadata_elem = ET.SubElement(root, 'metadata')
+
+    vmanager_meta_elem = metadata_elem.find(f'{{{VMANAGER_NS}}}vmanager')
+    if vmanager_meta_elem is None:
+        vmanager_meta_elem = ET.SubElement(metadata_elem, f'{{{VMANAGER_NS}}}vmanager')
+
+    return vmanager_meta_elem
+
+def _get_disabled_disks_elem(root):
+    vmanager_meta_elem = _get_vmanager_metadata(root)
+    disabled_disks_elem = vmanager_meta_elem.find(f'{{{VMANAGER_NS}}}disabled-disks')
+    if disabled_disks_elem is None:
+        disabled_disks_elem = ET.SubElement(vmanager_meta_elem, f'{{{VMANAGER_NS}}}disabled-disks')
+    return disabled_disks_elem
+
+def get_vm_disks_info(xml_content: str) -> list[dict]:
     """
     Extracts disks info from a VM's XML definition.
+    Returns a list of dictionaries with 'path' and 'status'.
     """
     disks = []
     try:
-
         root = ET.fromstring(xml_content)
+        # Enabled disks
         devices = root.find("devices")
         if devices is not None:
-            disk_elements = devices.findall("disk")
-            for disk in disk_elements:
+            for disk in devices.findall("disk"):
+                disk_path = ""
                 disk_source = disk.find("source")
                 if disk_source is not None and "file" in disk_source.attrib:
-                    disks.append(disk_source.attrib["file"])
+                    disk_path = disk_source.attrib["file"]
                 elif disk_source is not None and "dev" in disk_source.attrib:
-                    disks.append(disk_source.attrib["dev"])
-    except:
+                    disk_path = disk_source.attrib["dev"]
+
+                if disk_path:
+                    disks.append({'path': disk_path, 'status': 'enabled'})
+
+        # Disabled disks from metadata
+        metadata_elem = root.find('metadata')
+        if metadata_elem is not None:
+            vmanager_meta_elem = metadata_elem.find(f'{{{VMANAGER_NS}}}vmanager')
+            if vmanager_meta_elem is not None:
+                disabled_disks_elem = vmanager_meta_elem.find(f'{{{VMANAGER_NS}}}disabled-disks')
+                if disabled_disks_elem is not None:
+                    for disk in disabled_disks_elem.findall('disk'):
+                        disk_path = ""
+                        disk_source = disk.find("source")
+                        if disk_source is not None and "file" in disk_source.attrib:
+                            disk_path = disk_source.attrib["file"]
+                        elif disk_source is not None and "dev" in disk_source.attrib:
+                            disk_path = disk_source.attrib["dev"]
+
+                        if disk_path:
+                            disks.append({'path': disk_path, 'status': 'disabled'})
+    except ET.ParseError:
         pass  # Failed to get disks, continue without them
 
     return disks
+
+def disable_disk(domain, disk_path):
+    """Disables a disk by moving it to a metadata section in the XML."""
+    if domain.isActive():
+        raise libvirt.libvirtError("VM must be stopped to disable a disk.")
+
+    conn = domain.connect()
+    xml_desc = domain.XMLDesc(0)
+    root = ET.fromstring(xml_desc)
+    
+    devices = root.find('devices')
+    if devices is None:
+        raise ValueError("Could not find <devices> in VM XML.")
+
+    disk_to_disable = None
+    for disk in devices.findall('disk'):
+        source = disk.find('source')
+        path = None
+        if source is not None and 'file' in source.attrib:
+            path = source.attrib['file']
+        elif source is not None and 'dev' in source.attrib:
+            path = source.attrib['dev']
+
+        if path == disk_path:
+            disk_to_disable = disk
+            break
+            
+    if disk_to_disable is None:
+        raise ValueError(f"Enabled disk '{disk_path}' not found.")
+
+    devices.remove(disk_to_disable)
+    
+    disabled_disks_elem = _get_disabled_disks_elem(root)
+    disabled_disks_elem.append(disk_to_disable)
+
+    new_xml = ET.tostring(root, encoding='unicode')
+    conn.defineXML(new_xml)
+
+def enable_disk(domain, disk_path):
+    """Enables a disk by moving it from metadata back to devices."""
+    if domain.isActive():
+        raise libvirt.libvirtError("VM must be stopped to enable a disk.")
+
+    conn = domain.connect()
+    xml_desc = domain.XMLDesc(0)
+    root = ET.fromstring(xml_desc)
+
+    disabled_disks_elem = _get_disabled_disks_elem(root)
+    
+    disk_to_enable = None
+    for disk in disabled_disks_elem.findall('disk'):
+        source = disk.find('source')
+        path = None
+        if source is not None and 'file' in source.attrib:
+            path = source.attrib['file']
+        elif source is not None and 'dev' in source.attrib:
+            path = source.attrib['dev']
+        
+        if path == disk_path:
+            disk_to_enable = disk
+            break
+
+    if disk_to_enable is None:
+        raise ValueError(f"Disabled disk '{disk_path}' not found.")
+        
+    disabled_disks_elem.remove(disk_to_enable)
+
+    devices = root.find('devices')
+    if devices is None:
+        devices = ET.SubElement(root, 'devices')
+    devices.append(disk_to_enable)
+    
+    new_xml = ET.tostring(root, encoding='unicode')
+    conn.defineXML(new_xml)
 
 def set_vcpu(domain, vcpu_count: int):
     """
