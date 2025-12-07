@@ -388,10 +388,14 @@ class RemoveDiskModal(BaseModal[str | None]):
 class EditCpuModal(BaseModal[str | None]):
     """Modal screen for editing VCPU count."""
 
+    def __init__(self, current_cpu: str = "") -> None:
+        super().__init__()
+        self.current_cpu = current_cpu
+
     def compose(self) -> ComposeResult:
         with Vertical(id="edit-cpu-dialog"):
             yield Label("Enter new VCPU count:")
-            yield Input(placeholder="e.g., 2", id="cpu-input", type="integer")
+            yield Input(placeholder="e.g., 2", id="cpu-input", type="integer", value=self.current_cpu)
             with Horizontal():
                 yield Button("Save", variant="primary", id="save-btn")
                 yield Button("Cancel", variant="default", id="cancel-btn")
@@ -407,10 +411,14 @@ class EditCpuModal(BaseModal[str | None]):
 class EditMemoryModal(BaseModal[str | None]):
     """Modal screen for editing memory size."""
 
+    def __init__(self, current_memory: str = "") -> None:
+        super().__init__()
+        self.current_memory = current_memory
+
     def compose(self) -> ComposeResult:
         with Vertical(id="edit-memory-dialog"):
             yield Label("Enter new memory size (MB):")
-            yield Input(placeholder="e.g., 2048", id="memory-input", type="integer")
+            yield Input(placeholder="e.g., 2048", id="memory-input", type="integer", value=self.current_memory)
             with Horizontal():
                 yield Button("Save", variant="primary", id="save-btn")
                 yield Button("Cancel", variant="default", id="cancel-btn")
@@ -425,9 +433,10 @@ class EditMemoryModal(BaseModal[str | None]):
 class SelectMachineTypeModal(BaseModal[str | None]):
     """Modal screen for selecting machine type."""
 
-    def __init__(self, machine_types: list[str]) -> None:
+    def __init__(self, machine_types: list[str], current_machine_type: str = "") -> None:
         super().__init__()
         self.machine_types = machine_types
+        self.current_machine_type = current_machine_type
 
     def compose(self) -> ComposeResult:
         with Vertical(id="select-machine-type-dialog"):
@@ -439,6 +448,14 @@ class SelectMachineTypeModal(BaseModal[str | None]):
                 )
             with Horizontal():
                 yield Button("Cancel", variant="default", id="cancel-btn")
+
+    def on_mount(self) -> None:
+        list_view = self.query_one(ListView)
+        try:
+            current_index = self.machine_types.index(self.current_machine_type)
+            list_view.index = current_index
+        except (ValueError, IndexError):
+            pass
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         self.dismiss(str(event.item.query_one(Label).renderable))
@@ -720,10 +737,11 @@ class VMDetailModal(ModalScreen):
                         set_vcpu(self.domain, int(new_cpu_count))
                         self.app.show_success_message(f"CPU count set to {new_cpu_count}")
                         self.query_one("#cpu-label").update(f"CPU: {new_cpu_count}")
+                        self.vm_info['cpu'] = int(new_cpu_count)
                     except (libvirt.libvirtError, Exception) as e:
                         self.app.show_error_message(f"Error setting CPU: {e}")
 
-            self.app.push_screen(EditCpuModal(), edit_cpu_callback)
+            self.app.push_screen(EditCpuModal(current_cpu=str(self.vm_info.get('cpu', ''))), edit_cpu_callback)
 
         elif event.button.id == "edit-memory":
             def edit_memory_callback(new_memory_size):
@@ -732,10 +750,11 @@ class VMDetailModal(ModalScreen):
                         set_memory(self.domain, int(new_memory_size))
                         self.app.show_success_message(f"Memory size set to {new_memory_size} MB")
                         self.query_one("#memory-label").update(f"Memory: {new_memory_size} MB")
+                        self.vm_info['memory'] = int(new_memory_size)
                     except (libvirt.libvirtError, Exception) as e:
                         self.app.show_error_message(f"Error setting memory: {e}")
 
-            self.app.push_screen(EditMemoryModal(), edit_memory_callback)
+            self.app.push_screen(EditMemoryModal(current_memory=str(self.vm_info.get('memory', ''))), edit_memory_callback)
 
         elif event.button.id == "edit-machine-type":
             machine_types = get_supported_machine_types(self.domain.connect(), self.domain)
@@ -749,10 +768,11 @@ class VMDetailModal(ModalScreen):
                         set_machine_type(self.domain, new_type)
                         self.app.show_success_message(f"Machine type set to {new_type}")
                         self.query_one("#machine-type-label").update(f"Machine Type: {new_type}")
+                        self.vm_info['machine_type'] = new_type
                     except (libvirt.libvirtError, Exception) as e:
                         self.app.show_error_message(f"Error setting machine type: {e}")
 
-            self.app.push_screen(SelectMachineTypeModal(machine_types), set_machine_type_callback)
+            self.app.push_screen(SelectMachineTypeModal(machine_types, current_machine_type=self.vm_info.get('machine_type', '')), set_machine_type_callback)
 
     def action_close_modal(self) -> None:
         """Close the modal."""
