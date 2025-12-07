@@ -10,7 +10,7 @@ its **risky** to use it.
 
 ## Media
 
-![Screenshot](https://paste.opensuse.org/pastes/b328399fd3c5/raw)
+![Screenshot](https://paste.opensuse.org/pastes/50aacc6e8bab/raw)
 
 [Demo Video](https://www.youtube.com/watch?v=r49KpUghUI4)
 
