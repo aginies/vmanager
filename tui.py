@@ -1070,9 +1070,9 @@ class VMManagerTUI(App):
             pc.styles.align_horizontal = "center"
             pc.styles.height = "auto"
             pc.styles.padding_bottom = 0
-            yield Button("Previous", id="prev-button", variant="primary", classes="ctrlpage")
-            yield Label("", id="page-info", classes="ctrlpage")
-            yield Button("Next", id="next-button", variant="primary", classes="ctrlpage")
+            yield Button("Previous Page", id="prev-button", variant="primary", classes="ctrlpage")
+            yield Label("", id="page-info", classes="")
+            yield Button("Next Page", id="next-button", variant="primary", classes="ctrlpage")
 
         #with ScrollableContainer(id="vms-container"):
         with Vertical(id="vms-container"):
@@ -1411,7 +1411,7 @@ class VMManagerTUI(App):
         self.num_pages = num_pages
 
         page_info = self.query_one("#page-info", Label)
-        page_info.update(f" Page {self.current_page + 1}/{num_pages} ")
+        page_info.update(f" [ {self.current_page + 1}/{num_pages} ]")
 
         prev_button = self.query_one("#prev-button", Button)
         prev_button.disabled = self.current_page == 0

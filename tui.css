@@ -233,6 +233,7 @@ Button {
     margin: 0 0;
     padding: 0 0;
     color: white;
+    text-style: underline;
     background: $background;
 }
 
