@@ -112,10 +112,6 @@ class VMCard(Static):
                             yield Button("View XML", id="xml")
                             yield Static(classes="button-separator")
                             yield Button("Connect", id="connect", variant="default")
-                with TabPane("Delete", id="delete-tab"):
-                    with Horizontal():
-                        with Vertical():
-                            yield Button("Delete", id="delete", variant="success", classes="delete-button")
                 with TabPane("Snapshot", id="snapshot-tab"):
                     with Horizontal():
                         with Vertical():
@@ -132,15 +128,17 @@ class VMCard(Static):
                                id="snapshot_delete",
                                variant="error",
                                )
-                with TabPane("Info", id="info-tab"):
+                #with TabPane("Info", id="info-tab"):
+                    #with Horizontal():
+                    #    with Vertical():
+                    #        yield Button( "Show info", id="info-button", variant="primary",)
+                with TabPane("Special", id="special-tab"):
                     with Horizontal():
                         with Vertical():
-                            yield Button(
-                               "Show info",
-                               id="info-button",
-                               variant="primary",
-                               )
-
+                            yield Button("Delete", id="delete", variant="success", classes="delete-button")
+                            yield Button("Clone", id="clone", variant="success", classes="clone-button")
+                        with Vertical():
+                            yield Button( "Show info", id="info-button", variant="primary",)
 
     def on_mount(self) -> None:
         self.styles.background = self.color

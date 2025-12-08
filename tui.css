@@ -246,7 +246,9 @@ Button {
 .delete-button {
     background: red;
 }
-
+.clone-button {
+    background: pink;
+}
 .edit-button,
 .add-button {
     background: green;
