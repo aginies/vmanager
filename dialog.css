@@ -140,4 +140,32 @@ RenameVMDialog #dialog-buttons Button {
     margin-left: 1;
 }
 
+ChangeNetworkDialog {
+    align: center middle;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+ChangeNetworkDialog #dialog {
+    width: 60;
+    height: 20;
+    padding: 1;
+    border: round green;
+    background: $surface;
+}
+
+ChangeNetworkDialog #interface-select {
+    margin-bottom: 1;
+    height: 4;
+}
+
+ChangeNetworkDialog #network-select {
+    margin-bottom: 1;
+    height: 4;
+}
+
+ChangeNetworkDialog #dialog-buttons Button {
+    width: 50%;
+    margin-left: 1;
+}
+
 
