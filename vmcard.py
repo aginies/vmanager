@@ -2,8 +2,9 @@ import subprocess
 import tempfile
 import libvirt
 import logging
+from datetime import datetime
 
-from textual.widgets import Static, Button, Input, ListView, ListItem, Label, TabbedContent, TabPane
+from textual.widgets import Static, Button, Input, ListView, ListItem, Label, TabbedContent, TabPane, Sparkline
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
 from textual.message import Message
@@ -11,6 +12,8 @@ from textual.screen import Screen
 from textual import on
 from textual.events import Click
 from typing import TypeVar
+from textual.timer import Timer
+
 
 class VMNameClicked(Message):
     """Posted when a VM's name is clicked."""
@@ -71,15 +74,30 @@ class VMCard(Static):
     vm = reactive(None)
     color = reactive("blue")
 
+    cpu_history = reactive([])
+    mem_history = reactive([])
+
+    last_cpu_time = 0
+    last_cpu_time_ts = 0
+
     def compose(self):
         with Vertical(id="info-container"):
             classes = ""
             yield Static(self.name, id="name", classes=classes)
             status_class = self.status.lower()
-            cpu_mem_widget = Static(f"{self.cpu} VCPU | {self.memory} MB", id="cpu-mem-info", classes="cpu-mem-clickable")
-            cpu_mem_widget.styles.content_align = ("center", "middle")
-            yield cpu_mem_widget
             yield Static(f"Status: {self.status}", id="status", classes=status_class)
+            #cpu_mem_widget = Static(f"{self.cpu} VCPU | {self.memory} MB", id="cpu-mem-info", classes="cpu-mem-clickable")
+            #cpu_mem_widget.styles.content_align = ("center", "middle")
+            #yield cpu_mem_widget
+            with Horizontal(id="cpu-sparkline-container", classes="sparkline-container"):
+                cpu_spark = Static(f"{self.cpu} VCPU", id="cpu-mem-info", classes="sparkline-label")
+                yield cpu_spark #Label(f"{self.cpu} VCPU:", classes="sparkline-label")
+                yield Sparkline(self.cpu_history, id="cpu-sparkline")
+            with Horizontal(id="mem-sparkline-container", classes="sparkline-container"):
+                mem_gb = round(self.memory / 1024, 1)
+                mem_spark = Static(f"{mem_gb} Gb", id="cpu-mem-info", classes="sparkline-label")
+                yield mem_spark #Label(f"{self.memory}", classes="sparkline-label")
+                yield Sparkline(self.mem_history, id="mem-sparkline")
 
             with TabbedContent(id="button-container"):
                 with TabPane("Manage", id="manage-tab"):
@@ -122,13 +140,52 @@ class VMCard(Static):
                                id="info-button",
                                variant="primary",
                                )
- 
+
 
     def on_mount(self) -> None:
         self.styles.background = self.color
         self.update_button_layout()
         self._update_status_styling()
+        self.update_stats()  # Initial update
+        self.timer = self.set_interval(5, self.update_stats)
 
+    def on_unmount(self) -> None:
+        """Stop the timer when the widget is removed."""
+        self.timer.stop()
+
+    def update_stats(self) -> None:
+        """Update CPU and memory statistics."""
+        if self.vm and self.vm.isActive():
+            try:
+                # CPU Usage
+                stats = self.vm.getCPUStats(True)
+                current_cpu_time = stats[0]['cpu_time']
+                now = datetime.now().timestamp()
+
+                if self.last_cpu_time > 0:
+                    time_diff = now - self.last_cpu_time_ts
+                    cpu_diff = current_cpu_time - self.last_cpu_time
+                    if time_diff > 0:
+                        # nanoseconds to seconds, then divide by number of cpus
+                        cpu_percent = (cpu_diff / (time_diff * 1_000_000_000)) * 100
+                        cpu_percent = cpu_percent / self.cpu # Divide by number of vCPUs
+                        self.cpu_history = self.cpu_history[-20:] + [cpu_percent]
+                        self.query_one("#cpu-sparkline").data = self.cpu_history
+
+                self.last_cpu_time = current_cpu_time
+                self.last_cpu_time_ts = now
+
+                # Memory Usage
+                mem_stats = self.vm.memoryStats()
+                if 'rss' in mem_stats:
+                    rss_kb = mem_stats['rss']
+                    mem_percent = (rss_kb * 1024) / (self.memory * 1024 * 1024) * 100
+                    self.mem_history = self.mem_history[-20:] + [mem_percent]
+                    self.query_one("#mem-sparkline").data = self.mem_history
+
+            except libvirt.libvirtError as e:
+                logging.error(f"Error getting stats for {self.name}: {e}")
+        
     def update_button_layout(self):
         """Update the button layout based on current VM status."""
         start_button = self.query_one("#start", Button)
@@ -140,6 +197,9 @@ class VMCard(Static):
         restore_button = self.query_one("#snapshot_restore", Button)
         snapshot_delete_button = self.query_one("#snapshot_delete", Button)
         info_button = self.query_one("#info-button", Button)
+        cpu_sparkline_container = self.query_one("#cpu-sparkline-container")
+        mem_sparkline_container = self.query_one("#mem-sparkline-container")
+
 
         is_stopped = self.status == "Stopped"
         is_running = self.status == "Running"
@@ -155,6 +215,10 @@ class VMCard(Static):
         restore_button.display = has_snapshots
         snapshot_delete_button.display = has_snapshots
         info_button.display = True # Always show info button
+        
+        cpu_sparkline_container.display = not is_stopped
+        mem_sparkline_container.display = not is_stopped
+
 
     def _update_status_styling(self):
         status_widget = self.query_one("#status")

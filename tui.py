@@ -1437,7 +1437,7 @@ class VMManagerTUI(App):
 
 if __name__ == "__main__":
     terminal_size = os.get_terminal_size()
-    if terminal_size.lines < 34:
+    if terminal_size.lines < 36:
         print(f"Terminal height is too small ({terminal_size.lines} lines). Please resize to at least 34 lines.")
         sys.exit(1)
 

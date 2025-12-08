@@ -3,7 +3,7 @@ VMCard {
     border: hidden;
     margin: 0 0;
     width: 42;
-    height: 16;
+    height: 14;
 }
 #name {
     background: green;
@@ -19,7 +19,134 @@ VMCard {
     content-align: center middle;
     border: green;
     width: 40;
-    height: 13;
+    height: 14;
+}
+
+.sparkline-container {
+    align-horizontal: left;
+    margin: 0 1;
+}
+
+.sparkline-label {
+    width: 10;
+    text-align: left;
+    padding-right: 1;
+    padding-left: 1;
+}
+
+#cpu-sparkline {
+    background: $panel;
+    color: $success;
+    margin-right: 1;
+}
+
+#mem-sparkline {
+    background: $panel;
+    color: $warning;
+    margin-right: 1;
+}
+
+.hidden {
+    display: none !important;
+}
+
+#status {
+    margin: 0 2;
+    padding: 0 1;
+    text-style: bold;
+    height: 3vh; /* 3vh; */
+    min-height: 3vh; /* 3vh; */
+    max-height: 3vh; /* 3vh; */
+    content-align: center middle;
+    margin-top: 1;
+    margin-bottom: 1;
+}
+#status.running,
+#status.stopped,
+#status.paused {
+    color: black;
+}
+#status.running {
+    background: lightgreen;
+}
+#status.stopped {
+    background: red;
+}
+#status.paused {
+    background: yellow;
+}
+Button {
+    height: 3vh; /*3vh; */
+    max-height: 14vh; /* 3vh; */
+    width: 100%; /*5vh; */
+    margin: 0 1;
+    padding: 0 0;
+    border: hidden;
+}
+.Buttonpage {
+    height: 3vh;
+    max-height: 3vh; /* 3vh; */
+    width: 15%; /*5vh; */
+    margin: 0 1;
+    padding: 0 0;
+    overflow-y: auto;
+    border: hidden;
+}
+
+#button-container {
+    width: 100%;
+    height: 100%;
+    margin: 1 1;
+    padding: 0 1;
+}
+#status-cpu-mem {
+    width: 100%;
+    height: 100%;
+    padding: 0 1;
+}
+/* Custom button styles */
+#pause,
+#xml,
+#snapshot_take,
+#snapshot_restore,
+#snapshot_delete,
+#connect {
+    color: white;
+    max-height: 3vh; /* 3vh; */
+}
+#pause, #xml, #connect {
+    padding: 0 1;
+}
+#snapshot_take, #snapshot_restore, #snapshot_delete {
+    padding: 0 0;
+}
+
+#pause {
+    background: #FFA500; /* Orange */
+}
+#xml {
+    background: grey;
+}
+
+#snapshot_take {
+    background: #00008B; /* Dark blue */
+}
+#snapshot_restore {
+    background: #0000FF; /* Blue */
+}
+#snapshot_delete {
+    background: red; /* Blue */
+}
+#connect {
+    background: #FF00FF; /* Magenta */
+}
+
+#snapshot-tab,
+#manage-tab {
+    border: hidden;
+}
+.button-separator {
+    height: 1;
 }
 #status {
     margin: 0 2;

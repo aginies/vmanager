@@ -1,11 +1,11 @@
 /* Styles for VMManagerTUI */
 #vms-container {
-    height: 1000;
+    height: 80;
     width: 84;
-    max-height: 92vh;
+    max-height: 90vh;
     /*overflow-y: scroll;
     overflow-x: scroll;*/
-    grid-rows: 13;
+    grid-rows: 14;
     grid-gutter: 1 1;
     layout: grid;
     overflow: auto;
@@ -279,9 +279,7 @@ Button {
 #select-machine-type-dialog,
 #select-disk-dialog {
     width: auto;
-    height: auto;
     max-width: 90; /* Increased from 60 */
-    max-height: 80vh;
     border: round $primary;
     background: $surface;
     padding: 1 2;
