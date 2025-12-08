@@ -17,24 +17,10 @@ its **risky** to use it.
 ## Features
 
 General capabilities:
-- List and manage QEMU/KVM virtual machines
+- List and manage QEMU/KVM Virtual Machines
 - Dynamic error messages
-- direct virsh command on the server connected
-
-Vm cards:
+- Direct virsh command on the server connected
 - User configuration file for server list in **~/.config/vmanager/config.yaml**
-- Start, stop, pause, resume, delete VMs
-- Snapshot management (take, restore, delete)
-- View VM details (status, CPU, memory, description, machine type, firmware, devices, etc...)
-- Connect to VMs using **virt-viewer**
-- View VM XML configuration
-
-Menu:
-- Connection URI
-- Manage a Server list
-- Connect to a server listed
-- Filter view
-- View log (libvirt and app)
 
 ## Requirements
 
@@ -82,16 +68,15 @@ When you run the application, you'll see:
 3. **VM Cards**: Each VM is displayed in a card with:
    - VM name
    - color-coded Status (Running, Paused, Stopped)
-   - CPU and Memory dedicated to this VM
-   - Action buttons (Start/Stop/Pause/Resume, Delete, Take/Restore/Delete Snapshot, View XML, Connect)
-   - Click on the name of the VM give you readable info about the VM configuration
+   - CPU and Mem Graph if running
+   - Action buttons
    - in the VM details view
-     - you can add/delete disks
+     - you can add/delete/disable disks
      - you can edit CPU/Mem/Machine type
 
 4. **Footer**: show all shortcuts available
 
-### Available Actions
+### Available Actions Buttons
 
 - **Start**: Start a stopped VM
 - **Stop**: Stop a running VM
@@ -103,7 +88,9 @@ When you run the application, you'll see:
 - **Delete Snapshot**: Delete an existing snapshot.
 - **View XML**: Display the VM's XML configuration in a temporary file
 - **Connect**: Launch virt-viewer to connect to the VM (launched in a non-blocking external process).
-- **View Log**: Open the `vm_manager.log` file for inspection.
+- **Clone**: Clone the current VM selected
+- **Rename**: Rename the current VM
+- **Show Info**: Get some info about the VM
 
 ### Connection Management
 
