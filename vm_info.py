@@ -327,36 +327,59 @@ def get_vm_machine_info(xml_content: str) -> str:
 
     return machine_type
 
-def get_vm_networks_info(xml_content: str) -> str:
-    """
-    Extracts network from a VM's XML definition.
-    """
+def get_vm_networks_info(xml_content: str) -> list[dict]:
+    """Extracts network interface information from a VM's XML definition."""
+    root = ET.fromstring(xml_content)
     networks = []
-    try:
-        root = ET.fromstring(xml_content)
-        devices = root.find("devices")
-        if devices is not None:
-            interface_elements = devices.findall("interface")
-            for interface in interface_elements:
-                # Get interface type
-                interface_type = interface.get("type", "unknown")
-                # Get source (bridge, network, etc.)
-                source = interface.find("source")
-                if source is not None:
-                    if interface_type == "bridge":
-                        bridge_name = source.get("bridge", "unknown")
-                        networks.append(f"bridge: {bridge_name}")
-                    elif interface_type == "network":
-                        network_name = source.get("network", "unknown")
-                        networks.append(f"network: {network_name}")
-                    elif interface_type == "user":
-                        networks.append("user: network")
-                else:
-                    networks.append(f"{interface_type}: unknown")
-    except:
-        pass  # Failed to get networks, continue without them
+    for interface in root.findall(".//devices/interface"):
+        mac_address_node = interface.find("mac")
+        if mac_address_node is None:
+            continue
+        mac_address = mac_address_node.get("address")
+        source = interface.find("source")
+        network_name = None
+        if source is not None:
+            network_name = source.get("network")
 
+        # We are interested in interfaces that are part of a network
+        if network_name:
+            networks.append({"mac": mac_address, "network": network_name})
     return networks
+
+
+def change_vm_network(domain: libvirt.virDomain, mac_address: str, new_network: str):
+    """Changes the network for a VM's network interface."""
+    xml_desc = domain.XMLDesc(0)
+    root = ET.fromstring(xml_desc)
+
+    interface_to_update = None
+    for iface in root.findall(f".//devices/interface"):
+        mac_node = iface.find("mac")
+        if mac_node is not None and mac_node.get("address") == mac_address:
+            interface_to_update = iface
+            break
+
+    if interface_to_update is None:
+        raise ValueError(f"Interface with MAC {mac_address} not found.")
+
+    source_node = interface_to_update.find("source")
+    if source_node is None:
+        raise ValueError("Interface does not have a source element.")
+
+    # Check if network is already the same
+    if source_node.get("network") == new_network:
+        return # Nothing to do
+
+    source_node.set("network", new_network)
+    interface_xml = ET.tostring(interface_to_update, 'unicode')
+
+    state, _ = domain.info()
+    flags = libvirt.VIR_DOMAIN_DEVICE_MODIFY_CONFIG
+    if state in [libvirt.VIR_DOMAIN_RUNNING, libvirt.VIR_DOMAIN_PAUSED]:
+        flags |= libvirt.VIR_DOMAIN_DEVICE_MODIFY_LIVE
+
+    domain.updateDeviceFlags(interface_xml, flags)
+
 
 
 def get_vm_network_ip(domain) -> list:
