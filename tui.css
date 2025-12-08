@@ -139,7 +139,7 @@ VMDetailModal {
 #vm-detail-container {
     width: 80;
     height: auto;
-    max-height: 90%;
+    max-height: 100%;
     background: $surface;
     border: round $primary-lighten-2;
     padding: 1;
@@ -276,7 +276,7 @@ Button {
 .edit-detail-btn {
     width: auto;
     height: 1;
-    background: green;
+    background: $primary;
     min-height: 1;
     margin: 0 0 0 1;
 }

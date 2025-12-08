@@ -218,7 +218,7 @@ class ServerManagementModal(ModalScreen):
             with Horizontal():
                 yield Button("Add", id="add-server-btn", classes="add-button")
                 yield Button("Edit", id="edit-server-btn", disabled=True, classes="edit-button")
-                yield Button("Delete", id="delete-server-btn", disabled=True, variant="error", classes="delete-button")
+                yield Button("Delete", id="delete-server-btn", disabled=True, classes="delete-button")
             yield Button("Close", id="close-btn", classes="close-button")
 
     def on_mount(self) -> None:
@@ -811,7 +811,6 @@ class VMDetailModal(ModalScreen):
                     is_stopped = self.vm_info.get("status") == "Stopped"
                     yield Button("Edit", id="edit-machine-type", classes="edit-detail-btn", disabled=not is_stopped)
 
-
             yield Label("Disks", classes="section-title")
             with ScrollableContainer(classes="info-details"):
                 disks_info = self.vm_info.get("disks", [])
@@ -832,14 +831,14 @@ class VMDetailModal(ModalScreen):
                     self.disk_list_view.append(ListItem(Label("No disks found.")))
                 yield self.disk_list_view
             with Horizontal():
-                yield Button("Add Disk", id="detail_add_disk")
+                yield Button("Add Disk", id="detail_add_disk", variant="primary")
 
                 has_enabled_disks = any(d['status'] == 'enabled' for d in disks_info)
                 has_disabled_disks = any(d['status'] == 'disabled' for d in disks_info)
 
-                remove_button = Button("Remove Disk", id="detail_remove_disk")
-                disable_button = Button("Disable Disk", id="detail_disable_disk")
-                enable_button = Button("Enable Disk", id="detail_enable_disk")
+                remove_button = Button("Remove Disk", id="detail_remove_disk", variant="primary")
+                disable_button = Button("Disable Disk", id="detail_disable_disk", variant="primary")
+                enable_button = Button("Enable Disk", id="detail_enable_disk", variant="primary")
 
                 remove_button.display = has_enabled_disks
                 disable_button.display = has_enabled_disks
@@ -849,23 +848,28 @@ class VMDetailModal(ModalScreen):
                 yield disable_button
                 yield enable_button
 
+            yield Label("Networks", classes="section-title")
+            with TabPane("Networks", id="networks", classes="info-details"):
+                networks_list = self.vm_info.get("networks", [])
+                detail_network_list = self.vm_info.get("detail_network", [])
 
-            if self.vm_info.get("networks"):
-                yield Label("Networks", classes="section-title")
-                with ScrollableContainer(classes="info-details"):
-                    for interface in self.vm_info["networks"]:
-                        mac = interface.get('mac')
-                        current_net = interface.get('network')
-                        select_id = f"net-select-{mac.replace(':', '')}" if mac else ""
-                        options = [(net, net) for net in self.available_networks] if self.available_networks else []
+                mac_to_ip = {}
+                if detail_network_list:
+                    for detail in detail_network_list:
+                        ips = detail.get('ipv4', []) + detail.get('ipv6', [])
+                        if ips:
+                            mac_to_ip[detail['mac']] = ", ".join(ips)
 
-                        with Horizontal(classes="network-interface-row"):
-                            yield Label(f"MAC: {mac}", classes="network-mac-label")
-                            if self.available_networks:
-                                yield Select(options, value=current_net, id=select_id)
-                            else:
-                                yield Label(f"Net: {current_net}")
-                yield Button("Change Network", id="change-network", classes="change-network")
+                if networks_list:
+                    for net in networks_list:
+                        yield Label(f"MAC: {net['mac']}")
+                        yield Label(f"Network: {net.get('network', 'N/A')}")
+                        ip_address = mac_to_ip.get(net['mac'], "N/A")
+                        yield Label(f"IP: {ip_address}")
+                        yield Static(classes="separator")
+                else:
+                    yield Label("No network interfaces found.")
+            yield Button("Change Network", id="change-network-button", variant="primary")
 
             if self.vm_info.get("network_dns_gateway"):
                 yield Label("Network DNS & Gateway", classes="section-title")
@@ -890,8 +894,7 @@ class VMDetailModal(ModalScreen):
                                 detail_str = ", ".join(f"{k}: {v}" for k, v in device.items())
                                 yield Static(f"    • {detail_str}")
 
-            with Horizontal(id="detail-button-container"):
-                yield Button("Close", variant="default", id="close-btn", classes="close-button")
+            yield Button("Close", variant="default", id="close-btn", classes="close-button")
 
     def _update_disk_list(self):
         self.disk_list_view.clear()
@@ -1037,7 +1040,7 @@ class VMDetailModal(ModalScreen):
 
             self.app.push_screen(SelectMachineTypeModal(machine_types, current_machine_type=self.vm_info.get('machine_type', '')), set_machine_type_callback)
 
-        elif event.button.id == "change-network":
+        elif event.button.id == "change-network-button":
             logging.info(f"Attempting to change network for VM: {self.vm_name}")
             try:
                 available_networks_info = list_networks(self.app.conn)
