@@ -6,7 +6,7 @@ from datetime import datetime
 import vm_info
 import re
 
-from textual.widgets import Static, Button, Input, ListView, ListItem, Label, TabbedContent, TabPane, Sparkline
+from textual.widgets import Static, Button, Input, ListView, ListItem, Label, TabbedContent, TabPane, Sparkline, Select
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
 from textual.message import Message
@@ -75,6 +75,43 @@ class ConfirmationDialog(BaseDialog[bool]):
     def action_cancel_modal(self) -> None:
         """Cancel the modal."""
         self.dismiss(False)
+
+
+class ChangeNetworkDialog(BaseDialog[dict | None]):
+    """A dialog to change a VM's network interface."""
+
+    def __init__(self, interfaces: list[dict], networks: list[str]) -> None:
+        super().__init__()
+        self.interfaces = interfaces
+        self.networks = networks
+
+    def compose(self):
+        interface_options = [(f"{iface['mac']} ({iface['network']})", iface['mac']) for iface in self.interfaces]
+        network_options = [(str(net), str(net)) for net in self.networks]
+
+        with Vertical(id="dialog", classes="info-container"):
+            yield Label("Select interface and new network:")
+            yield Select(interface_options, id="interface-select")
+            yield Select(network_options, id="network-select")
+            with Horizontal(id="dialog-buttons"):
+                yield Button("Change", variant="success", id="change")
+                yield Button("Cancel", variant="error", id="cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "change":
+            interface_select = self.query_one("#interface-select", Select)
+            network_select = self.query_one("#network-select", Select)
+
+            mac_address = interface_select.value
+            new_network = network_select.value
+
+            if mac_address is Select.BLANK or new_network is Select.BLANK:
+                self.app.show_error_message("Please select an interface and a network.")
+                return
+
+            self.dismiss({"mac_address": mac_address, "new_network": new_network})
+        else:
+            self.dismiss(None)
 
 
 class VMCard(Static):
