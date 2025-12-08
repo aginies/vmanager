@@ -373,7 +373,7 @@ def change_vm_network(domain: libvirt.virDomain, mac_address: str, new_network: 
     source_node.set("network", new_network)
     interface_xml = ET.tostring(interface_to_update, 'unicode')
 
-    state, _ = domain.info()
+    state = domain.info()[0]
     flags = libvirt.VIR_DOMAIN_DEVICE_MODIFY_CONFIG
     if state in [libvirt.VIR_DOMAIN_RUNNING, libvirt.VIR_DOMAIN_PAUSED]:
         flags |= libvirt.VIR_DOMAIN_DEVICE_MODIFY_LIVE
