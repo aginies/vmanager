@@ -380,8 +380,6 @@ def change_vm_network(domain: libvirt.virDomain, mac_address: str, new_network: 
 
     domain.updateDeviceFlags(interface_xml, flags)
 
-
-
 def get_vm_network_ip(domain) -> list:
     """
     Retrieves network interface IP addresses for a given VM domain.
