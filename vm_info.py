@@ -35,7 +35,7 @@ def clone_vm(original_vm, new_vm_name):
             source_elem = disk.find('source')
             if source_elem is not None and source_elem.get('file'):
                 original_disk_path = source_elem.get('file')
-                
+
                 original_path, original_filename = os.path.split(original_disk_path)
                 name, ext = os.path.splitext(original_filename)
                 new_disk_filename = f"{new_vm_name}_{secrets.token_hex(4)}{ext}"
@@ -50,7 +50,7 @@ def clone_vm(original_vm, new_vm_name):
 
     new_xml = ET.tostring(root, encoding='unicode')
     new_vm = conn.defineXML(new_xml)
-    
+
     return new_vm
 
 def rename_vm(domain, new_name, delete_snapshots=False):
@@ -156,7 +156,7 @@ def add_disk(domain, disk_path, device_type='disk', create=False, size_gb=10, di
     # Determine target device
     xml_desc = domain.XMLDesc(0)
     root = ET.fromstring(xml_desc)
-    
+
     if device_type == 'disk':
         bus = 'virtio'
         prefix = 'vd'
@@ -173,14 +173,14 @@ def add_disk(domain, disk_path, device_type='disk', create=False, size_gb=10, di
         for target in root.findall(".//disk/target")
         if target.get("dev")
     ]
-    
+ 
     target_dev = ""
     for letter in dev_letters:
         dev = f"{prefix}{letter}"
         if dev not in used_devs:
             target_dev = dev
             break
-    
+ 
     if not target_dev:
         raise Exception("No available device slots for new disk.")
 
@@ -212,7 +212,7 @@ def add_disk(domain, disk_path, device_type='disk', create=False, size_gb=10, di
     flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
     if domain.isActive():
         flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
-        
+
     domain.attachDeviceFlags(disk_xml, flags)
     return target_dev
 
@@ -225,12 +225,12 @@ def remove_disk(domain, disk_dev_path):
 
     xml_desc = domain.XMLDesc(0)
     root = ET.fromstring(xml_desc)
-    
+
     disk_to_remove_xml = None
     for disk in root.findall(".//disk[@device='disk'] | .//disk[@device='cdrom']"):
         source = disk.find("source")
         target = disk.find("target")
-        
+
         match = False
         if source is not None and source.get("file") == disk_dev_path:
             match = True
@@ -247,7 +247,7 @@ def remove_disk(domain, disk_dev_path):
     flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
     if domain.isActive():
         flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
-        
+
     domain.detachDeviceFlags(disk_to_remove_xml, flags)
 
 
@@ -616,12 +616,12 @@ def disable_disk(domain, disk_path):
         if path == disk_path:
             disk_to_disable = disk
             break
-            
+
     if disk_to_disable is None:
         raise ValueError(f"Enabled disk '{disk_path}' not found.")
 
     devices.remove(disk_to_disable)
-    
+
     disabled_disks_elem = _get_disabled_disks_elem(root)
     disabled_disks_elem.append(disk_to_disable)
 
@@ -638,7 +638,7 @@ def enable_disk(domain, disk_path):
     root = ET.fromstring(xml_desc)
 
     disabled_disks_elem = _get_disabled_disks_elem(root)
-    
+ 
     disk_to_enable = None
     for disk in disabled_disks_elem.findall('disk'):
         source = disk.find('source')
@@ -647,21 +647,21 @@ def enable_disk(domain, disk_path):
             path = source.attrib['file']
         elif source is not None and 'dev' in source.attrib:
             path = source.attrib['dev']
-        
+
         if path == disk_path:
             disk_to_enable = disk
             break
 
     if disk_to_enable is None:
         raise ValueError(f"Disabled disk '{disk_path}' not found.")
-        
+
     disabled_disks_elem.remove(disk_to_enable)
 
     devices = root.find('devices')
     if devices is None:
         devices = ET.SubElement(root, 'devices')
     devices.append(disk_to_enable)
-    
+
     new_xml = ET.tostring(root, encoding='unicode')
     conn.defineXML(new_xml)
 
@@ -671,11 +671,11 @@ def set_vcpu(domain, vcpu_count: int):
     """
     if not domain:
         raise ValueError("Invalid domain object.")
-    
+ 
     flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
     if domain.isActive():
         flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
-        
+
     domain.setVcpusFlags(vcpu_count, flags)
 
 def set_memory(domain, memory_mb: int):
@@ -684,9 +684,9 @@ def set_memory(domain, memory_mb: int):
     """
     if not domain:
         raise ValueError("Invalid domain object.")
-        
+
     memory_kb = memory_mb * 1024
-    
+
     flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
     if domain.isActive():
         flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
@@ -699,7 +699,7 @@ def get_supported_machine_types(conn, domain):
     """
     if not conn or not domain:
         return []
-    
+
     try:
         # Get domain architecture
         domain_xml = domain.XMLDesc(0)
@@ -710,7 +710,7 @@ def get_supported_machine_types(conn, domain):
         # Get capabilities
         caps_xml = conn.getCapabilities()
         caps_root = ET.fromstring(caps_xml)
-        
+
         # Find machines for that arch
         machines = [m.text for m in caps_root.findall(f".//guest/arch[@name='{arch}']/machine")]
         return sorted(list(set(machines)))
@@ -725,21 +725,21 @@ def set_machine_type(domain, new_machine_type):
     """
     if not domain:
         raise ValueError("Invalid domain object.")
-        
+ 
     if domain.isActive():
         raise libvirt.libvirtError("VM must be stopped to change machine type.")
-        
+
     xml_desc = domain.XMLDesc(0)
     root = ET.fromstring(xml_desc)
-    
+ 
     type_elem = root.find(".//os/type")
     if type_elem is None:
         raise Exception("Could not find OS type element in VM XML.")
-        
+ 
     type_elem.set('machine', new_machine_type)
-    
+ 
     new_xml_desc = ET.tostring(root, encoding='unicode')
-    
+ 
     conn = domain.connect()
     conn.defineXML(new_xml_desc)
 
@@ -754,20 +754,21 @@ def list_networks(conn):
     for net in conn.listAllNetworks():
         xml_desc = net.XMLDesc(0)
         root = ET.fromstring(xml_desc)
-        
+
         forward_elem = root.find('forward')
         mode = forward_elem.get('mode') if forward_elem is not None else 'isolated'
-        
+ 
         networks.append({
             'name': net.name(),
             'mode': mode,
             'active': net.isActive(),
+            'autostart': net.autostart(),
         })
     return networks
 
-def create_nat_network(conn, name, forward_dev, ip_network, dhcp_enabled, dhcp_start, dhcp_end, domain_name):
+def create_network(conn, name, typenet, forward_dev, ip_network, dhcp_enabled, dhcp_start, dhcp_end, domain_name):
     """
-    Creates a new NAT network.
+    Creates a new NAT/Routed network.
     """
     if not conn:
         raise ValueError("Invalid libvirt connection.")
@@ -776,13 +777,20 @@ def create_nat_network(conn, name, forward_dev, ip_network, dhcp_enabled, dhcp_s
     net = ipaddress.ip_network(ip_network)
     generated_mac = generate_mac_address()
 
+    nat_xml = ""
+    if typenet == "nat":
+        nat_xml = """
+    <nat>
+      <port start='1024' end='65535'/>
+    </nat>"""
+    xml_forward_dev = ""
+    if forward_dev:
+        xml_forward_dev = f"dev='{forward_dev}'"
+
     xml = f"""
 <network>
   <name>{name}</name>
-  <forward mode='nat' dev='{forward_dev}'>
-    <nat>
-      <port start='1024' end='65535'/>
-    </nat>
+  <forward mode='{typenet}' {xml_forward_dev}>{nat_xml}
   </forward>
   <bridge name='{name}' stp='on' delay='0'/>
   <mac address='{generated_mac}'/>
@@ -803,6 +811,70 @@ def create_nat_network(conn, name, forward_dev, ip_network, dhcp_enabled, dhcp_s
     net = conn.networkDefineXML(xml)
     net.create()
     net.setAutostart(True)
+
+def delete_network(conn, network_name):
+    """
+    Deletes a network.
+    """
+    if not conn:
+        raise ValueError("Invalid libvirt connection.")
+
+    try:
+        net = conn.networkLookupByName(network_name)
+        if net.isActive():
+            net.destroy()
+        net.undefine()
+    except libvirt.libvirtError as e:
+        raise Exception(f"Error deleting network '{network_name}': {e}")
+
+
+def get_vms_using_network(conn, network_name):
+    """
+    Get a list of VMs using a specific network.
+    """
+    if not conn:
+        return []
+
+    vm_names = []
+    domains = conn.listAllDomains(0)
+    if domains:
+        for domain in domains:
+            xml_desc = domain.XMLDesc(0)
+            root = ET.fromstring(xml_desc)
+            for iface in root.findall(".//devices/interface[@type='network']"):
+                source = iface.find("source")
+                if source is not None and source.get("network") == network_name:
+                    vm_names.append(domain.name())
+                    break 
+    return vm_names
+
+def set_network_active(conn, network_name, active):
+    """
+    Sets a network to active or inactive.
+    """
+    if not conn:
+        raise ValueError("Invalid libvirt connection.")
+    try:
+        net = conn.networkLookupByName(network_name)
+        if active:
+            net.create()
+        else:
+            net.destroy()
+    except libvirt.libvirtError as e:
+        raise Exception(f"Error setting network active status: {e}")
+
+def set_network_autostart(conn, network_name, autostart):
+    """
+    Sets a network to autostart or not.
+    """
+    if not conn:
+        raise ValueError("Invalid libvirt connection.")
+    try:
+        net = conn.networkLookupByName(network_name)
+        net.setAutostart(autostart)
+    except libvirt.libvirtError as e:
+        raise Exception(f"Error setting network autostart status: {e}")
+
 
 def get_host_network_interfaces():
     """

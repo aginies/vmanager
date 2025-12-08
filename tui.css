@@ -27,6 +27,7 @@
 #add-server-dialog,
 #add-disk-dialog,
 #server-selection-dialog,
+#create-nat-network-dialog,
 #filter-dialog,
 #server-management-dialog, {
     width: 64;
@@ -36,13 +37,14 @@
     padding: 1 2;
 }
 
+#server-pref-title,
 #connection-dialog Label,
 #filter-dialog Label,
 #server-selection-dialog Label,
-#server-management-dialog Label,
 #edit-server-dialog Label,
 #add-server-dialog Label,
 #add-disk-dialog Label,
+#create-nat-network-dialog Label,
 #remove-disk-dialog Label,
 #edit-cpu-dialog Label,
 #edit-memory-dialog Label,
@@ -70,6 +72,7 @@
 #edit-server-dialog Horizontal,
 #add-server-dialog Horizontal,
 #server-management-dialog Horizontal,
+#create-nat-network-dialog Horizontal,
 #add-disk-dialog Horizontal,
 #remove-disk-dialog Horizontal,
 #edit-cpu-dialog Horizontal,
@@ -82,6 +85,7 @@
 
 #connection-dialog Button,
 #server-selection-dialog Button,
+#server-pref-title Button,
 #edit-server-dialog Button,
 #add-server-dialog Button,
 #server-management-dialog Button,
@@ -293,12 +297,6 @@ Button {
     align: center middle;
 }
 
-.existing-networks-list {
-    background: $surface;
-    height: 5; /* Keep fixed for existing networks, as it's not in a scrollable container directly controlling its flexible height */
-    border: round $primary;
-}
-
 #machine-type-list, #disk-selection-list {
     background: $surface;
     height: 1fr; /* Make height flexible within ScrollableContainer */
@@ -399,32 +397,53 @@ VirshShellScreen {
 /* Main dialog container */
 #server-pref-dialog {
     width: 90;
-    height: auto;
-    max-height: 40;
+    height: 35;
     border: round $primary;
     background: $surface;
-    padding: 1;
+    padding: 1 0;
 }
-
+.info-network-pref {
+    height: auto;
+    margin: 1 1;
+    padding: 0 0;
+    border: round $primary;
+    margin-bottom: 1;
+}
 /* ListView item styling */
 ListView > ListItem {
-    padding: 0 1;
+    height: 2;
+    padding: 0 0;
+    content-align-vertical: middle;
 }
-
 ListView > ListItem:hover {
+    height: auto;
     background: $primary-darken-2;
 }
-
 /* Input focus styling */
 Input:focus {
     border: tall $accent;
 }
-
 Select:focus {
     border: tall $accent;
 }
-
 /* Radio button spacing */
 RadioButton {
     padding: 0 0 0 1;
+}
+NetworkListItem {
+    height: auto;
+    margin-bottom: 0;
+}
+.net-name {
+    width: 30%;
+}
+.net-mode {
+    width: 15%;
+}
+#net-active-check {
+    width: 25%;
+}
+
+#net-autostart-check {
+    width: 25%;
 }

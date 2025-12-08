@@ -6,14 +6,15 @@ import asyncio
 from typing import TypeVar
 
 from textual.app import App, ComposeResult
-from textual.widgets import Header, Footer, Select, Button, Input, Label, Static, DataTable, Link, TextArea, ListView, ListItem, Checkbox, RadioButton, RadioSet, TabbedContent, TabPane
+from textual.widgets import Header, Footer, Select, Button, Input, Label, Static, DataTable, Link, TextArea, ListView, ListItem, Checkbox, RadioButton, RadioSet, TabbedContent, TabPane, Pretty
 from textual.containers import ScrollableContainer, Horizontal, Vertical
 from textual.reactive import reactive
 from textual.screen import ModalScreen
+from textual.message import Message
 from textual import on
 import libvirt
 from vmcard import VMCard, VMNameClicked, ConfirmationDialog
-from vm_info import get_status, get_vm_description, get_vm_machine_info, get_vm_firmware_info, get_vm_networks_info, get_vm_network_ip, get_vm_network_dns_gateway_info, get_vm_disks_info, get_vm_devices_info, add_disk, remove_disk, set_vcpu, set_memory, get_supported_machine_types, set_machine_type, list_networks, create_nat_network, get_host_network_interfaces, enable_disk, disable_disk
+from vm_info import get_status, get_vm_description, get_vm_machine_info, get_vm_firmware_info, get_vm_networks_info, get_vm_network_ip, get_vm_network_dns_gateway_info, get_vm_disks_info, get_vm_devices_info, add_disk, remove_disk, set_vcpu, set_memory, get_supported_machine_types, set_machine_type, list_networks, create_network, delete_network, get_vms_using_network, set_network_active, set_network_autostart, get_host_network_interfaces, enable_disk, disable_disk
 from config import load_config, save_config
 
 # Configure logging
@@ -492,68 +493,69 @@ class SelectMachineTypeModal(BaseModal[str | None]):
         if event.button.id == "cancel-btn":
             self.dismiss(None)
 
-class ServerPrefModal(BaseModal[None]):
-    """Modal screen for server preferences."""
+class NetworkListItem(ListItem):
+    """A list item that displays network information with interactive toggles."""
+
+    class NetworkStatusChanged(Message):
+        """Event sent when the active or autostart status of a network changes."""
+        def __init__(self, network_name: str, change_type: str, value: bool) -> None:
+            super().__init__()
+            self.network_name = network_name
+            self.change_type = change_type
+            self.value = value
+
+    def __init__(self, net_info: dict) -> None:
+        super().__init__()
+        self.net_info = net_info
+        self.network_name = net_info['name']
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="server-pref-dialog", classes="ServerPrefModal"):
-            yield Label("Server Preferences", id="server-pref-title")
-            with TabbedContent(id="server-pref-tabs"):
-                with TabPane("Network", id="tab-network"):
-                    host_interfaces = get_host_network_interfaces()
-                    if not host_interfaces:
-                        host_interfaces = [("No interfaces found", "")]
-                    interface_options = []
-                    for name, ip in host_interfaces:
-                        display_text = f"{name} ({ip})" if ip else name
-                        interface_options.append((display_text, name))
+        with Horizontal():
+            yield Label(self.net_info['name'], classes="net-name")
+            yield Label(self.net_info['mode'], classes="net-mode")
+            yield Checkbox("Active", self.net_info['active'], id="net-active-check")
+            yield Checkbox("Autostart", self.net_info['autostart'], id="net-autostart-check")
 
-                    with ScrollableContainer():
-                        yield Label("Existing Networks", classes="section-title")
-                        yield ListView(id="existing-networks-list", classes="existing-networks-list")
-                        yield Label("Create New NAT Network", classes="section-title")
-                        with Vertical(id="create-network-form"):
-                            yield Input(placeholder="Network Name (e.g., nat_net)", id="net-name-input")
-                            yield Select(interface_options, prompt="Select Forward Interface", id="net-forward-input", classes="net-forward-input")
-                            yield Input(placeholder="IPv4 Network (e.g., 192.168.100.0/24)", id="net-ip-input")
-                            yield Checkbox("Enable DHCPv4", id="dhcp-checkbox", value=True)
-                            with Vertical(id="dhcp-inputs-horizontal"):
-                                with Horizontal(id="dhcp-options"):
-                                    yield Input(placeholder="DHCP Start (e.g., 192.168.100.100)", id="dhcp-start-input", classes="dhcp-input")
-                                    yield Input(placeholder="DHCP End (e.g., 192.168.100.254)", id="dhcp-end-input", classes="dhcp-input")
-                            with RadioSet(id="dns-domain-radioset", classes="dns-domain-radioset"):
-                                yield RadioButton("Use Network Name for DNS Domain", id="dns-use-net-name", value=True)
-                                yield RadioButton("Use Custom DNS Domain", id="dns-use-custom")
-                            yield Input(placeholder="Custom DNS Domain", id="dns-custom-domain-input", classes="hidden")
-                            with Vertical(id="network-create-close-horizontal"):
-                                with Horizontal(id="dhcp-options"):
-                                    yield Button("Create Network", variant="primary", id="create-net-btn", classes="create-net-btn")
-                                    yield Button("Close", variant="default", id="close-btn", classes="close-button")
-                with TabPane("Storage", id="tab-storage"):
-                    yield Label("Storage settings... WIP")
+    @on(Checkbox.Changed)
+    def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
+        change_type = "active" if event.checkbox.id == "net-active-check" else "autostart"
 
-            #with Horizontal(id="server-pref-buttons"):
+class CreateNatNetworkModal(BaseModal[None]):
+    """Modal screen for creating a new NAT network."""
 
-    def on_mount(self) -> None:
-        self._load_networks()
+    def compose(self) -> ComposeResult:
+        with Vertical(id="create-nat-network-dialog"):
+            yield Label("Create New NAT Network", id="create-nat-network-title")
 
-    def _load_networks(self):
-        network_list = self.query_one("#existing-networks-list", ListView)
-        network_list.clear()
-        networks = list_networks(self.app.conn)
-        for net in networks:
-            network_list.append(ListItem(Label(net['name'])))
-        network_list.focus()
+            host_interfaces = get_host_network_interfaces()
+            if not host_interfaces:
+                host_interfaces = [("No interfaces found", "")]
+            interface_options = []
+            for name, ip in host_interfaces:
+                display_text = f"{name} ({ip})" if ip else name
+                interface_options.append((display_text, name))
 
-    @on(ListView.Selected, "#existing-networks-list")
-    def on_list_view_selected(self, event: ListView.Selected) -> None:
-        network_name = str(event.item.query_one(Label).renderable)
-        try:
-            net = self.app.conn.networkLookupByName(network_name)
-            xml = net.XMLDesc(0)
-            self.app.push_screen(NetworkDetailModal(network_name, xml))
-        except libvirt.libvirtError as e:
-            self.app.show_error_message(f"Error getting network details: {e}")
+            with ScrollableContainer():
+                with Vertical(id="create-network-form"):
+                    yield Input(placeholder="Network Name (e.g., nat_net)", id="net-name-input")
+                    with RadioSet(id="type-network", classes="type-network-radioset"):
+                        yield RadioButton("Nat network", id="type-network-nat", value=True)
+                        yield RadioButton("Routed network", id="type-network-routed")
+                    yield Select(interface_options, prompt="Select Forward Interface", id="net-forward-input", classes="net-forward-input")
+                    yield Input(placeholder="IPv4 Network (e.g., 192.168.100.0/24)", id="net-ip-input", value="192.168.11.0/24")
+                    yield Checkbox("Enable DHCPv4", id="dhcp-checkbox", value=True)
+                    with Vertical(id="dhcp-inputs-horizontal"):
+                        with Horizontal(id="dhcp-options"):
+                            yield Input(placeholder="DHCP Start (e.g., 192.168.100.100)", id="dhcp-start-input", classes="dhcp-input", value="192.168.11.10")
+                            yield Input(placeholder="DHCP End (e.g., 192.168.100.254)", id="dhcp-end-input", classes="dhcp-input", value="192.168.11.30")
+                    with RadioSet(id="dns-domain-radioset", classes="dns-domain-radioset"):
+                        yield RadioButton("Use Network Name for DNS Domain", id="dns-use-net-name", value=True)
+                        yield RadioButton("Use Custom DNS Domain", id="dns-use-custom")
+                    yield Input(placeholder="Custom DNS Domain", id="dns-custom-domain-input", classes="hidden")
+                    with Vertical(id="network-create-close-horizontal"):
+                        with Horizontal(id="dhcp-options"):
+                            yield Button("Create Network", variant="primary", id="create-net-btn", classes="create-net-btn")
+                            yield Button("Close", variant="default", id="close-btn", classes="close-button")
 
     @on(Checkbox.Changed, "#dhcp-checkbox")
     def on_dhcp_checkbox_changed(self, event: Checkbox.Changed) -> None:
@@ -577,13 +579,21 @@ class ServerPrefModal(BaseModal[None]):
             self.dismiss(None)
         elif event.button.id == "create-net-btn":
             name = self.query_one("#net-name-input", Input).value
+            typenet_id = self.query_one("#type-network", RadioSet).pressed_button.id
+            if typenet_id == "type-network-nat":
+                typenet = "nat"
+            elif typenet_id == "type-network-routed":
+                typenet = "route"
+            else:
+                self.app.show_error_message(f"Unknown network type: {typenet_id}")
+                return
             forward_select = self.query_one("#net-forward-input", Select)
             forward = forward_select.value
             ip = self.query_one("#net-ip-input", Input).value
             dhcp = self.query_one("#dhcp-checkbox", Checkbox).value
             dhcp_start = self.query_one("#dhcp-start-input", Input).value
             dhcp_end = self.query_one("#dhcp-end-input", Input).value
-            
+
             domain_radio = self.query_one("#dns-domain-radioset", RadioSet).pressed_button.id
             domain_name = name
             if domain_radio == "dns-use-custom":
@@ -614,11 +624,115 @@ class ServerPrefModal(BaseModal[None]):
                 return
 
             try:
-                create_nat_network(self.app.conn, name, forward, ip, dhcp, dhcp_start, dhcp_end, domain_name)
+                create_network(self.app.conn, name, typenet, forward, ip, dhcp, dhcp_start, dhcp_end, domain_name)
                 self.app.show_success_message(f"Network {name} created successfully.")
-                self._load_networks()
+                self.dismiss(True) # True to indicate success
             except Exception as e:
                 self.app.show_error_message(f"Error creating network: {e}")
+
+class ServerPrefModal(BaseModal[None]):
+    """Modal screen for server preferences."""
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="server-pref-dialog", classes="ServerPrefModal"):
+            yield Label("Server Preferences", id="server-pref-title")
+            with TabbedContent(id="server-pref-tabs"):
+                with TabPane("Network", id="tab-network"):
+                    with ScrollableContainer():
+                        yield ListView(id="existing-networks-list", classes="info-network-pref")
+                    with Horizontal(id="network-buttons"):
+                        yield Button("Add", id="add-net-btn", classes="Buttonpage")
+                        yield Button("View", id="view-net-btn", classes="Buttonpage", disabled=True)
+                        yield Button("Delete", id="delete-net-btn", variant="error", classes="Buttonpage", disabled=True)
+                        yield Button("Close", id="close-btn", classes="Buttonpage")
+                with TabPane("Storage", id="tab-storage"):
+                    yield Label("Storage settings... WIP")
+
+    def on_mount(self) -> None:
+        self._load_networks()
+
+    def _load_networks(self):
+        list_view = self.query_one("#existing-networks-list", ListView)
+        list_view.clear()
+        networks = list_networks(self.app.conn)
+        for net in networks:
+            list_view.append(NetworkListItem(net))
+        list_view.focus()
+
+    @on(ListView.Selected, "#existing-networks-list")
+    def on_list_view_selected(self, event: ListView.Selected):
+        self.query_one("#view-net-btn").disabled = False
+        self.query_one("#delete-net-btn").disabled = False
+
+    @on(NetworkListItem.NetworkStatusChanged)
+    def on_network_status_changed(self, event: NetworkListItem.NetworkStatusChanged) -> None:
+        try:
+            if event.change_type == "active":
+                set_network_active(self.app.conn, event.network_name, event.value)
+                self.app.show_success_message(f"Network {event.network_name} activity set to {event.value}")
+            elif event.change_type == "autostart":
+                set_network_autostart(self.app.conn, event.network_name, event.value)
+                self.app.show_success_message(f"Network {event.network_name} autostart set to {event.value}")
+        except Exception as e:
+            self.app.show_error_message(str(e))
+            self._load_networks() # Reload to show the correct state
+            self.app.show_error_message(f"An unexpected error occurred: {e}")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "close-btn":
+            self.dismiss(None)
+        elif event.button.id == "view-net-btn":
+            list_view = self.query_one("#existing-networks-list", ListView)
+            if list_view.index is None:
+                return
+
+            selected_item = list_view.children[list_view.index]
+            network_name = selected_item.network_name
+            try:
+                conn = self.app.conn
+                if conn is None:
+                    self.app.show_error_message("Not connected to libvirt.")
+                    return
+                net = conn.networkLookupByName(network_name)
+                network_xml = net.XMLDesc(0)
+                self.app.push_screen(NetworkXMLModal(network_name, network_xml))
+            except libvirt.libvirtError as e:
+                self.app.show_error_message(f"Error getting network XML: {e}")
+            except Exception as e:
+                self.app.show_error_message(f"An unexpected error occurred: {e}")
+
+        elif event.button.id == "add-net-btn":
+            def on_create(success: bool):
+                if success:
+                    self._load_networks()
+            self.app.push_screen(CreateNatNetworkModal(), on_create)
+        elif event.button.id == "delete-net-btn":
+            list_view = self.query_one("#existing-networks-list", ListView)
+            if list_view.index is None:
+                return
+
+            selected_item = list_view.children[list_view.index]
+            network_name = selected_item.network_name
+            vms_using_network = get_vms_using_network(self.app.conn, network_name)
+            
+            confirm_message = f"Are you sure you want to delete network '{network_name}'?"
+            if vms_using_network:
+                vm_list = ", ".join(vms_using_network)
+                confirm_message += f"\nThis network is currently in use by the following VMs:\n{vm_list}."
+
+            def on_confirm(confirmed: bool) -> None:
+                if confirmed:
+                    try:
+                        delete_network(self.app.conn, network_name)
+                        self.app.show_success_message(f"Network '{network_name}' deleted successfully.")
+                        self._load_networks()
+                    except Exception as e:
+                        self.app.show_error_message(f"Error deleting network '{network_name}': {e}")
+
+            self.app.push_screen(
+                ConfirmationDialog(confirm_message), on_confirm
+            )
+
 
 
 class VMDetailModal(ModalScreen):
@@ -661,7 +775,7 @@ class VMDetailModal(ModalScreen):
             yield Label("Disks", classes="section-title")
             with ScrollableContainer(classes="info-details"):
                 disks_info = self.vm_info.get("disks", [])
-                
+
                 disk_items = []
                 for disk in disks_info:
                     path = disk.get('path', 'N/A')
@@ -796,7 +910,7 @@ class VMDetailModal(ModalScreen):
             if not enabled_disks:
                 self.app.show_error_message("No enabled disks to remove.")
                 return
-                
+
             def remove_disk_callback(disk_to_remove):
                 if disk_to_remove:
                     try:
@@ -887,7 +1001,7 @@ class VMDetailModal(ModalScreen):
         """Close the modal."""
         self.dismiss()
 
-class NetworkDetailModal(BaseModal[None]):
+class NetworkXMLModal(BaseModal[None]):
     """Modal screen to show detailed network information."""
 
     def __init__(self, network_name: str, network_xml: str) -> None:
@@ -942,7 +1056,7 @@ class VirshShellScreen(ModalScreen):
 
         starting_virsh_text = "Starting virsh shell..."
         self.app.show_success_message(starting_virsh_text)
-        
+
         try:
             # We need to connect to the current libvirt URI
             uri = self.app.connection_uri if hasattr(self.app, 'connection_uri') else "qemu:///system"
@@ -1002,7 +1116,7 @@ class VirshShellScreen(ModalScreen):
         else:
             error_msg = "Virsh process not running."
             self.app.show_error_message(error_msg)
-        
+
         # Scroll to the end after writing output
         self.output_textarea.scroll_end()
 
