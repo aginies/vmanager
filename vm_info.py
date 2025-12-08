@@ -7,6 +7,51 @@ import libvirt
 import string
 import subprocess
 import secrets
+import uuid
+
+def clone_vm(original_vm, new_vm_name):
+    """
+    Clones a VM, including its storage.
+    """
+    conn = original_vm.connect()
+    original_xml = original_vm.XMLDesc(0)
+    root = ET.fromstring(original_xml)
+
+    name_elem = root.find('name')
+    if name_elem is not None:
+        name_elem.text = new_vm_name
+
+    uuid_elem = root.find('uuid')
+    if uuid_elem is not None:
+        uuid_elem.text = str(uuid.uuid4())
+
+    for interface in root.findall('.//devices/interface'):
+        mac_elem = interface.find('mac')
+        if mac_elem is not None:
+            interface.remove(mac_elem)
+
+    for disk in root.findall('.//devices/disk'):
+        if disk.get('device') == 'disk':
+            source_elem = disk.find('source')
+            if source_elem is not None and source_elem.get('file'):
+                original_disk_path = source_elem.get('file')
+                
+                original_path, original_filename = os.path.split(original_disk_path)
+                name, ext = os.path.splitext(original_filename)
+                new_disk_filename = f"{new_vm_name}_{secrets.token_hex(4)}{ext}"
+                new_disk_path = os.path.join(original_path, new_disk_filename)
+
+                try:
+                    subprocess.run(['qemu-img', 'create', '-f', 'qcow2', '-F', 'qcow2', '-b', original_disk_path, new_disk_path], check=True)
+                except (subprocess.CalledProcessError, FileNotFoundError) as e:
+                    raise Exception(f"Failed to clone disk: {e}")
+                
+                source_elem.set('file', new_disk_path)
+
+    new_xml = ET.tostring(root, encoding='unicode')
+    new_vm = conn.defineXML(new_xml)
+    
+    return new_vm
 
 def get_vm_info(conn):
     """
@@ -81,7 +126,6 @@ def add_disk(domain, disk_path, device_type='disk', create=False, size_gb=10, di
 
     if create:
         try:
-            # Ensure directory exists
             os.makedirs(os.path.dirname(disk_path), exist_ok=True)
             subprocess.run(['qemu-img', 'create', '-f', disk_format, disk_path, f'{size_gb}G'], check=True)
         except (subprocess.CalledProcessError, FileNotFoundError, OSError) as e:

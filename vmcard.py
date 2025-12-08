@@ -3,6 +3,7 @@ import tempfile
 import libvirt
 import logging
 from datetime import datetime
+import vm_info
 
 from textual.widgets import Static, Button, Input, ListView, ListItem, Label, TabbedContent, TabPane, Sparkline
 from textual.containers import Horizontal, Vertical
@@ -14,6 +15,7 @@ from textual.events import Click
 from typing import TypeVar
 from textual.timer import Timer
 
+T = TypeVar("T")
 
 class VMNameClicked(Message):
     """Posted when a VM's name is clicked."""
@@ -23,14 +25,10 @@ class VMNameClicked(Message):
         self.vm_name = vm_name
 
 
-T = TypeVar("T")
-
-
 class BaseDialog(Screen[T]):
     """A base class for dialogs with a cancel binding."""
 
     BINDINGS = [("escape", "cancel_modal", "Cancel")]
-    CSS_PATH = "snapshot.css"
 
     def action_cancel_modal(self) -> None:
         """Cancel the modal dialog."""
@@ -47,7 +45,7 @@ class ConfirmationDialog(BaseDialog[bool]):
     def compose(self):
         yield Vertical(
             Label(self.prompt, id="question"),
-            Vertical(
+            Horizontal(
                 Button("Yes", variant="error", id="yes", classes="dialog-buttons"),
                 Button("No", variant="primary", id="no", classes="dialog-buttons"),
                 id="dialog-buttons",
@@ -136,6 +134,7 @@ class VMCard(Static):
                     with Horizontal():
                         with Vertical():
                             yield Button("Delete", id="delete", variant="success", classes="delete-button")
+                            yield Static(classes="button-separator")
                             yield Button("Clone", id="clone", variant="success", classes="clone-button")
                         with Vertical():
                             yield Button( "Show info", id="info-button", variant="primary",)
@@ -195,6 +194,7 @@ class VMCard(Static):
         restore_button = self.query_one("#snapshot_restore", Button)
         snapshot_delete_button = self.query_one("#snapshot_delete", Button)
         info_button = self.query_one("#info-button", Button)
+        clone_button = self.query_one("#clone", Button)
         cpu_sparkline_container = self.query_one("#cpu-sparkline-container")
         mem_sparkline_container = self.query_one("#mem-sparkline-container")
 
@@ -207,6 +207,7 @@ class VMCard(Static):
         start_button.display = is_stopped
         stop_button.display = is_running or is_paused
         delete_button.display = is_running or is_paused or is_stopped
+        clone_button.display = is_stopped
         pause_button.display = is_running
         resume_button.display = is_paused
         connect_button.display = is_running
@@ -400,6 +401,21 @@ class VMCard(Static):
                 ConfirmationDialog(f"Are you sure you want to delete VM '{self.name}'?"), on_confirm
             )
 
+        elif event.button.id == "clone":
+            logging.info(f"Attempting to clone VM: {self.name}")
+
+            def handle_clone_name(new_name: str | None) -> None:
+                if new_name:
+                    try:
+                        vm_info.clone_vm(self.vm, new_name)
+                        self.app.show_success_message(f"VM '{self.name}' cloned as '{new_name}' successfully.")
+                        self.app.refresh_vm_list()
+                        logging.info(f"Successfully cloned VM '{self.name}' to '{new_name}'")
+                    except Exception as e:
+                        self.app.show_error_message(f"Error cloning VM {self.name}: {e}")
+
+            self.app.push_screen(CloneNameDialog(), handle_clone_name)
+
         elif event.button.id == "info-button":
             self.post_message(VMNameClicked(vm_name=self.name))
 
@@ -413,9 +429,9 @@ class SnapshotNameDialog(BaseDialog[str | None]):
 
     def compose(self):
         yield Vertical(
-            Label("Enter snapshot name:", id="question"),
+            Label("Enter snapshot name", id="question"),
             Input(placeholder="snapshot_name"),
-            Vertical(
+            Horizontal(
                 Button("Create", variant="success", id="create"),
                 Button("Cancel", variant="error", id="cancel"),
                 id="dialog-buttons",
@@ -426,6 +442,30 @@ class SnapshotNameDialog(BaseDialog[str | None]):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "create":
+            input_widget = self.query_one(Input)
+            self.dismiss(input_widget.value)
+        else:
+            self.dismiss(None)
+
+
+class CloneNameDialog(BaseDialog[str | None]):
+    """A dialog to ask for a new VM name when cloning."""
+
+    def compose(self):
+        yield Vertical(
+            Label("Enter new VM name", id="question"),
+            Input(placeholder="new_vm_name"),
+            Horizontal(
+                Button("Clone", variant="success", id="clone_vm"),
+                Button("Cancel", variant="error", id="cancel"),
+                id="dialog-buttons",
+            ),
+            id="dialog",
+            classes="info-container",
+        )
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "clone_vm":
             input_widget = self.query_one(Input)
             self.dismiss(input_widget.value)
         else:

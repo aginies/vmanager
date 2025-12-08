@@ -1048,7 +1048,7 @@ class VMManagerTUI(App):
     search_text = reactive("")
     num_pages = reactive(1)
 
-    CSS_PATH = ["tui.css", "vmcard.css", "snapshot.css"]
+    CSS_PATH = ["tui.css", "vmcard.css", "dialog.css"]
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
