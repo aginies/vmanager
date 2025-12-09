@@ -4,11 +4,15 @@ A Textual-based TUI (Terminal User Interface) application for managing QEMU/KVM 
 
 This is using Python Textual: https://github.com/Textualize/textual
 
-## Overview
+## Why
 
-This project provides a terminal-based interface to manage virtual machines using libvirt.
-This project is part of a SUSE **hackweek** project, its not mature, under heavy developement, so
-its **risky** to use it.
+Virt-manager is only usable with X or X forward, and this is very slow and not possible in many cases to use it,. It has a lot of dependencies.
+
+This terminal solution is simple, very few deps, remote control with low bandwidth. Moreover it includes some features like disabling a disk (intead or removing it completly), change machine-type. Some other will be implemented later.
+
+## Warning
+
+This project is part of a SUSE **hackweek** project, its not mature, under heavy developement, its lacks a lot of features, and surely contains tons of bugs. You have been warned. Please report any bugs or ask for specific features.
 
 ## Media
 
@@ -24,15 +28,15 @@ its **risky** to use it.
 ## Features
 
 General capabilities:
-- List and manage QEMU/KVM Virtual Machines
-- Dynamic error messages
-- Direct virsh command on the server connected
+- List VM in a grid with management capabilities (QEMU/KVM Virtual Machines)
+- Dynamic error/info messages
+- virsh command console possible
 - User configuration file for server list in **~/.config/vmanager/config.yaml**
 
 ## Requirements
 
 - Python 3.7+
-- libvirt-python
+- libvirt
 - textual
 - pyaml
 - virt-viewer (for connecting to VMs)
