@@ -143,6 +143,10 @@ Select {
 .tabd {
     margin: 0 1;
 }
+.tabd-warning {
+    margin: 0 1;
+    background: red 40%;
+}
 /* Styles for VMDetailModal */
 VMDetailModal {
     align: center middle;

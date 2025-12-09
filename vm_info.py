@@ -847,6 +847,9 @@ def get_vm_shared_memory_info(xml_content: str) -> bool:
         if memory_backing is not None:
             if memory_backing.find('shared') is not None:
                 return True
+            access_elem = memory_backing.find('access')
+            if access_elem is not None and access_elem.get('mode') == 'shared':
+                return True
     except (ET.ParseError, AttributeError):
         pass
     return False
@@ -871,6 +874,11 @@ def set_shared_memory(domain: libvirt.virDomain, enable: bool):
             shared = memory_backing.find('shared')
             if shared is not None:
                 memory_backing.remove(shared)
+
+            access_elem = memory_backing.find('access')
+            if access_elem is not None and access_elem.get('mode') == 'shared':
+                memory_backing.remove(access_elem)
+
             # If memoryBacking is now empty, and has no attributes, remove it.
             if not list(memory_backing) and not memory_backing.attrib:
                 root.remove(memory_backing)

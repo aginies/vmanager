@@ -13,7 +13,7 @@ from textual.message import Message
 from textual.screen import Screen
 from textual import on
 from textual.events import Click
-from textual.timer import timer
+from textual.timer import Timer
 from typing import TypeVar
 
 T = TypeVar("T")

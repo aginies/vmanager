@@ -946,6 +946,8 @@ class VMDetailModal(ModalScreen):
 
                 if self.vm_info.get("devices"):
                     with TabPane("VirtIO-FS", id="detail-virtiofs-tab"):
+                        if self.vm_info.get('shared_memory') == False:
+                            yield Label("! Shared Memory is Mandatory to use VirtIO-FS.\n! Enable it in Mem tab.", classes="tabd-warning")
                         with ScrollableContainer(classes="info-details"):
                             virtiofs_table = DataTable(id="virtiofs-table")
                             virtiofs_table.cursor_type = "row"
