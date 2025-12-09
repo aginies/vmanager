@@ -139,6 +139,7 @@ Select {
 .detail-disks {
     width: 3vh;
     background: $primary;
+    height: 3vh;
 }
 .tabd {
     margin: 0 1;
@@ -151,9 +152,10 @@ Select {
 VMDetailModal {
     align: center middle;
 } 
-#vm-detail-container {
+#vm-detail-container,
+#vm-detail2-container {
     width: 70;
-    height: 33;
+    height: auto;
     border: round $primary-lighten-2;
     padding: 1;
 /*    overflow: auto;*/

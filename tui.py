@@ -304,6 +304,11 @@ class LogModal(BaseModal[None]):
         with Horizontal():
             yield Button("Cancel", variant="default", id="cancel-btn", classes="Buttonpage")
 
+    def on_mount(self) -> None:
+        """Called when the modal is mounted."""
+        text_area = self.query_one(TextArea)
+        text_area.scroll_end()
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "cancel-btn":
             self.dismiss(None)
@@ -969,6 +974,34 @@ class VMDetailModal(ModalScreen):
                                 yield Button("Delete", variant="error", id="delete-virtiofs-btn", disabled=True, classes="detail-disks")
                                 yield Button("Close", variant="default", id="close-btn", classes="detail-disks")
 
+        #with Vertical(id="vm-detail2-container"):
+        #    with TabbedContent(id="detail2-vm"):
+                with TabPane("Video", id="detail-video-tab"):
+                    yield Label("Video")
+                with TabPane("Serial", id="detail-serial-tab"):
+                    yield Label("Serial")
+                with TabPane("Sound", id="detail-sound-tab"):
+                    yield Label("Sound")
+                with TabPane("Watchdog", id="detail-watchdog-tab"):
+                    yield Label("Watchdog")
+                with TabPane("RNG", id="detail-rng-tab"):
+                    yield Label("RNG")
+                with TabPane("Input", id="detail-input-tab"):
+                    yield Label("Input")
+                with TabPane("USB", id="detail-usb-tab"):
+                    yield Label("USB")
+                with TabPane("USB Host", id="detail-usbhost-tab"):
+                    yield Label("USB Host")
+                with TabPane("PCI Host", id="detail-PCIhost-tab"):
+                    yield Label("PCI Host")
+                with TabPane("PCIe", id="detail-pcie-tab"):
+                    yield Label("PCIe")
+                with TabPane("SATA", id="detail-sata-tab"):
+                    yield Label("SATA")
+                with TabPane("Channel", id="detail-channel-tab"):
+                    yield Label("Channel")
+
+            
     def _update_disk_list(self):
         self.disk_list_view.clear()
         new_xml = self.domain.XMLDesc(0)
