@@ -15,7 +15,7 @@ from textual.message import Message
 from textual import on
 import libvirt
 from vmcard import VMCard, VMNameClicked, ConfirmationDialog, ChangeNetworkDialog
-from vm_info import get_status, get_vm_description, get_vm_machine_info, get_vm_firmware_info, get_vm_networks_info, get_vm_network_ip, get_vm_network_dns_gateway_info, get_vm_disks_info, get_vm_devices_info, add_disk, remove_disk, set_vcpu, set_memory, get_supported_machine_types, set_machine_type, list_networks, create_network, delete_network, get_vms_using_network, set_network_active, set_network_autostart, get_host_network_interfaces, enable_disk, disable_disk, change_vm_network
+from vm_info import get_status, get_vm_description, get_vm_machine_info, get_vm_firmware_info, get_vm_networks_info, get_vm_network_ip, get_vm_network_dns_gateway_info, get_vm_disks_info, get_vm_devices_info, add_disk, remove_disk, set_vcpu, set_memory, get_supported_machine_types, set_machine_type, list_networks, create_network, delete_network, get_vms_using_network, set_network_active, set_network_autostart, get_host_network_interfaces, enable_disk, disable_disk, change_vm_network, get_vm_shared_memory_info, set_shared_memory
 from config import load_config, save_config
 
 # Configure logging
@@ -787,114 +787,127 @@ class VMDetailModal(ModalScreen):
 
         self.available_networks = []
 
+    @on(Checkbox.Changed, "#shared-memory-checkbox")
+    def on_shared_memory_changed(self, event: Checkbox.Changed) -> None:
+        try:
+            set_shared_memory(self.domain, event.value)
+            self.app.show_success_message(f"Shared memory {'enabled' if event.value else 'disabled'}.")
+            self.vm_info['shared_memory'] = event.value
+        except (libvirt.libvirtError, ValueError, Exception) as e:
+            self.app.show_error_message(f"Error setting shared memory: {e}")
+            # Revert checkbox state on failure
+            event.checkbox.value = not event.value
+
     def compose(self) -> ComposeResult:
         with Vertical(id="vm-detail-container"):
             yield Label(f"VM Details: {self.vm_name}", id="title")
-
-            status = self.vm_info.get("status", "N/A")
-            yield Label("General information", classes="section-title")
-            yield Label(
-               f"Status: {status}", id=f"status-{status.lower().replace(' ', '-')}", classes="centered-status-label"
-           )
-            with Horizontal(classes="compact-info-row"):
-                yield Label(f"CPU: {self.vm_info.get('cpu', 'N/A')}", id="cpu-label")
-                yield Button("Edit", id="edit-cpu", classes="edit-detail-btn")
-            with Horizontal(classes="compact-info-row"):
-                yield Label(f"Memory: {self.vm_info.get('memory', 'N/A')} MB", id="memory-label")
-                yield Button("Edit", id="edit-memory", classes="edit-detail-btn")
             yield Label(f"UUID: {self.vm_info.get('uuid', 'N/A')}")
-            if "firmware" in self.vm_info:
-                yield Label(f"Firmware: {self.vm_info['firmware']}")
-            if "machine_type" in self.vm_info:
-                with Horizontal():
-                    yield Label(f"Machine Type: {self.vm_info['machine_type']}", id="machine-type-label")
-                    is_stopped = self.vm_info.get("status") == "Stopped"
-                    yield Button("Edit", id="edit-machine-type", classes="edit-detail-btn", disabled=not is_stopped)
+            status = self.vm_info.get("status", "N/A")
+            yield Label(f"Status: {status}", id=f"status-{status.lower().replace(' ', '-')}", classes="centered-status-label")
+            with TabbedContent(id="detail-vm"):
+                with TabPane("CPU", id="detail-cpu-tab"):
+                    with Vertical(classes="info-details"):
+                        yield Label(f"CPU: {self.vm_info.get('cpu', 'N/A')}", id="cpu-label", classes="")
+                        yield Button("Edit", id="edit-cpu", classes="edit-detail-btn")
+                with TabPane("Mem", id="detail-mem-tab", ):
+                    with Vertical(classes="info-details"):
+                        yield Label(f"Memory: {self.vm_info.get('memory', 'N/A')} MB", id="memory-label")
+                        yield Button("Edit", id="edit-memory", classes="edit-detail-btn")
+                        is_stopped = self.vm_info.get("status") == "Stopped"
+                        yield Checkbox("Shared Memory", value=self.vm_info.get('shared_memory', False), id="shared-memory-checkbox", classes="shared-memory", disabled=not is_stopped)
+                with TabPane("Firmware", id="detail-firmware-tab"):
+                    with Vertical(classes="info-details"): 
+                        if "firmware" in self.vm_info:
+                            yield Label(f"Firmware: {self.vm_info['firmware']}")
+                        if "machine_type" in self.vm_info:
+                            yield Label(f"Machine Type: {self.vm_info['machine_type']}", id="machine-type-label")
+                            is_stopped = self.vm_info.get("status") == "Stopped"
+                            yield Button("Edit", id="edit-machine-type", classes="edit-detail-btn", disabled=not is_stopped)
 
-            yield Label("Disks", classes="section-title")
-            with ScrollableContainer(classes="info-details"):
-                disks_info = self.vm_info.get("disks", [])
+                with TabPane("Boot", id="detail-boot-tab"):
+                    yield Label("TODO")
 
-                disk_items = []
-                for disk in disks_info:
-                    path = disk.get('path', 'N/A')
-                    status = disk.get('status', 'unknown')
-                    label = f"{path}"
-                    if status == 'disabled':
-                        label += " (disabled)"
-                    disk_items.append(ListItem(Label(label)))
+                with TabPane("Disks", id="detail-disk-tab"):
+                    with ScrollableContainer(classes="info-details"):
+                        disks_info = self.vm_info.get("disks", [])
+                        disk_items = []
+                        for disk in disks_info:
+                            path = disk.get('path', 'N/A')
+                            status = disk.get('status', 'unknown')
+                            label = f"{path}"
+                            if status == 'disabled':
+                                label += " (disabled)"
+                            disk_items.append(ListItem(Label(label)))
 
-                self.disk_list_view = ListView(*disk_items)
-                num_disks = len(disks_info)
-                self.disk_list_view.styles.height = num_disks if num_disks > 0 else 1
-                if not disks_info:
-                    self.disk_list_view.append(ListItem(Label("No disks found.")))
-                yield self.disk_list_view
-            with Horizontal():
-                yield Button("Add Disk", id="detail_add_disk", variant="primary")
+                        self.disk_list_view = ListView(*disk_items)
+                        num_disks = len(disks_info)
+                        self.disk_list_view.styles.height = num_disks if num_disks > 0 else 1
+                        if not disks_info:
+                            self.disk_list_view.append(ListItem(Label("No disks found.")))
+                        yield self.disk_list_view
+                    with Horizontal():
+                        #yield Button("Add Disk", id="detail_add_disk", classes="add-button")
+                        has_enabled_disks = any(d['status'] == 'enabled' for d in disks_info)
+                        has_disabled_disks = any(d['status'] == 'disabled' for d in disks_info)
+                        remove_button = Button("Remove Disk", id="detail_remove_disk", classes="detail-disks")
+                        disable_button = Button("Disable Disk", id="detail_disable_disk", classes="detail-disks")
+                        enable_button = Button("Enable Disk", id="detail_enable_disk", classes="detail-disks")
+                        remove_button.display = has_enabled_disks
+                        disable_button.display = has_enabled_disks
+                        enable_button.display = has_disabled_disks
 
-                has_enabled_disks = any(d['status'] == 'enabled' for d in disks_info)
-                has_disabled_disks = any(d['status'] == 'disabled' for d in disks_info)
+                        with Vertical():
+                            yield Button("Add Disk", id="detail_add_disk", classes="detail-disks")
+                        yield remove_button
+                        yield disable_button
+                        yield enable_button
 
-                remove_button = Button("Remove Disk", id="detail_remove_disk", variant="primary")
-                disable_button = Button("Disable Disk", id="detail_disable_disk", variant="primary")
-                enable_button = Button("Enable Disk", id="detail_enable_disk", variant="primary")
+                with TabPane("Networks", id="networks"):
+                    with ScrollableContainer(classes="info-details"):
+                        networks_list = self.vm_info.get("networks", [])
+                        detail_network_list = self.vm_info.get("detail_network", [])
+                        mac_to_ip = {}
+                        if detail_network_list:
+                            for detail in detail_network_list:
+                                ips = detail.get('ipv4', []) + detail.get('ipv6', [])
+                                if ips:
+                                    mac_to_ip[detail['mac']] = ", ".join(ips)
 
-                remove_button.display = has_enabled_disks
-                disable_button.display = has_enabled_disks
-                enable_button.display = has_disabled_disks
+                        if networks_list:
+                            for net in networks_list:
+                                yield Label(f"MAC: {net['mac']}")
+                                yield Label(f"Network: {net.get('network', 'N/A')}")
+                                ip_address = mac_to_ip.get(net['mac'], "N/A")
+                                yield Label(f"IP: {ip_address}")
+                                yield Static(classes="separator")
+                        else:
+                            yield Label("No network interfaces found.")
+                    yield Button("Change Network", id="change-network-button", variant="primary")
 
-                yield remove_button
-                yield disable_button
-                yield enable_button
+                    if self.vm_info.get("network_dns_gateway"):
+                        yield Label("Network DNS & Gateway", classes="section-title")
+                        with ScrollableContainer(classes="info-section"):
+                            for net_detail in self.vm_info["network_dns_gateway"]:
+                                with Vertical(classes="info-details"):
+                                    yield Static(f"  Network: {net_detail.get('network_name', 'N/A')}")
+                                    if net_detail.get("gateway"):
+                                        yield Static(f"    Gateway: {net_detail['gateway']}")
+                                    if net_detail.get("dns_servers"):
+                                        yield Static("    DNS Servers:")
+                                        for dns_server in net_detail["dns_servers"]:
+                                            yield Static(f"      • {dns_server}")
 
-            yield Label("Networks", classes="section-title")
-            with TabPane("Networks", id="networks", classes="info-details"):
-                networks_list = self.vm_info.get("networks", [])
-                detail_network_list = self.vm_info.get("detail_network", [])
-
-                mac_to_ip = {}
-                if detail_network_list:
-                    for detail in detail_network_list:
-                        ips = detail.get('ipv4', []) + detail.get('ipv6', [])
-                        if ips:
-                            mac_to_ip[detail['mac']] = ", ".join(ips)
-
-                if networks_list:
-                    for net in networks_list:
-                        yield Label(f"MAC: {net['mac']}")
-                        yield Label(f"Network: {net.get('network', 'N/A')}")
-                        ip_address = mac_to_ip.get(net['mac'], "N/A")
-                        yield Label(f"IP: {ip_address}")
-                        yield Static(classes="separator")
-                else:
-                    yield Label("No network interfaces found.")
-            yield Button("Change Network", id="change-network-button", variant="primary")
-
-            if self.vm_info.get("network_dns_gateway"):
-                yield Label("Network DNS & Gateway", classes="section-title")
-                with ScrollableContainer(classes="info-section"):
-                    for net_detail in self.vm_info["network_dns_gateway"]:
-                        with Vertical(classes="info-details"):
-                            yield Static(f"  Network: {net_detail.get('network_name', 'N/A')}")
-                            if net_detail.get("gateway"):
-                                yield Static(f"    Gateway: {net_detail['gateway']}")
-                            if net_detail.get("dns_servers"):
-                                yield Static("    DNS Servers:")
-                                for dns_server in net_detail["dns_servers"]:
-                                    yield Static(f"      • {dns_server}")
-
-            if self.vm_info.get("devices"):
-                yield Label("Devices", classes="section-title")
-                with ScrollableContainer(classes="info-details"):
-                    for device_type, device_list in self.vm_info["devices"].items():
-                        if device_list:
-                            yield Static(f"  {device_type.replace('_', ' ').title()}:")
-                            for device in device_list:
-                                detail_str = ", ".join(f"{k}: {v}" for k, v in device.items())
-                                yield Static(f"    • {detail_str}")
-
-            yield Button("Close", variant="default", id="close-btn", classes="close-button")
+                if self.vm_info.get("devices"):
+                    with TabPane("Devices", id="detail-devices-tab"):
+                        with ScrollableContainer(classes="info-details"):
+                            for device_type, device_list in self.vm_info["devices"].items():
+                                if device_list:
+                                    yield Static(f"  {device_type.replace('_', ' ').title()}:")
+                                    for device in device_list:
+                                        detail_str = ", ".join(f"{k}: {v}" for k, v in device.items())
+                                        yield Static(f"    • {detail_str}")
+    
+                            yield Button("Close", variant="default", id="close-btn", classes="close-button")
 
     def _update_disk_list(self):
         self.disk_list_view.clear()
@@ -1422,6 +1435,7 @@ class VMManagerTUI(App):
                 'memory': info[2] // 1024,  # Convert KiB to MiB
                 'machine_type': get_vm_machine_info(xml_content),
                 'firmware': get_vm_firmware_info(xml_content),
+                'shared_memory': get_vm_shared_memory_info(xml_content),
                 'networks': get_vm_networks_info(xml_content),
                 'detail_network': get_vm_network_ip(domain),
                 'network_dns_gateway': get_vm_network_dns_gateway_info(domain),

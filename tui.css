@@ -56,14 +56,19 @@
     margin-bottom: 1;
 }
 
+#shared-memory {
+    height: 4;
+    border: none;
+}
+
 #connection-dialog Input,
 #edit-server-dialog Input,
 #add-server-dialog Input,
 #add-disk-dialog Input,
-#add-disk-dialog Select,
 #remove-disk-dialog Input,
-#remove-disk-dialog Select,
 #edit-cpu-dialog Input,
+#add-disk-dialog Select,
+#remove-disk-dialog Select,
 #edit-memory-dialog Input {
     width: 100%;
     margin-bottom: 1;
@@ -131,21 +136,22 @@ Select {
     height: 40;
     border-left: round;
 }
+.detail-disks {
+    width: 3vh;
+    background: $primary;
+}
 
 /* Styles for VMDetailModal */
 VMDetailModal {
     align: center middle;
 } 
 #vm-detail-container {
-    width: 80;
-    height: auto;
-    max-height: 100%;
-    background: $surface;
+    width: 70;
+    height: 35;
     border: round $primary-lighten-2;
     padding: 1;
-    overflow: auto;
+/*    overflow: auto;*/
 }
-
 #text-show {
     width: 100%;
     height: 90%;
@@ -282,7 +288,7 @@ Button {
 }
 
 .centered-status-label {
-    content-align: center middle;
+    align: center middle;
 }
 
 .network-interface-row {
