@@ -462,8 +462,8 @@ class EditCpuModal(BaseModal[str | None]):
         self.current_cpu = current_cpu
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="edit-cpu-dialog"):
-            yield Label("Enter new VCPU count:")
+        with Vertical(id="edit-cpu-dialog", classes="edit-cpu-dialog"):
+            yield Label("Enter new VCPU count")
             yield Input(placeholder="e.g., 2", id="cpu-input", type="integer", value=self.current_cpu)
             with Horizontal():
                 yield Button("Save", variant="primary", id="save-btn")
@@ -485,8 +485,8 @@ class EditMemoryModal(BaseModal[str | None]):
         self.current_memory = current_memory
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="edit-memory-dialog"):
-            yield Label("Enter new memory size (MB):")
+        with Vertical(id="edit-memory-dialog", classes="edit-memory-dialog"):
+            yield Label("Enter new memory size (MB)")
             yield Input(placeholder="e.g., 2048", id="memory-input", type="integer", value=self.current_memory)
             with Horizontal():
                 yield Button("Save", variant="primary", id="save-btn")
@@ -797,6 +797,7 @@ class VMDetailModal(ModalScreen):
         except (libvirt.libvirtError, Exception) as e:
             self.app.show_error_message(f"Could not load networks: {e}")
             self.available_networks = []
+        self.query_one("#detail2-vm").add_class("hidden")
 
     @on(Select.Changed)
     def on_network_change(self, event: Select.Changed) -> None:
@@ -846,6 +847,7 @@ class VMDetailModal(ModalScreen):
             yield Label(f"UUID: {self.vm_info.get('uuid', 'N/A')}")
             status = self.vm_info.get("status", "N/A")
             yield Label(f"Status: {status}", id=f"status-{status.lower().replace(' ', '-')}", classes="centered-status-label")
+            yield Button("Toggle Tab Content", id="toggle-detail-button")
             with TabbedContent(id="detail-vm"):
                 with TabPane("CPU", id="detail-cpu-tab"):
                     with Vertical(classes="info-details"):
@@ -974,12 +976,12 @@ class VMDetailModal(ModalScreen):
                                 yield Button("Add", variant="primary", id="add-virtiofs-btn", classes="detail-disks")
                                 yield Button("Edit", variant="default", id="edit-virtiofs-btn", disabled=True, classes="detail-disks")
                                 yield Button("Delete", variant="error", id="delete-virtiofs-btn", disabled=True, classes="detail-disks")
-                                yield Button("Close", variant="default", id="close-btn", classes="detail-disks")
 
-        #    with TabbedContent(id="detail2-vm"):
-        # TOFIX !
                 with TabPane("Video", id="detail-video-tab"):
                     yield Label("Video")
+
+            with TabbedContent(id="detail2-vm"):
+        # TOFIX !
                 with TabPane("Serial", id="detail-serial-tab"):
                     yield Label("Serial")
                 with TabPane("Sound", id="detail-sound-tab"):
@@ -1003,7 +1005,8 @@ class VMDetailModal(ModalScreen):
                 with TabPane("Channel", id="detail-channel-tab"):
                     yield Label("Channel")
 
-            
+            yield Button("Close", variant="default", id="close-btn", classes="close-button")
+
     def _update_disk_list(self):
         self.disk_list_view.clear()
         new_xml = self.domain.XMLDesc(0)
@@ -1073,11 +1076,13 @@ class VMDetailModal(ModalScreen):
         self.selected_virtiofs_target = None
         self.selected_virtiofs_info = None
         self.query_one("#delete-virtiofs-btn", Button).disabled = True
-        self.query_one("#edit-virtiofs-btn", Button).disabled = True
-
-
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "close-btn":
+        if event.button.id == "toggle-detail-button":
+            vm = self.query_one("#detail-vm")
+            vm2 = self.query_one("#detail2-vm")
+            vm.toggle_class("hidden")
+            vm2.toggle_class("hidden")
+        elif event.button.id == "close-btn":
             self.dismiss()
         elif event.button.id == "add-virtiofs-btn":
             def add_virtiofs_callback(result):
@@ -1642,7 +1647,6 @@ class VMManagerTUI(App):
 
     @on(VMNameClicked)
     async def on_vm_name_clicked(self, message: VMNameClicked) -> None:
-        logging.info(f"VM name clicked: {message.vm_name}")
         if not self.conn:
             return
 

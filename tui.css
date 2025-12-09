@@ -28,6 +28,8 @@
 #add-disk-dialog,
 #server-selection-dialog,
 #create-nat-network-dialog,
+#edit-cpu-dialog,
+#edit-memory-dialog,
 #filter-dialog,
 #server-management-dialog, {
     width: 64;
@@ -78,6 +80,7 @@
 #edit-server-dialog Horizontal,
 #add-server-dialog Horizontal,
 #server-management-dialog Horizontal,
+#edit-cpu-dialog Horizontal,
 #create-nat-network-dialog Horizontal,
 #add-disk-dialog Horizontal,
 #remove-disk-dialog Horizontal,
@@ -153,8 +156,8 @@ VMDetailModal {
     align: center middle;
 } 
 #vm-detail-container {
-    width: 70;
-    height: 100%;
+    width: 75;
+    height: 90%;
     border: round $primary-lighten-2;
     padding: 1;
 /*    overflow: auto;*/
