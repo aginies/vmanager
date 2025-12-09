@@ -13,8 +13,10 @@ its **risky** to use it.
 ![Screenshot](https://paste.opensuse.org/pastes/3e82e8b12deb/raw)
 ![Screenshot](https://paste.opensuse.org/pastes/2b6dd3fb59dd/raw)
 ![Screenshot](https://paste.opensuse.org/pastes/a894f2825956/raw)
-![Screenshot](https://paste.opensuse.org/pastes/4bd350f90c42/raw)
-
+![Screenshot](https://paste.opensuse.org/pastes/09eefc77fd9d/raw)
+![Screenshot](https://paste.opensuse.org/pastes/370d17b6f927/raw)
+![Screenshot](https://paste.opensuse.org/pastes/87e5465e718b/raw)
+![Screenshot](https://paste.opensuse.org/pastes/cf8a73ab2a99/raw)
 [Demo Video](https://www.youtube.com/watch?v=r49KpUghUI4)
 
 ## Features
