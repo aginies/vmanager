@@ -8,6 +8,7 @@ import subprocess
 import shlex
 import uuid
 import string
+import copy
 import libvirt
 
 def _find_vol_by_path(conn, vol_path):
@@ -1208,12 +1209,67 @@ def set_vm_video_model(domain: libvirt.virDomain, model: str):
     if model_elem is None:
         model_elem = ET.SubElement(video, 'model')
 
+    # Get a copy of the old attributes, just in case we need them
+    old_attribs = model_elem.attrib.copy()
+
+    # Clear all attributes from model_elem to start fresh
+    model_elem.clear()
+
     model_elem.set('type', model)
-    # Set some sensible defaults if creating from scratch
-    if model_elem.get('vram') is None:
-        model_elem.set('vram', '16384') # 16MB
-    if model_elem.get('heads') is None:
+
+    if model == 'virtio':
         model_elem.set('heads', '1')
+        model_elem.set('primary', 'yes')
+    elif model == 'qxl':
+        model_elem.set('vram', old_attribs.get('vram', '65536'))
+        model_elem.set('ram', old_attribs.get('ram', '65536'))
+    elif model == 'vga':
+        model_elem.set('vram', old_attribs.get('vram', '16384'))
+    else: # Fallback for other models like 'cirrus', etc.
+        model_elem.set('vram', old_attribs.get('vram', '16384'))
+        model_elem.set('heads', old_attribs.get('heads', '1'))
+
+    new_xml = ET.tostring(root, encoding='unicode')
+    domain.connect().defineXML(new_xml)
+
+def get_cpu_models(conn, arch):
+    """
+    Get a list of CPU models for a given architecture.
+    """
+    if not conn:
+        return []
+    try:
+        # Returns a list of supported CPU model names
+        models = conn.getCPUModelNames(arch)
+        return models
+    except libvirt.libvirtError as e:
+        print(f"Error getting CPU models for arch {arch}: {e}")
+        return []
+
+def get_vm_cpu_model(xml_content: str) -> str | None:
+    """Extracts the cpu model from a VM's XML definition."""
+    try:
+        root = ET.fromstring(xml_content)
+        cpu = root.find('.//cpu')
+        if cpu is not None:
+            return cpu.get('mode')
+    except ET.ParseError:
+        pass
+    return None
+
+def set_cpu_model(domain: libvirt.virDomain, cpu_model: str):
+    """Sets the CPU model for a VM."""
+    if domain.isActive():
+        raise libvirt.libvirtError("VM must be stopped to change the CPU model.")
+
+    xml_desc = domain.XMLDesc(0)
+    root = ET.fromstring(xml_desc)
+    
+    cpu = root.find('.//cpu')
+    if cpu is None:
+        cpu = ET.SubElement(root, 'cpu')
+
+    cpu.set('mode', cpu_model)
 
     new_xml = ET.tostring(root, encoding='unicode')
     domain.connect().defineXML(new_xml)

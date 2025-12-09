@@ -15,7 +15,18 @@ from textual.message import Message
 from textual import on
 import libvirt
 from vmcard import VMCard, VMNameClicked, ConfirmationDialog, ChangeNetworkDialog
-from vm_info import get_status, get_vm_description, get_vm_machine_info, get_vm_firmware_info, get_vm_networks_info, get_vm_network_ip, get_vm_network_dns_gateway_info, get_vm_disks_info, get_vm_devices_info, add_disk, remove_disk, set_vcpu, set_memory, get_supported_machine_types, set_machine_type, list_networks, create_network, delete_network, get_vms_using_network, set_network_active, set_network_autostart, get_host_network_interfaces, enable_disk, disable_disk, change_vm_network, get_vm_shared_memory_info, set_shared_memory, remove_virtiofs, add_virtiofs, get_boot_info, set_boot_info, get_vm_video_model, set_vm_video_model
+from vm_info import (
+    get_status, get_vm_description, get_vm_machine_info, get_vm_firmware_info,
+    get_vm_networks_info, get_vm_network_ip, get_vm_network_dns_gateway_info,
+    get_vm_disks_info, get_vm_devices_info, add_disk, remove_disk, set_vcpu,
+    set_memory, get_supported_machine_types, set_machine_type, list_networks,
+    create_network, delete_network, get_vms_using_network, set_network_active,
+    set_network_autostart, get_host_network_interfaces, enable_disk, disable_disk,
+    change_vm_network, get_vm_shared_memory_info, set_shared_memory,
+    remove_virtiofs, add_virtiofs, get_boot_info, set_boot_info,
+    get_vm_video_model, set_vm_video_model, get_cpu_models, get_vm_cpu_model,
+    set_cpu_model
+)
 from config import load_config, save_config
 
 # Configure logging
@@ -885,6 +896,23 @@ class VMDetailModal(ModalScreen):
 
         self.available_networks = []
 
+    @on(Select.Changed, "#cpu-model-select")
+    def on_cpu_model_changed(self, event: Select.Changed) -> None:
+        new_cpu_model = event.value
+        original_cpu_model = self.vm_info.get('cpu_model', 'default')
+
+        if new_cpu_model == original_cpu_model:
+            return
+
+        try:
+            set_cpu_model(self.domain, new_cpu_model)
+            self.app.show_success_message(f"CPU model set to {new_cpu_model}")
+            self.vm_info['cpu_model'] = new_cpu_model
+            self.query_one("#cpu-model-label").update(f"CPU Model: {new_cpu_model}")
+        except (libvirt.libvirtError, ValueError, Exception) as e:
+            self.app.show_error_message(f"Error setting CPU model: {e}")
+            event.control.value = original_cpu_model
+
     @on(Checkbox.Changed, "#shared-memory-checkbox")
     def on_shared_memory_changed(self, event: Checkbox.Changed) -> None:
         try:
@@ -905,9 +933,35 @@ class VMDetailModal(ModalScreen):
             yield Button("Toggle Tab Content", id="toggle-detail-button")
             with TabbedContent(id="detail-vm"):
                 with TabPane("CPU", id="detail-cpu-tab"):
+                    is_stopped = self.vm_info.get("status") == "Stopped"
                     with Vertical(classes="info-details"):
                         yield Label(f"CPU: {self.vm_info.get('cpu', 'N/A')}", id="cpu-label", classes="tabd")
                         yield Button("Edit", id="edit-cpu", classes="edit-detail-btn")
+                        
+                        # CPU Model Selection
+                        current_cpu_model = self.vm_info.get('cpu_model', 'default')
+                        yield Label(f"CPU Model: {current_cpu_model}", id="cpu-model-label", classes="tabd")
+
+                        import xml.etree.ElementTree as ET
+                        xml_root = ET.fromstring(self.vm_info['xml'])
+                        arch_elem = xml_root.find(".//os/type")
+                        arch = arch_elem.get('arch') if arch_elem is not None else 'x86_64'
+                        
+                        cpu_models = get_cpu_models(self.domain.connect(), arch)
+                        # Ensure 'host-passthrough' and 'default' are in the list
+                        if 'host-passthrough' not in cpu_models:
+                            cpu_models.append('host-passthrough')
+                        if 'default' not in cpu_models:
+                            cpu_models.append('default')
+                        
+                        cpu_model_options = [(model, model) for model in sorted(cpu_models)]
+                        
+                        yield Select(
+                            cpu_model_options,
+                            value=current_cpu_model,
+                            id="cpu-model-select",
+                            disabled=not is_stopped
+                        )
                 with TabPane("Mem", id="detail-mem-tab", ):
                     with Vertical(classes="info-details"):
                         yield Label(f"Memory: {self.vm_info.get('memory', 'N/A')} MB", id="memory-label", classes="tabd")
@@ -1801,6 +1855,7 @@ class VMManagerTUI(App):
                 'status': get_status(domain),
                 'description': get_vm_description(domain),
                 'cpu': info[3],
+                'cpu_model': get_vm_cpu_model(xml_content),
                 'memory': info[2] // 1024,  # Convert KiB to MiB
                 'machine_type': get_vm_machine_info(xml_content),
                 'firmware': get_vm_firmware_info(xml_content),
