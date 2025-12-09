@@ -152,10 +152,9 @@ Select {
 VMDetailModal {
     align: center middle;
 } 
-#vm-detail-container,
-#vm-detail2-container {
+#vm-detail-container {
     width: 70;
-    height: auto;
+    height: 100%;
     border: round $primary-lighten-2;
     padding: 1;
 /*    overflow: auto;*/

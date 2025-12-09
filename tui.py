@@ -888,7 +888,6 @@ class VMDetailModal(ModalScreen):
                             self.disk_list_view.append(ListItem(Label("No disks found.")))
                         yield self.disk_list_view
                     with Horizontal():
-                        #yield Button("Add Disk", id="detail_add_disk", classes="add-button")
                         has_enabled_disks = any(d['status'] == 'enabled' for d in disks_info)
                         has_disabled_disks = any(d['status'] == 'disabled' for d in disks_info)
                         remove_button = Button("Remove Disk", id="detail_remove_disk", classes="detail-disks")
@@ -899,10 +898,11 @@ class VMDetailModal(ModalScreen):
                         enable_button.display = has_disabled_disks
 
                         with Vertical():
-                            yield Button("Add Disk", id="detail_add_disk", classes="detail-disks")
-                        yield remove_button
-                        yield disable_button
-                        yield enable_button
+                            with Horizontal():
+                                yield Button("Add Disk", id="detail_add_disk", classes="detail-disks")
+                                yield remove_button
+                                yield disable_button
+                                yield enable_button
 
                 with TabPane("Networks", id="networks"):
                     with ScrollableContainer(classes="info-details"):
@@ -943,7 +943,9 @@ class VMDetailModal(ModalScreen):
                     with TabPane("Devices", id="detail-devices-tab"):
                         with ScrollableContainer(classes="info-details"):
                             for device_type, device_list in self.vm_info["devices"].items():
-                                if device_list:
+                                if device_type == "virtiofs":
+                                    pass
+                                else:
                                     yield Static(f"  {device_type.replace('_', ' ').title()}:")
                                     for device in device_list:
                                         detail_str = ", ".join(f"{k}: {v}" for k, v in device.items())
@@ -974,8 +976,8 @@ class VMDetailModal(ModalScreen):
                                 yield Button("Delete", variant="error", id="delete-virtiofs-btn", disabled=True, classes="detail-disks")
                                 yield Button("Close", variant="default", id="close-btn", classes="detail-disks")
 
-        #with Vertical(id="vm-detail2-container"):
         #    with TabbedContent(id="detail2-vm"):
+        # TOFIX !
                 with TabPane("Video", id="detail-video-tab"):
                     yield Label("Video")
                 with TabPane("Serial", id="detail-serial-tab"):
