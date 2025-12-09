@@ -10,9 +10,35 @@ import uuid
 import string
 import libvirt
 
+def _find_vol_by_path(conn, vol_path):
+    """Finds a storage volume by its path and returns the volume and its pool."""
+    # Slower but more compatible way to find a volume by path
+    try:
+        all_pool_names = conn.listStoragePools() + conn.listDefinedStoragePools()
+    except libvirt.libvirtError:
+        all_pool_names = []
+
+    for pool_name in all_pool_names:
+        try:
+            pool = conn.storagePoolLookupByName(pool_name)
+            if not pool.isActive():
+                try:
+                    pool.create(0)
+                except libvirt.libvirtError:
+                    continue  # Skip pools we can't start
+
+            # listAllVolumes returns a list of virStorageVol objects
+            for vol in pool.listAllVolumes():
+                if vol and vol.path() == vol_path:
+                    return vol, pool
+        except libvirt.libvirtError:
+            continue # Permissions issue or other problem, try next pool
+    return None, None
+
+
 def clone_vm(original_vm, new_vm_name):
     """
-    Clones a VM, including its storage.
+    Clones a VM, including its storage using libvirt's storage pool API.
     """
     conn = original_vm.connect()
     original_xml = original_vm.XMLDesc(0)
@@ -32,25 +58,54 @@ def clone_vm(original_vm, new_vm_name):
             interface.remove(mac_elem)
 
     for disk in root.findall('.//devices/disk'):
-        if disk.get('device') == 'disk':
-            source_elem = disk.find('source')
-            if source_elem is not None and source_elem.get('file'):
-                original_disk_path = source_elem.get('file')
+        if disk.get('device') != 'disk':
+            continue
 
-                original_path, original_filename = os.path.split(original_disk_path)
-                _, ext = os.path.splitext(original_filename)
-                new_disk_filename = f"{new_vm_name}_{secrets.token_hex(4)}{ext}"
-                new_disk_path = os.path.join(original_path, new_disk_filename)
+        source_elem = disk.find('source')
+        if source_elem is None:
+            continue
 
-                try:
-                    cmd_str = (f"qemu-img create -f qcow2 -F qcow2 -b "
-                               f"{shlex.quote(original_disk_path)} "
-                               f"{shlex.quote(new_disk_path)}")
-                    subprocess.run(cmd_str, shell=True, check=True)
-                except (subprocess.CalledProcessError, FileNotFoundError) as e:
-                    raise Exception(f"Failed to clone disk: {e}")
+        original_disk_path = source_elem.get('file')
+        if not original_disk_path:
+            continue
 
-                source_elem.set('file', new_disk_path)
+        original_vol, original_pool = _find_vol_by_path(conn, original_disk_path)
+        if not original_vol:
+            raise Exception(f"Disk '{original_disk_path}' is not a managed libvirt storage volume. Cannot clone via API.")
+
+        original_vol_xml = original_vol.XMLDesc(0)
+        vol_root = ET.fromstring(original_vol_xml)
+
+        _, vol_name_ext = os.path.splitext(original_vol.name())
+        new_vol_name = f"{new_vm_name}_{secrets.token_hex(4)}{vol_name_ext}"
+        vol_root.find('name').text = new_vol_name
+
+        # Libvirt will handle capacity, allocation, and backing store when cloning.
+        # Clear old path/key info just in case.
+        if vol_root.find('key') is not None:
+             vol_root.remove(vol_root.find('key'))
+        target_elem = vol_root.find('target')
+        if target_elem is not None:
+            if target_elem.find('path') is not None:
+                target_elem.remove(target_elem.find('path'))
+
+        new_vol_xml = ET.tostring(vol_root, encoding='unicode')
+
+        # Clone the volume. Use REFLINK for efficiency (thin clone).
+        try:
+            new_vol = original_pool.createXMLFrom(new_vol_xml, original_vol, libvirt.VIR_STORAGE_VOL_CREATE_REFLINK)
+        except libvirt.libvirtError as e:
+            # If reflinking is not supported by the storage backend, fall back to a full clone.
+            if 'unsupported flags' in str(e).lower():
+                new_vol = original_pool.createXMLFrom(new_vol_xml, original_vol, 0)
+            else:
+                raise
+
+        disk.set('type', 'volume')
+        if 'file' in source_elem.attrib:
+            del source_elem.attrib['file']
+        source_elem.set('pool', original_pool.name())
+        source_elem.set('volume', new_vol.name())
 
     new_xml = ET.tostring(root, encoding='unicode')
     new_vm = conn.defineXML(new_xml)
@@ -91,13 +146,11 @@ def rename_vm(domain, new_name, delete_snapshots=False):
     except libvirt.libvirtError as e:
         # "domain not found" is the expected error if the name is available.
         # We check the error code to be sure, as the error message string
-        # can vary (e.g., due to localization).
         if e.get_error_code() != libvirt.VIR_ERR_NO_DOMAIN:
             raise # Re-raise other libvirt errors.
 
     xml_desc = domain.XMLDesc(0)
 
-    # Undefine the domain. This is a critical step.
     domain.undefine()
 
     try:
@@ -112,9 +165,7 @@ def rename_vm(domain, new_name, delete_snapshots=False):
         # Define the new domain from the modified XML
         conn.defineXML(new_xml)
     except Exception as e:
-        # If we fail, try to restore the original domain definition
         conn.defineXML(xml_desc)
-        # And then re-raise the exception with a more informative message.
         raise Exception(f"Failed to rename VM, but restored original state. Error: {e}")
 
 def get_vm_info(conn):
@@ -177,7 +228,7 @@ def add_disk(domain, disk_path, device_type='disk', create=False, size_gb=10, di
         for target in root.findall(".//disk/target")
         if target.get("dev")
     ]
- 
+
     target_dev = ""
     for letter in dev_letters:
         dev = f"{prefix}{letter}"
