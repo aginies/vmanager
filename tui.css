@@ -140,7 +140,9 @@ Select {
     width: 3vh;
     background: $primary;
 }
-
+.tabd {
+    margin: 0 1;
+}
 /* Styles for VMDetailModal */
 VMDetailModal {
     align: center middle;
