@@ -558,36 +558,6 @@ class SelectMachineTypeModal(BaseModal[str | None]):
 
 
 
-class NetworkListItem(ListItem):
-    """A list item that displays network information with interactive toggles."""
-
-    class NetworkStatusChanged(Message):
-        """Event sent when the active or autostart status of a network changes."""
-        def __init__(self, network_name: str, change_type: str, value: bool) -> None:
-            super().__init__()
-            self.network_name = network_name
-            self.change_type = change_type
-            self.value = value
-
-    def __init__(self, net_info: dict, vms_using_net: list[str]) -> None:
-        super().__init__()
-        self.net_info = net_info
-        self.network_name = net_info['name']
-        self.vms_using_net = vms_using_net
-
-    def compose(self) -> ComposeResult:
-        with Horizontal():
-            yield Label(self.net_info['name'], classes="net-name")
-            yield Label(self.net_info['mode'], classes="net-mode")
-            vms_str = ", ".join(self.vms_using_net) if self.vms_using_net else "Not in use"
-            yield Label(vms_str, classes="net-usage")
-            yield Checkbox("Active", self.net_info['active'], id="net-active-check")
-            yield Checkbox("Autostart", self.net_info['autostart'], id="net-autostart-check")
-
-    @on(Checkbox.Changed)
-    def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
-        change_type = "active" if event.checkbox.id == "net-active-check" else "autostart"
-
 class CreateNatNetworkModal(BaseModal[None]):
     """Modal screen for creating a new NAT network."""
 
@@ -740,29 +710,42 @@ class ServerPrefModal(BaseModal[None]):
             with TabbedContent(id="server-pref-tabs"):
                 with TabPane("Network", id="tab-network"):
                     with ScrollableContainer():
-                        yield ListView(id="existing-networks-list", classes="info-network-pref")
-                    with Horizontal(id="network-buttons"):
-                        yield Button("Add", id="add-net-btn", classes="Buttonpage")
-                        yield Button("View", id="view-net-btn", classes="Buttonpage", disabled=True)
-                        yield Button("Delete", id="delete-net-btn", variant="error", classes="Buttonpage", disabled=True)
-                        yield Button("Close", id="close-btn", classes="Buttonpage")
+                        yield DataTable(id="networks-table", classes="networks-table", cursor_type="row")
+                    with Vertical(classes="small"):
+                        with Horizontal():
+                            yield Button("Toggle Active", id="toggle-net-active-btn", classes="toggle-detail-button", variant="primary", disabled=True)
+                            yield Button("Toggle Autostart", id="toggle-net-autostart-btn", classes="toggle-detail-button", variant="primary", disabled=True)
+                        with Horizontal():
+                            yield Button("Add", id="add-net-btn", variant="success", classes="toggle-detail-button")
+                            yield Button("View", id="view-net-btn", variant="success", classes="toggle-detail-button", disabled=True)
+                            yield Button("Delete", id="delete-net-btn", variant="error", classes="toggle-detail-button", disabled=True)
+                        yield Button("Close", id="close-btn", classes="close-button")
                 with TabPane("Storage", id="tab-storage"):
-                    yield Tree("Storage Pools", id="storage-tree")
-                    with Vertical(id="storage-actions"):
-                        yield Label("Pool Actions", classes="storage-action-label")
-                        with Horizontal(classes="storage-buttons"):
-                            yield Button(id="toggle-active-pool-btn", disabled=True)
-                            yield Button(id="toggle-autostart-pool-btn", disabled=True)
-                            yield Button("Delete Pool", id="del-pool-btn", disabled=True)
-                        yield Label("Volume Actions", classes="storage-action-label")
-                        with Horizontal(classes="storage-buttons"):
-                            yield Button("New Volume", id="add-vol-btn", disabled=True)
-                            yield Button("Delete Volume", id="del-vol-btn", disabled=True)
+                    with ScrollableContainer(classes="storage-pool-details"):
+                        yield Tree("Storage Pools", id="storage-tree")
+                    with Vertical(id="storage-actions", classes="small"):
+                        with Horizontal():
+                            yield Button(id="toggle-active-pool-btn", variant="primary", classes="toggle-detail-button")
+                            yield Button(id="toggle-autostart-pool-btn", variant="primary", classes="toggle-detail-button")
+                            yield Button("New Volume", id="add-vol-btn", variant="success", classes="toggle-detail-button")
+                            yield Button("Add Pool", id="add-pool-btn", variant="success", classes="toggle-detail-button")
+                            yield Button("Delete Pool", id="del-pool-btn", variant="error", classes="toggle-detail-button")
+                            yield Button("Delete Volume", id="del-vol-btn", variant="error", classes="toggle-detail-button")
 
     def on_mount(self) -> None:
         self._load_networks()
-        self.disk_to_vm_map = vm_queries.get_all_vm_disk_usage(self.app.conn)
+        disk_map = vm_queries.get_all_vm_disk_usage(self.app.conn)
+        nvram_map = vm_queries.get_all_vm_nvram_usage(self.app.conn)
+        self.file_to_vm_map = {**disk_map, **nvram_map}
         self._load_storage_pools()
+
+        self.query_one("#toggle-active-pool-btn").display = False
+        self.query_one("#toggle-autostart-pool-btn").display = False
+        self.query_one("#add-pool-btn").display = False
+        self.query_one("#del-pool-btn").display = False
+        self.query_one("#add-vol-btn").display = False
+        self.query_one("#del-vol-btn").display = False
+
 
     def _load_storage_pools(self) -> None:
         """Load storage pools into the tree view."""
@@ -781,18 +764,33 @@ class ServerPrefModal(BaseModal[None]):
             pool_node.add_leaf("Loading volumes...")
 
     def _load_networks(self):
-        list_view = self.query_one("#existing-networks-list", ListView)
-        list_view.clear()
+        table = self.query_one("#networks-table", DataTable)
         
-        # Get the usage map
+        if not table.columns:
+            table.add_column("Name", key="name")
+            table.add_column("Mode", key="mode")
+            table.add_column("Active", key="active")
+            table.add_column("Autostart", key="autostart")
+            table.add_column("Used By", key="used_by")
+        
+        table.clear()
+        
         network_usage = vm_queries.get_all_network_usage(self.app.conn)
-        
-        networks = list_networks(self.app.conn)
-        for net in networks:
-            net_name = net['name']
-            vms_using_net = network_usage.get(net_name, [])
-            list_view.append(NetworkListItem(net, vms_using_net))
-        list_view.focus()
+        self.networks_list = list_networks(self.app.conn)
+
+        for net in self.networks_list:
+            vms_str = ", ".join(network_usage.get(net['name'], [])) or "Not in use"
+            active_str = "✔️" if net['active'] else "❌"
+            autostart_str = "✔️" if net['autostart'] else "❌"
+            
+            table.add_row(
+                net['name'],
+                net['mode'],
+                active_str,
+                autostart_str,
+                vms_str,
+                key=net['name']
+            )
 
     @on(Tree.NodeExpanded)
     async def on_tree_node_expanded(self, event: Tree.NodeExpanded) -> None:
@@ -813,7 +811,7 @@ class ServerPrefModal(BaseModal[None]):
                     vol_path = vol_data['volume'].path()
                     capacity_gb = round(vol_data['capacity'] / (1024**3), 2)
                     
-                    vm_name = self.disk_to_vm_map.get(vol_path)
+                    vm_name = self.file_to_vm_map.get(vol_path)
                     usage_info = f" (in use by {vm_name})" if vm_name else ""
                     
                     label = f"{vol_name} ({capacity_gb} GB){usage_info}"
@@ -836,12 +834,18 @@ class ServerPrefModal(BaseModal[None]):
 
         toggle_active_btn = self.query_one("#toggle-active-pool-btn")
         toggle_autostart_btn = self.query_one("#toggle-autostart-pool-btn")
+        del_pool_btn = self.query_one("#del-pool-btn")
+        add_pool_btn = self.query_one("#add-pool-btn")
 
-        toggle_active_btn.disabled = not is_pool
-        toggle_autostart_btn.disabled = not is_pool
-        self.query_one("#del-pool-btn").disabled = not is_pool
-        self.query_one("#add-vol-btn").disabled = not is_pool
-        self.query_one("#del-vol-btn").disabled = not is_volume
+        toggle_active_btn.display = is_pool
+        toggle_autostart_btn.display = is_pool
+        del_pool_btn.display = is_pool
+        add_pool_btn.display = is_pool
+        
+        self.query_one("#add-vol-btn").display = is_volume
+        self.query_one("#add-vol-btn").display = is_volume
+        self.query_one("#add-vol-btn").display = is_volume
+        self.query_one("#del-vol-btn").display = is_volume
 
         if is_pool:
             is_active = node_data.get('status') == 'active'
@@ -922,6 +926,42 @@ class ServerPrefModal(BaseModal[None]):
 
         self.app.push_screen(CreateVolumeModal(), on_create)
 
+    @on(Button.Pressed, "#add-pool-btn")
+    def on_add_pool_button_pressed(self, event: Button.Pressed) -> None:
+        try:
+            storage_manager.add_storage_pool(pool)
+            self.app.show_success_message(f"Storage pool '{pool_name}' added successfully.")
+            self._load_storage_pools()
+        except Exception as e:
+            self.app.show_error_message(str(e))
+
+    @on(Button.Pressed, "#del-pool-btn")
+    def on_delete_pool_button_pressed(self, event: Button.Pressed) -> None:
+        tree: Tree[dict] = self.query_one("#storage-tree")
+        if not tree.cursor_node or not tree.cursor_node.data:
+            return
+
+        node_data = tree.cursor_node.data
+        if node_data.get("type") != "pool":
+            return
+
+        pool_name = node_data.get('name')
+        pool = node_data.get('pool')
+
+        def on_confirm(confirmed: bool) -> None:
+            if confirmed:
+                try:
+                    storage_manager.delete_storage_pool(pool)
+                    self.app.show_success_message(f"Storage pool '{pool_name}' deleted successfully.")
+                    self._load_storage_pools() # Refresh the tree
+                except Exception as e:
+                    self.app.show_error_message(str(e))
+
+        self.app.push_screen(
+            ConfirmationDialog(f"Are you sure you want to delete storage pool '{pool_name}'? This will delete the pool definition but not the data on it."),
+            on_confirm
+        )
+
     @on(Button.Pressed, "#del-vol-btn")
     def on_delete_volume_button_pressed(self, event: Button.Pressed) -> None:
         tree: Tree[dict] = self.query_one("#storage-tree")
@@ -955,35 +995,66 @@ class ServerPrefModal(BaseModal[None]):
         )
 
 
-    @on(ListView.Selected, "#existing-networks-list")
-    def on_list_view_selected(self, event: ListView.Selected):
+    @on(DataTable.RowSelected, "#networks-table")
+    def on_network_table_row_selected(self, event: DataTable.RowSelected) -> None:
         self.query_one("#view-net-btn").disabled = False
         self.query_one("#delete-net-btn").disabled = False
+        
+        toggle_active_btn = self.query_one("#toggle-net-active-btn")
+        toggle_autostart_btn = self.query_one("#toggle-net-autostart-btn")
+        toggle_active_btn.disabled = False
+        toggle_autostart_btn.disabled = False
 
-    @on(NetworkListItem.NetworkStatusChanged)
-    def on_network_status_changed(self, event: NetworkListItem.NetworkStatusChanged) -> None:
-        try:
-            if event.change_type == "active":
-                set_network_active(self.app.conn, event.network_name, event.value)
-                self.app.show_success_message(f"Network {event.network_name} activity set to {event.value}")
-            elif event.change_type == "autostart":
-                set_network_autostart(self.app.conn, event.network_name, event.value)
-                self.app.show_success_message(f"Network {event.network_name} autostart set to {event.value}")
-        except Exception as e:
-            self.app.show_error_message(str(e))
-            self._load_networks() # Reload to show the correct state
-            self.app.show_error_message(f"An unexpected error occurred: {e}")
+        selected_net_name = event.row_key.value
+        net_info = next((net for net in self.networks_list if net['name'] == selected_net_name), None)
+        if net_info:
+            toggle_active_btn.label = "Deactivate" if net_info['active'] else "Activate"
+            toggle_autostart_btn.label = "Autostart Off" if net_info['autostart'] else "Autostart On"
+
+    @on(Button.Pressed, "#toggle-net-active-btn")
+    def on_toggle_net_active_pressed(self, event: Button.Pressed) -> None:
+        table = self.query_one("#networks-table", DataTable)
+        if not table.cursor_coordinate: return
+        
+        row_key, _ = table.coordinate_to_cell_key(table.cursor_coordinate)
+        net_name = row_key.value
+        net_info = next((net for net in self.networks_list if net['name'] == net_name), None)
+        
+        if net_info:
+            try:
+                set_network_active(self.app.conn, net_name, not net_info['active'])
+                self.app.show_success_message(f"Network '{net_name}' is now {'inactive' if net_info['active'] else 'active'}.")
+                self._load_networks()
+            except Exception as e:
+                self.app.show_error_message(str(e))
+
+    @on(Button.Pressed, "#toggle-net-autostart-btn")
+    def on_toggle_net_autostart_pressed(self, event: Button.Pressed) -> None:
+        table = self.query_one("#networks-table", DataTable)
+        if not table.cursor_coordinate: return
+        
+        row_key, _ = table.coordinate_to_cell_key(table.cursor_coordinate)
+        net_name = row_key.value
+        net_info = next((net for net in self.networks_list if net['name'] == net_name), None)
+        
+        if net_info:
+            try:
+                set_network_autostart(self.app.conn, net_name, not net_info['autostart'])
+                self.app.show_success_message(f"Autostart for network '{net_name}' is now {'off' if net_info['autostart'] else 'on'}.")
+                self._load_networks()
+            except Exception as e:
+                self.app.show_error_message(str(e))
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "close-btn":
             self.dismiss(None)
         elif event.button.id == "view-net-btn":
-            list_view = self.query_one("#existing-networks-list", ListView)
-            if list_view.index is None:
+            table = self.query_one("#networks-table", DataTable)
+            if not table.cursor_coordinate:
                 return
 
-            selected_item = list_view.children[list_view.index]
-            network_name = selected_item.network_name
+            row_key, _ = table.coordinate_to_cell_key(table.cursor_coordinate)
+            network_name = row_key.value
             try:
                 conn = self.app.conn
                 if conn is None:
@@ -1003,12 +1074,12 @@ class ServerPrefModal(BaseModal[None]):
                     self._load_networks()
             self.app.push_screen(CreateNatNetworkModal(), on_create)
         elif event.button.id == "delete-net-btn":
-            list_view = self.query_one("#existing-networks-list", ListView)
-            if list_view.index is None:
+            table = self.query_one("#networks-table", DataTable)
+            if not table.cursor_coordinate:
                 return
 
-            selected_item = list_view.children[list_view.index]
-            network_name = selected_item.network_name
+            row_key, _ = table.coordinate_to_cell_key(table.cursor_coordinate)
+            network_name = row_key.value
             vms_using_network = get_vms_using_network(self.app.conn, network_name)
 
             confirm_message = f"Are you sure you want to delete network '{network_name}'?"
