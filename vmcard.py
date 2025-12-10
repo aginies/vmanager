@@ -179,7 +179,7 @@ class VMCard(Static):
                         with Vertical():
                             yield Button("Delete", id="delete", variant="success", classes="delete-button")
                             yield Static(classes="button-separator")
-                            yield Button("Clone", id="clone", variant="success", classes="clone-button")
+                            yield Button("Clone", id="clone", classes="clone-button")
                         with Vertical():
                             yield Button( "Show info", id="info-button", variant="primary")
                             yield Static(classes="button-separator")
