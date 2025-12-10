@@ -37,7 +37,7 @@ General capabilities:
 
 - Fix CSS issue (there is a lot as this is not trivial to deal with CSS...)
 - Add all missing features on Adding/Removing stuff to VM
-- Split code into sub files (Dialog, VM info, VM management, Host Management etc...)
+- Re-organise code into sub files
 - Support adding devices to VM (WIP)
 - Being able to create VM based on scenario usage: API is ready, just need to call it (https://github.com/aginies/virt-scenario)
 
