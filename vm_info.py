@@ -10,6 +10,7 @@ import uuid
 import string
 import copy
 import libvirt
+import json
 
 def _find_vol_by_path(conn, vol_path):
     """Finds a storage volume by its path and returns the volume and its pool."""
@@ -410,7 +411,7 @@ def get_vm_firmware_info(xml_content: str) -> dict:
     Extracts firmware (BIOS/UEFI) from a VM's XML definition.
     Returns a dictionary with firmware info.
     """
-    firmware_info = {'type': 'BIOS', 'path': None} # Default to BIOS
+    firmware_info = {'type': 'BIOS', 'path': None, 'secure_boot': False} # Default to BIOS
 
     try:
         root = ET.fromstring(xml_content)
@@ -423,6 +424,8 @@ def get_vm_firmware_info(xml_content: str) -> dict:
                 if loader_path:
                     firmware_info['type'] = 'UEFI'
                     firmware_info['path'] = loader_path
+                    if loader_elem.get('secure') == 'yes':
+                        firmware_info['secure_boot'] = True
             else:
                 bootloader_elem = os_elem.find('bootloader')
                 if bootloader_elem is not None:
@@ -1273,28 +1276,107 @@ def set_cpu_model(domain: libvirt.virDomain, cpu_model: str):
     domain.connect().defineXML(new_xml)
 
 
+FIRMWARE_META_BASE_DIR = "/usr/share/qemu/firmware/"
+
+class Firmware:
+    """
+    firmware class
+    """
+    def __init__(self):
+        """
+        Set default values
+        """
+        self.executable = None
+        self.nvram_template = None
+        self.architectures = []
+        self.features = []
+        self.interfaces = []
+
+    def load_from_json(self, jsondata):
+        """
+        Initialize object from a json firmware description
+        """
+        if "interface-types" in jsondata:
+            self.interfaces = jsondata['interface-types']
+        else:
+            return False
+
+        if 'mapping' in jsondata:
+            if 'executable' in jsondata['mapping'] and 'filename' in jsondata['mapping']['executable']:
+                self.executable = jsondata['mapping']['executable']['filename']
+            elif 'filename' in jsondata['mapping']:
+                self.executable = jsondata['mapping']['filename']
+            if 'nvram-template' in jsondata['mapping'] and 'filename' in jsondata['mapping']['nvram-template']:
+                self.nvram_template = jsondata['mapping']['nvram-template']['filename']
+
+        if self.executable is None:
+            return False
+
+        if 'features' in jsondata:
+            for feat in jsondata['features']:
+                self.features.append(feat)
+
+        if 'targets' in jsondata:
+            for target in jsondata['targets']:
+                self.architectures.append(target['architecture'])
+
+        if not self.architectures:
+            return False
+
+        return True
+
+
 def get_uefi_files():
     """
-    Scans for UEFI firmware files in common directories.
+    Scans for UEFI firmware json description files and returns a list of firmware capabilities.
     """
-    uefi_paths = [
-        "/usr/share/OVMF",
-        "/usr/share/qemu-efi-aarch64",
-        "/usr/share/qemu/"
-        # Add other potential paths here
-    ]
     uefi_files = []
-    for path in uefi_paths:
-        if os.path.isdir(path):
-            for root, _, files in os.walk(path):
-                for file in files:
-                    if file.endswith((".fd", ".bin")):
-                        uefi_files.append(os.path.join(root, file))
+    if not os.path.isdir(FIRMWARE_META_BASE_DIR):
+        return uefi_files
+
+    for file in os.listdir(FIRMWARE_META_BASE_DIR):
+        if file.endswith(".json"):
+            full_path = os.path.join(FIRMWARE_META_BASE_DIR, file)
+            try:
+                with open(full_path, 'r', encoding='utf-8') as f:
+                    jsondata = json.load(f)
+
+                firmware = Firmware()
+                if firmware.load_from_json(jsondata):
+                    uefi_files.append(firmware)
+            except (json.JSONDecodeError, IOError):
+                # ignore malformed or unreadable files
+                continue
+
     return uefi_files
 
-def set_uefi_file(domain: libvirt.virDomain, uefi_path: str):
+def get_host_sev_capabilities(conn):
     """
-    Sets the UEFI file for a VM.
+    Checks if the host supports AMD SEV and SEV-ES.
+    """
+    sev_caps = {'sev': False, 'sev-es': False}
+    if conn is None:
+        return sev_caps
+    try:
+        caps_xml = conn.getCapabilities()
+        root = ET.fromstring(caps_xml)
+        sev_elem = root.find('.//host/cpu/sev')
+        if sev_elem is not None:
+            sev_caps['sev'] = True
+
+        guest_arch = root.find(".//guest/arch[@name='x86_64']")
+        if guest_arch is not None:
+            features = guest_arch.find('features')
+            if features is not None:
+                if features.find('sev-es') is not None:
+                    sev_caps['sev-es'] = True
+    except (libvirt.libvirtError, ET.ParseError):
+        pass
+    return sev_caps
+
+def set_uefi_file(domain: libvirt.virDomain, uefi_path: str, secure_boot: bool):
+    """
+    Sets the UEFI file for a VM and optionally enables/disables secure boot.
     The VM must be stopped.
     """
     if domain.isActive():
@@ -1309,21 +1391,24 @@ def set_uefi_file(domain: libvirt.virDomain, uefi_path: str):
 
     loader_elem = os_elem.find('loader')
     if loader_elem is None:
-        # If there's no loader, we can't set it. This implies non-UEFI boot.
-        raise ValueError("VM is not configured for UEFI boot (no <loader> element).")
-    
-    if not uefi_path: # Setting to BIOS
-        os_elem.remove(loader_elem)
-        # Also remove nvram if it exists
+        loader_elem = ET.SubElement(os_elem, 'loader', type='pflash')
+
+    if not uefi_path:
+        if loader_elem is not None:
+            os_elem.remove(loader_elem)
         nvram_elem = os_elem.find('nvram')
         if nvram_elem is not None:
             os_elem.remove(nvram_elem)
-    else: # Setting to a UEFI file
+    else:
         loader_elem.text = uefi_path
-        # You might also need to create or update the <nvram> tag if it's not
-        # correctly templated. For simplicity, we assume it's either correct
-        # or doesn't need to be changed for now.
+        if secure_boot:
+            loader_elem.set('secure', 'yes')
+        elif 'secure' in loader_elem.attrib:
+            del loader_elem.attrib['secure']
+
+        nvram_elem = os_elem.find('nvram')
+        if nvram_elem is None:
+            nvram_elem = ET.SubElement(os_elem, 'nvram', template=f"{uefi_path.replace('.bin', '_VARS.fd')}",)
 
     new_xml = ET.tostring(root, encoding='unicode')
     domain.connect().defineXML(new_xml)
-
