@@ -553,7 +553,7 @@ def set_boot_info(domain: libvirt.virDomain, menu_enabled: bool, order: list[str
 
     new_xml = ET.tostring(root, encoding='unicode')
 
-def set_vm_video_model(domain: libvirt.virDomain, model: str):
+def set_vm_video_model(domain: libvirt.virDomain, model: str | None):
     """Sets the video model for a VM."""
     if domain.isActive():
         raise libvirt.libvirtError("VM must be stopped to change the video model.")
@@ -563,35 +563,35 @@ def set_vm_video_model(domain: libvirt.virDomain, model: str):
     
     devices = root.find('devices')
     if devices is None:
+        if model is None: return
         devices = ET.SubElement(root, 'devices')
         
     video = devices.find('video')
     if video is None:
+        if model is None: return
         video = ET.SubElement(devices, 'video')
         
     model_elem = video.find('model')
-    if model_elem is None:
-        model_elem = ET.SubElement(video, 'model')
 
-    # Get a copy of the old attributes, just in case we need them
-    old_attribs = model_elem.attrib.copy()
+    if model is None:
+        if model_elem is not None:
+            video.remove(model_elem)
+    else:
+        if model_elem is None:
+            model_elem = ET.SubElement(video, 'model')
 
-    # Clear all attributes from model_elem to start fresh
-    model_elem.clear()
+        old_attribs = model_elem.attrib.copy()
+        model_elem.clear()
+        model_elem.set('type', model)
 
-    model_elem.set('type', model)
-
-    if model == 'virtio':
-        model_elem.set('heads', '1')
-        model_elem.set('primary', 'yes')
-    elif model == 'qxl':
-        model_elem.set('vram', old_attribs.get('vram', '65536'))
-        model_elem.set('ram', old_attribs.get('ram', '65536'))
-    elif model == 'vga':
-        model_elem.set('vram', old_attribs.get('vram', '16384'))
-    else: # Fallback for other models like 'cirrus', etc.
-        model_elem.set('vram', old_attribs.get('vram', '16384'))
-        model_elem.set('heads', old_attribs.get('heads', '1'))
+        if model == 'virtio':
+            model_elem.set('heads', '1')
+            model_elem.set('primary', 'yes')
+        elif model == 'qxl':
+            model_elem.set('vram', old_attribs.get('vram', '65536'))
+            model_elem.set('ram', old_attribs.get('ram', '65536'))
+        else: # vga, cirrus etc.
+             model_elem.set('vram', old_attribs.get('vram', '16384'))
 
     new_xml = ET.tostring(root, encoding='unicode')
     domain.connect().defineXML(new_xml)
