@@ -328,7 +328,8 @@ Button {
 
 #machine-type-list, #disk-selection-list {
     background: $surface;
-    height: 1fr; /* Make height flexible within ScrollableContainer */
+    height: 25;
+    /*height: 1fr; /* Make height flexible within ScrollableContainer */
     border: round $primary;
 }
 
