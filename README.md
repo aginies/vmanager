@@ -79,7 +79,7 @@ When you run the application, you'll see:
    - Current connection URI
 
 2. **Top Controls**: Provides global actions and filtering options:
-   - **Server Pref** configure network and storage (WIP)
+   - **Server Pref** configure network and storage
    - **Server List**: Server management list, add, edit, delete
    - **Select Server**: connect to a server in the list, or via input
    - **Filter VM** to sort VMs by name and status (All, Running, Paused, Stopped)

@@ -7,8 +7,10 @@ import shlex
 import subprocess
 import os
 from libvirt_utils import _get_vmanager_metadata, _get_disabled_disks_elem, VMANAGER_NS
+from utils import log_function_call
 
 
+@log_function_call
 def get_vm_info(conn):
     """
     get all VM info
@@ -34,19 +36,21 @@ def get_vm_info(conn):
                 'networks': get_vm_networks_info(xml_content),
                 'detail_network': get_vm_network_ip(domain),
                 'network_dns_gateway': get_vm_network_dns_gateway_info(domain),
-                'disks': get_vm_disks_info(xml_content),
+                'disks': get_vm_disks_info(conn, xml_content),
                 'devices': get_vm_devices_info(xml_content),
             }
             vm_info_list.append(vm_info)
 
     return vm_info_list
 
+@log_function_call
 def get_vm_network_dns_gateway_info(domain: str):
     """
     Extracts DNS and gateway information for networks connected to the VM.
     """
     pass
 
+@log_function_call
 def get_status(domain):
     """
     state of a VM
@@ -59,6 +63,7 @@ def get_status(domain):
     else:
         return 'Stopped'
 
+@log_function_call
 def get_vm_description(domain):
     """
     desc of the VM
@@ -68,6 +73,7 @@ def get_vm_description(domain):
     except libvirt.libvirtError:
         return "No description available"
 
+@log_function_call
 def get_vm_firmware_info(xml_content: str) -> dict:
     """
     Extracts firmware (BIOS/UEFI) from a VM's XML definition.
@@ -98,6 +104,7 @@ def get_vm_firmware_info(xml_content: str) -> dict:
 
     return firmware_info
 
+@log_function_call
 def get_vm_machine_info(xml_content: str) -> str:
     """
     Extracts machine type from a VM's XML definition.
@@ -119,6 +126,7 @@ def get_vm_machine_info(xml_content: str) -> str:
 
     return machine_type
 
+@log_function_call
 def get_vm_networks_info(xml_content: str) -> list[dict]:
     """Extracts network interface information from a VM's XML definition."""
     root = ET.fromstring(xml_content)
@@ -139,6 +147,7 @@ def get_vm_networks_info(xml_content: str) -> list[dict]:
     return networks
 
 
+@log_function_call
 def get_vm_network_ip(domain) -> list:
     """
     Retrieves network interface IP addresses for a given VM domain.
@@ -170,6 +179,7 @@ def get_vm_network_ip(domain) -> list:
         return ip_addresses
     return []
 
+@log_function_call
 def get_vm_devices_info(xml_content: str) -> dict:
     """
     Extracts information about various virtual devices from a VM's XML definition.
@@ -311,7 +321,8 @@ def get_vm_devices_info(xml_content: str) -> dict:
     return devices_info
 
 
-def get_vm_disks_info(xml_content: str) -> list[dict]:
+@log_function_call
+def get_vm_disks_info(conn: libvirt.virConnect, xml_content: str) -> list[dict]:
     """
     Extracts disks info from a VM's XML definition.
     Returns a list of dictionaries with 'path' and 'status'.
@@ -325,10 +336,20 @@ def get_vm_disks_info(xml_content: str) -> list[dict]:
             for disk in devices.findall("disk"):
                 disk_path = ""
                 disk_source = disk.find("source")
-                if disk_source is not None and "file" in disk_source.attrib:
-                    disk_path = disk_source.attrib["file"]
-                elif disk_source is not None and "dev" in disk_source.attrib:
-                    disk_path = disk_source.attrib["dev"]
+                if disk_source is not None:
+                    if "file" in disk_source.attrib:
+                        disk_path = disk_source.attrib["file"]
+                    elif "dev" in disk_source.attrib:
+                        disk_path = disk_source.attrib["dev"]
+                    elif "pool" in disk_source.attrib and "volume" in disk_source.attrib:
+                        pool_name = disk_source.attrib["pool"]
+                        vol_name = disk_source.attrib["volume"]
+                        try:
+                            pool = conn.storagePoolLookupByName(pool_name)
+                            vol = pool.storageVolLookupByName(vol_name)
+                            disk_path = vol.path()
+                        except libvirt.libvirtError:
+                            disk_path = f"Error: volume '{vol_name}' not found in pool '{pool_name}'"
 
                 if disk_path:
                     disks.append({'path': disk_path, 'status': 'enabled'})
@@ -344,10 +365,20 @@ def get_vm_disks_info(xml_content: str) -> list[dict]:
                     for disk in disabled_disks_elem.findall('disk'):
                         disk_path = ""
                         disk_source = disk.find("source")
-                        if disk_source is not None and "file" in disk_source.attrib:
-                            disk_path = disk_source.attrib["file"]
-                        elif disk_source is not None and "dev" in disk_source.attrib:
-                            disk_path = disk_source.attrib["dev"]
+                        if disk_source is not None:
+                            if "file" in disk_source.attrib:
+                                disk_path = disk_source.attrib["file"]
+                            elif "dev" in disk_source.attrib:
+                                disk_path = disk_source.attrib["dev"]
+                            elif "pool" in disk_source.attrib and "volume" in disk_source.attrib:
+                                pool_name = disk_source.attrib["pool"]
+                                vol_name = disk_source.attrib["volume"]
+                                try:
+                                    pool = conn.storagePoolLookupByName(pool_name)
+                                    vol = pool.storageVolLookupByName(vol_name)
+                                    disk_path = vol.path()
+                                except libvirt.libvirtError:
+                                    disk_path = f"Error: volume '{vol_name}' not found in pool '{pool_name}'"
 
                         if disk_path:
                             disks.append({'path': disk_path, 'status': 'disabled'})
@@ -356,6 +387,7 @@ def get_vm_disks_info(xml_content: str) -> list[dict]:
 
     return disks
 
+@log_function_call
 def get_all_vm_disk_usage(conn: libvirt.virConnect) -> dict[str, str]:
     """
     Scans all VMs and returns a mapping of disk path to VM name.
@@ -372,7 +404,7 @@ def get_all_vm_disk_usage(conn: libvirt.virConnect) -> dict[str, str]:
     for domain in domains:
         try:
             xml_desc = domain.XMLDesc(0)
-            disks = get_vm_disks_info(xml_desc) # Re-use existing function
+            disks = get_vm_disks_info(conn, xml_desc) # Re-use existing function
             vm_name = domain.name()
             for disk in disks:
                 path = disk.get('path')
@@ -383,6 +415,7 @@ def get_all_vm_disk_usage(conn: libvirt.virConnect) -> dict[str, str]:
             
     return disk_to_vm_map
 
+@log_function_call
 def get_all_vm_nvram_usage(conn: libvirt.virConnect) -> dict[str, str]:
     """
     Scans all VMs and returns a mapping of NVRAM file path to VM name.
@@ -412,6 +445,7 @@ def get_all_vm_nvram_usage(conn: libvirt.virConnect) -> dict[str, str]:
 
 
 
+@log_function_call
 def get_all_network_usage(conn: libvirt.virConnect) -> dict[str, list[str]]:
     """
     Scans all VMs and returns a mapping of network name to a list of VM names using it.
@@ -444,6 +478,7 @@ def get_all_network_usage(conn: libvirt.virConnect) -> dict[str, list[str]]:
     return network_to_vms
 
 
+@log_function_call
 def get_supported_machine_types(conn, domain):
     """
     Returns a list of supported machine types for the domain's architecture.
@@ -469,6 +504,7 @@ def get_supported_machine_types(conn, domain):
         print(f"Error getting machine types: {e}")
         return []
 
+@log_function_call
 def get_vm_shared_memory_info(xml_content: str) -> bool:
     """Check if shared memory is enabled for the VM."""
     try:
@@ -484,6 +520,7 @@ def get_vm_shared_memory_info(xml_content: str) -> bool:
         pass
     return False
 
+@log_function_call
 def get_boot_info(xml_content: str) -> dict:
     """Extracts boot information from the VM's XML."""
     root = ET.fromstring(xml_content)
@@ -499,6 +536,7 @@ def get_boot_info(xml_content: str) -> dict:
     return {'menu_enabled': menu_enabled, 'order': order}
 
 
+@log_function_call
 def get_vm_video_model(xml_content: str) -> str | None:
     """Extracts the video model from a VM's XML definition."""
     try:
@@ -510,6 +548,7 @@ def get_vm_video_model(xml_content: str) -> str | None:
         pass
     return None
 
+@log_function_call
 def get_cpu_models(conn, arch):
     """
     Get a list of CPU models for a given architecture.
@@ -524,6 +563,7 @@ def get_cpu_models(conn, arch):
         print(f"Error getting CPU models for arch {arch}: {e}")
         return []
 
+@log_function_call
 def get_vm_cpu_model(xml_content: str) -> str | None:
     """Extracts the cpu model from a VM's XML definition."""
     try:
@@ -535,6 +575,7 @@ def get_vm_cpu_model(xml_content: str) -> str | None:
         pass
     return None
 
+@log_function_call
 def get_vm_sound_model(xml_content: str) -> str | None:
     """Extracts the sound model from a VM's XML definition."""
     try:

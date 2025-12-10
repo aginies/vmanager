@@ -7,8 +7,10 @@ import secrets
 import libvirt
 import xml.etree.ElementTree as ET
 import ipaddress
+from utils import log_function_call
 
 
+@log_function_call
 def list_networks(conn):
     """
     Lists all networks.
@@ -32,6 +34,7 @@ def list_networks(conn):
         })
     return networks
 
+@log_function_call
 def create_network(conn, name, typenet, forward_dev, ip_network, dhcp_enabled, dhcp_start, dhcp_end, domain_name):
     """
     Creates a new NAT/Routed network.
@@ -77,6 +80,7 @@ def create_network(conn, name, typenet, forward_dev, ip_network, dhcp_enabled, d
     net.create()
     net.setAutostart(True)
 
+@log_function_call
 def delete_network(conn, network_name):
     """
     Deletes a network.
@@ -93,6 +97,7 @@ def delete_network(conn, network_name):
         raise Exception(f"Error deleting network '{network_name}': {e}")
 
 
+@log_function_call
 def get_vms_using_network(conn, network_name):
     """
     Get a list of VMs using a specific network.
@@ -113,6 +118,7 @@ def get_vms_using_network(conn, network_name):
                     break
     return vm_names
 
+@log_function_call
 def set_network_active(conn, network_name, active):
     """
     Sets a network to active or inactive.
@@ -128,6 +134,7 @@ def set_network_active(conn, network_name, active):
     except libvirt.libvirtError as e:
         raise Exception(f"Error setting network active status: {e}")
 
+@log_function_call
 def set_network_autostart(conn, network_name, autostart):
     """
     Sets a network to autostart or not.
@@ -141,6 +148,7 @@ def set_network_autostart(conn, network_name, autostart):
         raise Exception(f"Error setting network autostart status: {e}")
 
 
+@log_function_call
 def get_host_network_interfaces():
     """
     Retrieves a list of network interface names and their primary IPv4 addresses available on the host.
@@ -181,6 +189,7 @@ def get_host_network_interfaces():
         print("Error: 'ip' command not found. Please ensure iproute2 is installed.")
         return []
 
+@log_function_call
 def generate_mac_address():
     """Generates a random MAC address."""
     mac = [ 0x52, 0x54, 0x00,
@@ -189,6 +198,7 @@ def generate_mac_address():
             secrets.randbelow(0xff) ]
     return ':'.join(map(lambda x: "%02x" % x, mac))
 
+@log_function_call
 def get_existing_subnets(conn: libvirt.virConnect) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
     """
     Returns a list of all IP subnets currently configured for libvirt networks.

@@ -5,6 +5,7 @@ import os
 import json
 import libvirt
 import xml.etree.ElementTree as ET
+from utils import log_function_call
 
 FIRMWARE_META_BASE_DIR = "/usr/share/qemu/firmware/"
 
@@ -57,6 +58,7 @@ class Firmware:
         return True
 
 
+@log_function_call
 def get_uefi_files():
     """
     Scans for UEFI firmware json description files and returns a list of firmware capabilities.
@@ -81,6 +83,7 @@ def get_uefi_files():
 
     return uefi_files
 
+@log_function_call
 def get_host_sev_capabilities(conn):
     """
     Checks if the host supports AMD SEV and SEV-ES.

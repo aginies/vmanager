@@ -6,6 +6,7 @@ import asyncio
 import traceback
 from typing import TypeVar
 
+from libvirt_error_handler import register_error_handler
 from textual.app import App, ComposeResult
 from textual.widgets import DirectoryTree, Header, Footer, Select, Button, Input, Label, Static, DataTable, Link, TextArea, ListView, ListItem, Checkbox, RadioButton, RadioSet, TabbedContent, TabPane, Tree
 from textual.containers import ScrollableContainer, Horizontal, Vertical
@@ -445,6 +446,33 @@ class SelectDiskModal(BaseModal[str | None]):
         if event.button.id == "cancel":
             self.dismiss(None)
 
+class SelectPoolModal(BaseModal[str | None]):
+    """Modal screen for selecting a storage pool from a list."""
+
+    def __init__(self, pools: list[str], prompt: str) -> None:
+        super().__init__()
+        self.pools = pools
+        self.prompt = prompt
+        self.selected_pool = None
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="select-pool-dialog", classes="select-pool-dialog"):
+            yield Label(self.prompt)
+            with ScrollableContainer():
+                yield ListView(
+                    *[ListItem(Label(pool)) for pool in self.pools],
+                    id="pool-selection-list"
+                )
+            yield Button("Cancel", variant="error", id="cancel")
+
+    def on_list_view_selected(self, event: ListView.Selected) -> None:
+        self.selected_pool = str(event.item.query_one(Label).renderable)
+        self.dismiss(self.selected_pool)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "cancel":
+            self.dismiss(None)
+
 
 class RemoveDiskModal(BaseModal[str | None]):
     """Modal screen for removing a disk."""
@@ -528,7 +556,7 @@ class SelectMachineTypeModal(BaseModal[str | None]):
         self.current_machine_type = current_machine_type
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="select-machine-type-dialog"):
+        with Vertical(id="select-machine-type-dialog", classes="select-machine-type-dialog"):
             yield Label("Select Machine Type:")
             with ScrollableContainer():
                 yield ListView(
@@ -1599,19 +1627,20 @@ class VMDetailModal(ModalScreen):
                     with ScrollableContainer(classes="info-details"):
                         disks_info = self.vm_info.get("disks", [])
                         disk_items = []
-                        for disk in disks_info:
-                            path = disk.get('path', 'N/A')
-                            status = disk.get('status', 'unknown')
-                            label = f"{path}"
-                            if status == 'disabled':
-                                label += " (disabled)"
-                            disk_items.append(ListItem(Label(label)))
+                        if disks_info:
+                            for disk in disks_info:
+                                path = disk.get('path', 'N/A')
+                                status = disk.get('status', 'unknown')
+                                label = f"{path}"
+                                if status == 'disabled':
+                                    label += " (disabled)"
+                                disk_items.append(ListItem(Label(label)))
+                        else:
+                            disk_items.append(ListItem(Label("No disks found.")))
 
                         self.disk_list_view = ListView(*disk_items)
                         num_disks = len(disks_info)
                         self.disk_list_view.styles.height = num_disks if num_disks > 0 else 1
-                        if not disks_info:
-                            self.disk_list_view.append(ListItem(Label("No disks found.")))
                         yield self.disk_list_view
                     with Horizontal():
                         has_enabled_disks = any(d['status'] == 'enabled' for d in disks_info)
@@ -1623,10 +1652,12 @@ class VMDetailModal(ModalScreen):
                         disable_button.display = has_enabled_disks
                         enable_button.display = has_disabled_disks
 
-                        with Vertical():
-                            with Horizontal():
-                                yield Button("Add Disk", id="detail_add_disk", classes="detail-disks")
-                                yield remove_button
+                        #with Vertical():
+                        with Horizontal():
+                            yield Button("Add Disk", id="detail_add_disk", classes="detail-disks")
+                            yield Button("Attach Existing Disk", id="detail_attach_disk", classes="detail-disks")
+                            yield remove_button
+                            with Vertical():
                                 yield disable_button
                                 yield enable_button
 
@@ -1747,7 +1778,7 @@ class VMDetailModal(ModalScreen):
     def _update_disk_list(self):
         self.disk_list_view.clear()
         new_xml = self.domain.XMLDesc(0)
-        disks_info = get_vm_disks_info(new_xml)
+        disks_info = get_vm_disks_info(self.app.conn, new_xml)
         self.vm_info['disks'] = disks_info  # Update the stored info
 
         disk_items = []
@@ -1982,53 +2013,145 @@ class VMDetailModal(ModalScreen):
                     except Exception as e:
                         self.app.show_error_message(f"Error adding disk: {e}")
             self.app.push_screen(AddDiskModal(), add_disk_callback)
-        elif event.button.id == "detail_remove_disk":
-            enabled_disks = [d['path'] for d in self.vm_info.get("disks", []) if d['status'] == 'enabled']
-            if not enabled_disks:
-                self.app.show_error_message("No enabled disks to remove.")
+        elif event.button.id == "detail_attach_disk":
+            all_pools = storage_manager.list_storage_pools(self.app.conn)
+            active_pools = [p for p in all_pools if p['status'] == 'active']
+
+            if not active_pools:
+                self.app.show_error_message("No active storage pools found.")
                 return
 
-            def remove_disk_callback(disk_to_remove):
-                if disk_to_remove:
+            def select_pool_callback(pool_name: str | None) -> None:
+                if not pool_name:
+                    return
+
+                selected_pool_obj = next((p['pool'] for p in active_pools if p['name'] == pool_name), None)
+                if not selected_pool_obj:
+                    self.app.show_error_message(f"Could not find pool object for {pool_name}")
+                    return
+
+                all_volumes_in_pool = storage_manager.list_storage_volumes(selected_pool_obj)
+                all_volume_paths = [vol['volume'].path() for vol in all_volumes_in_pool]
+
+                used_disks = vm_queries.get_all_vm_disk_usage(self.app.conn)
+                used_nvrams = vm_queries.get_all_vm_nvram_usage(self.app.conn)
+                used_paths = set(used_disks.keys()) | set(used_nvrams.keys())
+
+                available_disks = [path for path in all_volume_paths if path not in used_paths]
+
+                if not available_disks:
+                    self.app.show_error_message(f"No available disks found in pool '{pool_name}'.")
+                    return
+
+                def attach_disk_callback(disk_to_attach: str | None) -> None:
+                    if disk_to_attach:
+                        try:
+                            target_dev = add_disk(
+                                self.domain,
+                                disk_to_attach,
+                                device_type="disk",
+                            )
+                            self.app.show_success_message(f"Disk added as {target_dev}")
+                            self._update_disk_list()
+                        except Exception as e:
+                            self.app.show_error_message(f"Error attaching disk: {e}")
+
+                self.app.push_screen(
+                    SelectDiskModal(available_disks, f"Select a disk to attach from pool '{pool_name}'"),
+                    attach_disk_callback
+                )
+
+            self.app.push_screen(
+                SelectPoolModal([p['name'] for p in active_pools], "Select a storage pool"),
+                select_pool_callback
+            )
+        elif event.button.id == "detail_remove_disk":
+            highlighted_index = self.disk_list_view.index
+            if highlighted_index is None:
+                self.app.show_error_message("No disk selected.")
+                return
+
+            disks_info = self.vm_info.get("disks", [])
+            if highlighted_index >= len(disks_info):
+                self.app.show_error_message("Invalid selection.")
+                return
+
+            disk_to_remove = disks_info[highlighted_index]
+            if disk_to_remove['status'] != 'enabled':
+                self.app.show_error_message("Can only remove enabled disks.")
+                return
+
+            disk_path = disk_to_remove['path']
+
+            def on_confirm(confirmed: bool):
+                if confirmed:
                     try:
-                        remove_disk(self.domain, disk_to_remove)
-                        self.app.show_success_message(f"Disk {disk_to_remove} removed.")
+                        remove_disk(self.domain, disk_path)
+                        self.app.show_success_message(f"Disk {disk_path} removed.")
                         self._update_disk_list()
                     except Exception as e:
                         self.app.show_error_message(f"Error removing disk: {e}")
-            self.app.push_screen(RemoveDiskModal(enabled_disks), remove_disk_callback)
+
+            self.app.push_screen(ConfirmationDialog(f"Are you sure you want to remove disk {disk_path}?"), on_confirm)
+
         elif event.button.id == "detail_disable_disk":
-            enabled_disks = [d['path'] for d in self.vm_info.get("disks", []) if d['status'] == 'enabled']
-            if not enabled_disks:
-                self.app.show_error_message("No enabled disks to disable.")
+            highlighted_index = self.disk_list_view.index
+            if highlighted_index is None:
+                self.app.show_error_message("No disk selected.")
                 return
 
-            def disable_disk_callback(disk_to_disable):
-                if disk_to_disable:
+            disks_info = self.vm_info.get("disks", [])
+            if highlighted_index >= len(disks_info):
+                self.app.show_error_message("Invalid selection.")
+                return
+            
+            disk_to_disable = disks_info[highlighted_index]
+            if disk_to_disable['status'] != 'enabled':
+                self.app.show_error_message("Can only disable enabled disks.")
+                return
+
+            disk_path = disk_to_disable['path']
+
+            def on_confirm(confirmed: bool):
+                if confirmed:
                     try:
-                        disable_disk(self.domain, disk_to_disable)
-                        self.app.show_success_message(f"Disk {disk_to_disable} disabled.")
+                        disable_disk(self.domain, disk_path)
+                        self.app.show_success_message(f"Disk {disk_path} disabled.")
                         self._update_disk_list()
                     except (libvirt.libvirtError, ValueError, Exception) as e:
                         self.app.show_error_message(f"Error disabling disk: {e}")
+            
+            self.app.push_screen(ConfirmationDialog(f"Are you sure you want to disable disk:\n{disk_path}"), on_confirm)
 
-            self.app.push_screen(SelectDiskModal(enabled_disks, "Select disk to disable"), disable_disk_callback)
         elif event.button.id == "detail_enable_disk":
-            disabled_disks = [d['path'] for d in self.vm_info.get("disks", []) if d['status'] == 'disabled']
-            if not disabled_disks:
-                self.app.show_error_message("No disabled disks to enable.")
+            highlighted_index = self.disk_list_view.index
+            if highlighted_index is None:
+                self.app.show_error_message("No disk selected.")
                 return
 
-            def enable_disk_callback(disk_to_enable):
-                if disk_to_enable:
+            disks_info = self.vm_info.get("disks", [])
+            if highlighted_index >= len(disks_info):
+                self.app.show_error_message("Invalid selection.")
+                return
+            
+            disk_to_enable = disks_info[highlighted_index]
+            if disk_to_enable['status'] != 'disabled':
+                self.app.show_error_message("Can only enable disabled disks.")
+                return
+            
+            disk_path = disk_to_enable['path']
+
+            def on_confirm(confirmed: bool):
+                if confirmed:
                     try:
-                        enable_disk(self.domain, disk_to_enable)
-                        self.app.show_success_message(f"Disk {disk_to_enable} enabled.")
+                        enable_disk(self.domain, disk_path)
+                        self.app.show_success_message(f"Disk {disk_path} enabled.")
                         self._update_disk_list()
                     except (libvirt.libvirtError, ValueError, Exception) as e:
                         self.app.show_error_message(f"Error enabling disk: {e}")
+            
+            self.app.push_screen(ConfirmationDialog(f"Are you sure you want to enable disk {disk_path}?"), on_confirm)
 
-            self.app.push_screen(SelectDiskModal(disabled_disks, "Select disk to enable"), enable_disk_callback)
 
         elif event.button.id == "edit-cpu":
             def edit_cpu_callback(new_cpu_count):
@@ -2310,6 +2433,7 @@ class VMManagerTUI(App):
 
     def on_mount(self) -> None:
         """Called when the app is mounted."""
+        register_error_handler()
         self.title = "Rainbow V Manager"
         self.sparkline_data = {}
         error_footer = self.query_one("#error-footer")
@@ -2462,7 +2586,7 @@ class VMManagerTUI(App):
                 'networks': get_vm_networks_info(xml_content),
                 'detail_network': get_vm_network_ip(domain),
                 'network_dns_gateway': get_vm_network_dns_gateway_info(domain),
-                'disks': get_vm_disks_info(xml_content),
+                'disks': get_vm_disks_info(self.conn, xml_content),
                 'devices': get_vm_devices_info(xml_content),
                 'boot': get_boot_info(xml_content),
                 'video_model': get_vm_video_model(xml_content),

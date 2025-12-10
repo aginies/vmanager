@@ -10,8 +10,10 @@ import copy
 import libvirt
 import xml.etree.ElementTree as ET
 from libvirt_utils import _find_vol_by_path, _get_disabled_disks_elem
+from utils import log_function_call
 
 
+@log_function_call
 def clone_vm(original_vm, new_vm_name):
     """
     Clones a VM, including its storage using libvirt's storage pool API.
@@ -47,7 +49,7 @@ def clone_vm(original_vm, new_vm_name):
 
         original_vol, original_pool = _find_vol_by_path(conn, original_disk_path)
         if not original_vol:
-            raise Exception(f"Disk '{original_disk_path}' is not a managed libvirt storage volume. Cannot clone via API.")
+            raise Exception(f"Disk '[red]{original_disk_path}[/red]' is not a managed libvirt storage volume. Cannot clone via API.")
 
         original_vol_xml = original_vol.XMLDesc(0)
         vol_root = ET.fromstring(original_vol_xml)
@@ -88,6 +90,7 @@ def clone_vm(original_vm, new_vm_name):
 
     return new_vm
 
+@log_function_call
 def rename_vm(domain, new_name, delete_snapshots=False):
     """
     Renames a VM.
@@ -144,6 +147,7 @@ def rename_vm(domain, new_name, delete_snapshots=False):
         conn.defineXML(xml_desc)
         raise Exception(f"Failed to rename VM, but restored original state. Error: {e}")
 
+@log_function_call
 def add_disk(domain, disk_path, device_type='disk', create=False, size_gb=10, disk_format='qcow2'):
     """
     Adds a disk to a VM. Can optionally create a new disk image in a libvirt storage pool.
@@ -207,7 +211,7 @@ def add_disk(domain, disk_path, device_type='disk', create=False, size_gb=10, di
                     continue  # Some pools might not have paths, etc.
 
         if not pool:
-            raise Exception(f"Could not find an active storage pool managing the path '{os.path.dirname(disk_path)}'.")
+            raise Exception(f"Could not find an active storage pool managing the path '[red]{os.path.dirname(disk_path)}[/red]'.")
 
         vol_name = os.path.basename(disk_path)
 
@@ -251,29 +255,25 @@ def add_disk(domain, disk_path, device_type='disk', create=False, size_gb=10, di
             </disk>
             """
         else:  # device_type is 'disk'
-            vol, pool = _find_vol_by_path(conn, disk_path)
-            if vol and pool:  # It's a managed volume
-                # Extract format from volume XML
-                vol_xml_str = vol.XMLDesc(0)
-                vol_root = ET.fromstring(vol_xml_str)
-                format_elem = vol_root.find("target/format")
-                vol_format = format_elem.get('type') if format_elem is not None else disk_format
+            vol, _ = _find_vol_by_path(conn, disk_path)
+            vol_format = disk_format
+            if vol:
+                try:
+                    vol_xml_str = vol.XMLDesc(0)
+                    vol_root = ET.fromstring(vol_xml_str)
+                    format_elem = vol_root.find("target/format")
+                    if format_elem is not None:
+                        vol_format = format_elem.get('type')
+                except (libvirt.libvirtError, ET.ParseError):
+                    pass # use default disk_format
 
-                disk_xml = f"""
-                <disk type='volume' device='disk'>
-                    <driver name='qemu' type='{vol_format}'/>
-                    <source pool='{pool.name()}' volume='{vol.name()}'/>
-                    <target dev='{target_dev}' bus='{bus}'/>
-                </disk>
-                """
-            else:  # A non-managed file disk
-                disk_xml = f"""
-                <disk type='file' device='disk'>
-                    <driver name='qemu' type='{disk_format}'/>
-                    <source file='{disk_path}'/>
-                    <target dev='{target_dev}' bus='{bus}'/>
-                </disk>
-                """
+            disk_xml = f"""
+            <disk type='file' device='disk'>
+                <driver name='qemu' type='{vol_format}' discard='unmap'/>
+                <source file='{disk_path}'/>
+                <target dev='{target_dev}' bus='{bus}'/>
+            </disk>
+            """
 
     if not disk_xml:
         raise Exception("Could not generate disk XML for attaching.")
@@ -285,6 +285,7 @@ def add_disk(domain, disk_path, device_type='disk', create=False, size_gb=10, di
     domain.attachDeviceFlags(disk_xml, flags)
     return target_dev
 
+@log_function_call
 def remove_disk(domain, disk_dev_path):
     """
     Removes a disk from a VM based on its device path (e.g. /path/to/disk.img) or device name (vda)
@@ -301,9 +302,20 @@ def remove_disk(domain, disk_dev_path):
         target = disk.find("target")
 
         match = False
-        if source is not None and source.get("file") == disk_dev_path:
-            match = True
-        elif target is not None and target.get("dev") == disk_dev_path:
+        if source is not None:
+            if source.get("file") == disk_dev_path:
+                match = True
+            elif source.get("pool") and source.get("volume"):
+                # This is a volume. We need to resolve its path.
+                try:
+                    pool = domain.connect().storagePoolLookupByName(source.get("pool"))
+                    vol = pool.storageVolLookupByName(source.get("volume"))
+                    if vol.path() == disk_dev_path:
+                        match = True
+                except libvirt.libvirtError:
+                    pass # Volume not found, path doesn't match
+        
+        if not match and target is not None and target.get("dev") == disk_dev_path:
             match = True
 
         if match:
@@ -311,7 +323,7 @@ def remove_disk(domain, disk_dev_path):
             break
 
     if not disk_to_remove_xml:
-        raise Exception(f"Disk with device path or name '{disk_dev_path}' not found.")
+        raise Exception(f"Disk with device path or name '[red]{disk_dev_path}[/red]' not found.")
 
     flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
     if domain.isActive():
@@ -319,6 +331,7 @@ def remove_disk(domain, disk_dev_path):
 
     domain.detachDeviceFlags(disk_to_remove_xml, flags)
 
+@log_function_call
 def remove_virtiofs(domain: libvirt.virDomain, target_dir: str):
     """
     Removes a virtiofs filesystem from a VM.
@@ -356,6 +369,7 @@ def remove_virtiofs(domain: libvirt.virDomain, target_dir: str):
     conn = domain.connect()
     conn.defineXML(new_xml)
 
+@log_function_call
 def add_virtiofs(domain: libvirt.virDomain, source_path: str, target_path: str, readonly: bool):
     """
     Adds a virtiofs filesystem to a VM.
@@ -391,6 +405,7 @@ def add_virtiofs(domain: libvirt.virDomain, source_path: str, target_path: str, 
     conn.defineXML(new_xml)
 
 
+@log_function_call
 def change_vm_network(domain: libvirt.virDomain, mac_address: str, new_network: str):
     """Changes the network for a VM's network interface."""
     xml_desc = domain.XMLDesc(0)
@@ -425,6 +440,7 @@ def change_vm_network(domain: libvirt.virDomain, mac_address: str, new_network: 
     domain.updateDeviceFlags(interface_xml, flags)
 
 
+@log_function_call
 def disable_disk(domain, disk_path):
     """Disables a disk by moving it to a metadata section in the XML."""
     if domain.isActive():
@@ -462,6 +478,7 @@ def disable_disk(domain, disk_path):
     new_xml = ET.tostring(root, encoding='unicode')
     conn.defineXML(new_xml)
 
+@log_function_call
 def enable_disk(domain, disk_path):
     """Enables a disk by moving it from metadata back to devices."""
     if domain.isActive():
@@ -499,6 +516,7 @@ def enable_disk(domain, disk_path):
     new_xml = ET.tostring(root, encoding='unicode')
     conn.defineXML(new_xml)
 
+@log_function_call
 def set_vcpu(domain, vcpu_count: int):
     """
     Sets the number of virtual CPUs for a VM.
@@ -512,6 +530,7 @@ def set_vcpu(domain, vcpu_count: int):
 
     domain.setVcpusFlags(vcpu_count, flags)
 
+@log_function_call
 def set_memory(domain, memory_mb: int):
     """
     Sets the memory for a VM in megabytes.
@@ -527,6 +546,7 @@ def set_memory(domain, memory_mb: int):
 
     domain.setMemoryFlags(memory_kb, flags)
 
+@log_function_call
 def set_machine_type(domain, new_machine_type):
     """
     Sets the machine type for a VM.
@@ -553,6 +573,7 @@ def set_machine_type(domain, new_machine_type):
     conn.defineXML(new_xml_desc)
 
 
+@log_function_call
 def set_shared_memory(domain: libvirt.virDomain, enable: bool):
     """Enable or disable shared memory for a VM."""
     if domain.isActive():
@@ -597,6 +618,7 @@ def set_shared_memory(domain: libvirt.virDomain, enable: bool):
     conn = domain.connect()
     conn.defineXML(new_xml)
 
+@log_function_call
 def set_boot_info(domain: libvirt.virDomain, menu_enabled: bool, order: list[str]):
     """Sets the boot configuration for a VM."""
     if domain.isActive():
@@ -623,6 +645,7 @@ def set_boot_info(domain: libvirt.virDomain, menu_enabled: bool, order: list[str
 
     new_xml = ET.tostring(root, encoding='unicode')
 
+@log_function_call
 def set_vm_video_model(domain: libvirt.virDomain, model: str | None):
     """Sets the video model for a VM."""
     if domain.isActive():
@@ -667,6 +690,7 @@ def set_vm_video_model(domain: libvirt.virDomain, model: str | None):
     domain.connect().defineXML(new_xml)
 
 
+@log_function_call
 def set_cpu_model(domain: libvirt.virDomain, cpu_model: str):
     """Sets the CPU model for a VM."""
     if domain.isActive():
@@ -682,6 +706,7 @@ def set_cpu_model(domain: libvirt.virDomain, cpu_model: str):
     new_xml = ET.tostring(root, encoding='unicode')
     domain.connect().defineXML(new_xml)
 
+@log_function_call
 def set_uefi_file(domain: libvirt.virDomain, uefi_path: str, secure_boot: bool):
     """
     Sets the UEFI file for a VM and optionally enables/disables secure boot.
@@ -721,6 +746,7 @@ def set_uefi_file(domain: libvirt.virDomain, uefi_path: str, secure_boot: bool):
     new_xml = ET.tostring(root, encoding='unicode')
     domain.connect().defineXML(new_xml)
 
+@log_function_call
 def set_vm_sound_model(domain, model):
     """
     Sets the sound model for a VM.
@@ -754,3 +780,38 @@ def set_vm_sound_model(domain, model):
     new_xml = ET.tostring(root, encoding="unicode")
     domain.connect().defineXML(new_xml)
 
+
+@log_function_call
+def start_vm(domain):
+    """
+    Starts a VM after checking for missing disks.
+    """
+    xml_desc = domain.XMLDesc(0)
+    root = ET.fromstring(xml_desc)
+    conn = domain.connect()
+
+    for disk in root.findall('.//devices/disk'):
+        if disk.get('device') != 'disk':
+            continue
+
+        source_elem = disk.find('source')
+        if source_elem is None:
+            continue
+
+        if 'file' in source_elem.attrib:
+            disk_path = source_elem.get('file')
+            if not os.path.exists(disk_path):
+                raise Exception(f"Disk image file not found: [red]{disk_path}[/red]")
+        elif 'pool' in source_elem.attrib and 'volume' in source_elem.attrib:
+            pool_name = source_elem.get('pool')
+            vol_name = source_elem.get('volume')
+            try:
+                pool = conn.storagePoolLookupByName(pool_name)
+                if not pool.isActive():
+                    raise Exception(f"Storage pool '[red]{pool_name}[/red]' is not active.")
+                # This will raise an exception if the volume doesn't exist
+                pool.storageVolLookupByName(vol_name)
+            except libvirt.libvirtError as e:
+                raise Exception(f"Error checking disk volume '[red]{vol_name}[/red]' in pool '[red]{pool_name}[/red]': {e}")
+
+    domain.create()

@@ -3,11 +3,13 @@ Utility functions for libvirt XML parsing and common helpers.
 """
 import libvirt
 import xml.etree.ElementTree as ET
+from utils import log_function_call
 
 VMANAGER_NS = "http://github.com/aginies/vmanager"
 ET.register_namespace("vmanager", VMANAGER_NS)
 
 
+@log_function_call
 def _find_vol_by_path(conn, vol_path):
     """Finds a storage volume by its path and returns the volume and its pool."""
     # Slower but more compatible way to find a volume by path
