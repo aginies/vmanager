@@ -356,6 +356,64 @@ def get_vm_disks_info(xml_content: str) -> list[dict]:
 
     return disks
 
+def get_all_vm_disk_usage(conn: libvirt.virConnect) -> dict[str, str]:
+    """
+    Scans all VMs and returns a mapping of disk path to VM name.
+    """
+    disk_to_vm_map = {}
+    if not conn:
+        return disk_to_vm_map
+    
+    try:
+        domains = conn.listAllDomains(0)
+    except libvirt.libvirtError:
+        return disk_to_vm_map
+
+    for domain in domains:
+        try:
+            xml_desc = domain.XMLDesc(0)
+            disks = get_vm_disks_info(xml_desc) # Re-use existing function
+            vm_name = domain.name()
+            for disk in disks:
+                path = disk.get('path')
+                if path:
+                    disk_to_vm_map[path] = vm_name
+        except libvirt.libvirtError:
+            continue
+            
+    return disk_to_vm_map
+
+def get_all_network_usage(conn: libvirt.virConnect) -> dict[str, list[str]]:
+    """
+    Scans all VMs and returns a mapping of network name to a list of VM names using it.
+    """
+    network_to_vms = {}
+    if not conn:
+        return network_to_vms
+    
+    try:
+        domains = conn.listAllDomains(0)
+    except libvirt.libvirtError:
+        return network_to_vms
+
+    for domain in domains:
+        try:
+            xml_desc = domain.XMLDesc(0)
+            vm_name = domain.name()
+            # get_vm_networks_info is already in vm_queries.py
+            networks = get_vm_networks_info(xml_desc)
+            for net in networks:
+                net_name = net.get('network')
+                if net_name:
+                    if net_name not in network_to_vms:
+                        network_to_vms[net_name] = []
+                    if vm_name not in network_to_vms[net_name]:
+                        network_to_vms[net_name].append(vm_name)
+        except libvirt.libvirtError:
+            continue
+            
+    return network_to_vms
+
 
 def get_supported_machine_types(conn, domain):
     """

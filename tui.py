@@ -7,7 +7,7 @@ import traceback
 from typing import TypeVar
 
 from textual.app import App, ComposeResult
-from textual.widgets import Header, Footer, Select, Button, Input, Label, Static, DataTable, Link, TextArea, ListView, ListItem, Checkbox, RadioButton, RadioSet, TabbedContent, TabPane, Pretty
+from textual.widgets import Header, Footer, Select, Button, Input, Label, Static, DataTable, Link, TextArea, ListView, ListItem, Checkbox, RadioButton, RadioSet, TabbedContent, TabPane, Pretty, Tree
 from textual.containers import ScrollableContainer, Horizontal, Vertical
 from textual.reactive import reactive
 from textual.screen import ModalScreen
@@ -34,6 +34,8 @@ from network_manager import (
 from firmware_manager import (
     get_uefi_files, get_host_sev_capabilities
 )
+import storage_manager
+import vm_queries
 from config import load_config, save_config
 
 # Configure logging
@@ -567,15 +569,18 @@ class NetworkListItem(ListItem):
             self.change_type = change_type
             self.value = value
 
-    def __init__(self, net_info: dict) -> None:
+    def __init__(self, net_info: dict, vms_using_net: list[str]) -> None:
         super().__init__()
         self.net_info = net_info
         self.network_name = net_info['name']
+        self.vms_using_net = vms_using_net
 
     def compose(self) -> ComposeResult:
         with Horizontal():
             yield Label(self.net_info['name'], classes="net-name")
             yield Label(self.net_info['mode'], classes="net-mode")
+            vms_str = ", ".join(self.vms_using_net) if self.vms_using_net else "Not in use"
+            yield Label(vms_str, classes="net-usage")
             yield Checkbox("Active", self.net_info['active'], id="net-active-check")
             yield Checkbox("Autostart", self.net_info['autostart'], id="net-autostart-check")
 
@@ -693,6 +698,39 @@ class CreateNatNetworkModal(BaseModal[None]):
             except Exception as e:
                 self.app.show_error_message(f"Error creating network: {e}")
 
+class CreateVolumeModal(BaseModal[dict | None]):
+    """Modal screen for creating a new storage volume."""
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="create-volume-dialog"):
+            yield Label("Create New Storage Volume")
+            yield Input(placeholder="Volume Name (e.g., new_disk.qcow2)", id="vol-name-input")
+            yield Input(placeholder="Size in GB (e.g., 10)", id="vol-size-input", type="integer")
+            yield Select([("qcow2", "qcow2"), ("raw", "raw")], id="vol-format-select", value="qcow2")
+            with Horizontal():
+                yield Button("Create", variant="primary", id="create-btn")
+                yield Button("Cancel", variant="default", id="cancel-btn")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "create-btn":
+            name = self.query_one("#vol-name-input", Input).value
+            size = self.query_one("#vol-size-input", Input).value
+            vol_format = self.query_one("#vol-format-select", Select).value
+
+            if not name or not size:
+                self.app.show_error_message("Name and size are required.")
+                return
+            
+            try:
+                size_gb = int(size)
+            except ValueError:
+                self.app.show_error_message("Size must be an integer.")
+                return
+
+            self.dismiss({'name': name, 'size_gb': size_gb, 'format': vol_format})
+        elif event.button.id == "cancel-btn":
+            self.dismiss(None)
+
 class ServerPrefModal(BaseModal[None]):
     """Modal screen for server preferences."""
 
@@ -709,18 +747,213 @@ class ServerPrefModal(BaseModal[None]):
                         yield Button("Delete", id="delete-net-btn", variant="error", classes="Buttonpage", disabled=True)
                         yield Button("Close", id="close-btn", classes="Buttonpage")
                 with TabPane("Storage", id="tab-storage"):
-                    yield Label("Storage settings... WIP")
+                    yield Tree("Storage Pools", id="storage-tree")
+                    with Vertical(id="storage-actions"):
+                        yield Label("Pool Actions", classes="storage-action-label")
+                        with Horizontal(classes="storage-buttons"):
+                            yield Button(id="toggle-active-pool-btn", disabled=True)
+                            yield Button(id="toggle-autostart-pool-btn", disabled=True)
+                            yield Button("Delete Pool", id="del-pool-btn", disabled=True)
+                        yield Label("Volume Actions", classes="storage-action-label")
+                        with Horizontal(classes="storage-buttons"):
+                            yield Button("New Volume", id="add-vol-btn", disabled=True)
+                            yield Button("Delete Volume", id="del-vol-btn", disabled=True)
 
     def on_mount(self) -> None:
         self._load_networks()
+        self.disk_to_vm_map = vm_queries.get_all_vm_disk_usage(self.app.conn)
+        self._load_storage_pools()
+
+    def _load_storage_pools(self) -> None:
+        """Load storage pools into the tree view."""
+        tree: Tree[dict] = self.query_one("#storage-tree")
+        tree.clear()
+        tree.root.data = {"type": "root"}
+        pools = storage_manager.list_storage_pools(self.app.conn)
+        for pool_data in pools:
+            pool_name = pool_data['name']
+            status = pool_data['status']
+            autostart = "autostart" if pool_data['autostart'] else "no autostart"
+            label = f"{pool_name} [{status}, {autostart}]"
+            pool_node = tree.root.add(label, data=pool_data)
+            pool_node.data["type"] = "pool"
+            # Add a dummy node to make the pool node expandable
+            pool_node.add_leaf("Loading volumes...")
 
     def _load_networks(self):
         list_view = self.query_one("#existing-networks-list", ListView)
         list_view.clear()
+        
+        # Get the usage map
+        network_usage = vm_queries.get_all_network_usage(self.app.conn)
+        
         networks = list_networks(self.app.conn)
         for net in networks:
-            list_view.append(NetworkListItem(net))
+            net_name = net['name']
+            vms_using_net = network_usage.get(net_name, [])
+            list_view.append(NetworkListItem(net, vms_using_net))
         list_view.focus()
+
+    @on(Tree.NodeExpanded)
+    async def on_tree_node_expanded(self, event: Tree.NodeExpanded) -> None:
+        """Load child nodes when a node is expanded."""
+        node = event.node
+        node_data = node.data
+        if not node_data or node_data.get("type") != "pool":
+            return
+
+        # If it's the first time expanding, the only child is the dummy "Loading..."
+        if len(node.children) == 1 and node.children[0].data is None:
+            node.remove_children()
+            pool = node_data.get('pool')
+            if pool and pool.isActive():
+                volumes = storage_manager.list_storage_volumes(pool)
+                for vol_data in volumes:
+                    vol_name = vol_data['name']
+                    vol_path = vol_data['volume'].path()
+                    capacity_gb = round(vol_data['capacity'] / (1024**3), 2)
+                    
+                    vm_name = self.disk_to_vm_map.get(vol_path)
+                    usage_info = f" (in use by {vm_name})" if vm_name else ""
+                    
+                    label = f"{vol_name} ({capacity_gb} GB){usage_info}"
+                    child_node = node.add(label, data=vol_data)
+                    child_node.data["type"] = "volume"
+                    child_node.allow_expand = False
+            else:
+                # Handle case where pool is not active
+                node.add_leaf("Pool is not active")
+
+
+    @on(Tree.NodeSelected)
+    def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
+        """Handle node selection to enable/disable buttons."""
+        node = event.node
+        node_data = node.data if node else None
+
+        is_pool = node_data and node_data.get("type") == "pool"
+        is_volume = node_data and node_data.get("type") == "volume"
+
+        toggle_active_btn = self.query_one("#toggle-active-pool-btn")
+        toggle_autostart_btn = self.query_one("#toggle-autostart-pool-btn")
+
+        toggle_active_btn.disabled = not is_pool
+        toggle_autostart_btn.disabled = not is_pool
+        self.query_one("#del-pool-btn").disabled = not is_pool
+        self.query_one("#add-vol-btn").disabled = not is_pool
+        self.query_one("#del-vol-btn").disabled = not is_volume
+
+        if is_pool:
+            is_active = node_data.get('status') == 'active'
+            has_autostart = node_data.get('autostart', False)
+            toggle_active_btn.label = "Deactivate" if is_active else "Activate"
+            toggle_autostart_btn.label = "Autostart Off" if has_autostart else "Autostart On"
+
+    @on(Button.Pressed, "#toggle-active-pool-btn")
+    def on_toggle_active_pool_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle pool activation/deactivation."""
+        tree: Tree[dict] = self.query_one("#storage-tree")
+        if not tree.cursor_node or not tree.cursor_node.data:
+            return
+
+        node_data = tree.cursor_node.data
+        if node_data.get("type") != "pool":
+            return
+
+        pool = node_data.get('pool')
+        is_active = node_data.get('status') == 'active'
+        try:
+            storage_manager.set_pool_active(pool, not is_active)
+            self.app.show_success_message(f"Pool '{pool.name()}' is now {'inactive' if is_active else 'active'}.")
+            self._load_storage_pools() # Refresh the tree
+        except Exception as e:
+            self.app.show_error_message(str(e))
+
+    @on(Button.Pressed, "#toggle-autostart-pool-btn")
+    def on_toggle_autostart_pool_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle pool autostart toggling."""
+        tree: Tree[dict] = self.query_one("#storage-tree")
+        if not tree.cursor_node or not tree.cursor_node.data:
+            return
+
+        node_data = tree.cursor_node.data
+        if node_data.get("type") != "pool":
+            return
+        
+        pool = node_data.get('pool')
+        has_autostart = node_data.get('autostart', False)
+        try:
+            storage_manager.set_pool_autostart(pool, not has_autostart)
+            self.app.show_success_message(f"Autostart for pool '{pool.name()}' is now {'off' if has_autostart else 'on'}.")
+            self._load_storage_pools() # Refresh the tree
+        except Exception as e:
+            self.app.show_error_message(str(e))
+
+    @on(Button.Pressed, "#add-vol-btn")
+    def on_add_volume_button_pressed(self, event: Button.Pressed) -> None:
+        tree: Tree[dict] = self.query_one("#storage-tree")
+        if not tree.cursor_node or not tree.cursor_node.data:
+            return
+        
+        node_data = tree.cursor_node.data
+        if node_data.get("type") != "pool":
+            return
+            
+        pool = node_data.get('pool')
+        
+        def on_create(result: dict | None) -> None:
+            if result:
+                try:
+                    storage_manager.create_volume(
+                        pool,
+                        result['name'],
+                        result['size_gb'],
+                        result['format']
+                    )
+                    self.app.show_success_message(f"Volume '{result['name']}' created successfully.")
+                    # Refresh the node
+                    if tree.cursor_node:
+                        tree.cursor_node.remove_children()
+                        tree.cursor_node.add_leaf("Loading volumes...")
+                        self.app.call_later(tree.cursor_node.expand)
+
+                except Exception as e:
+                    self.app.show_error_message(str(e))
+
+        self.app.push_screen(CreateVolumeModal(), on_create)
+
+    @on(Button.Pressed, "#del-vol-btn")
+    def on_delete_volume_button_pressed(self, event: Button.Pressed) -> None:
+        tree: Tree[dict] = self.query_one("#storage-tree")
+        if not tree.cursor_node or not tree.cursor_node.data:
+            return
+
+        node_data = tree.cursor_node.data
+        if node_data.get("type") != "volume":
+            return
+
+        vol_name = node_data.get('name')
+        vol = node_data.get('volume')
+
+        def on_confirm(confirmed: bool) -> None:
+            if confirmed:
+                try:
+                    storage_manager.delete_volume(vol)
+                    self.app.show_success_message(f"Volume '{vol_name}' deleted successfully.")
+                    # Refresh the parent node
+                    parent_node = tree.cursor_node.parent
+                    tree.cursor_node.remove()
+                    if parent_node and not parent_node.children:
+                        parent_node.add_leaf("No volumes")
+
+                except Exception as e:
+                    self.app.show_error_message(str(e))
+
+        self.app.push_screen(
+            ConfirmationDialog(f"Are you sure you want to delete volume '{vol_name}'?"),
+            on_confirm
+        )
+
 
     @on(ListView.Selected, "#existing-networks-list")
     def on_list_view_selected(self, event: ListView.Selected):
