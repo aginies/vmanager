@@ -266,6 +266,7 @@ Button {
 
 .delete-button,
 .edit-button,
+.toggle-detail-button,
 .add-button {
     height: 4vh;
     width: 25%; /*5vh; */
