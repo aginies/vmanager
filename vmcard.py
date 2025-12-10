@@ -4,8 +4,9 @@ import libvirt
 import logging
 from datetime import datetime
 import re
+import os
 from vm_queries import get_status, get_vm_disks_info
-from vm_actions import clone_vm, rename_vm
+from vm_actions import clone_vm, rename_vm, start_vm
 
 from textual.widgets import Static, Button, Input, ListView, ListItem, Label, TabbedContent, TabPane, Sparkline, Select, Checkbox
 from textual.containers import Horizontal, Vertical
@@ -314,7 +315,8 @@ class VMCard(Static):
             logging.info(f"Attempting to start VM: {self.name}")
             if not self.vm.isActive():
                 try:
-                    self.vm.create()
+                    start_vm(self.vm)
+                    #self.vm.create()
                     self.status = "Running"
                     status_widget = self.query_one("#status")
                     status_widget.update(f"Status: {self.status}")
@@ -323,7 +325,7 @@ class VMCard(Static):
                     self.app.refresh_vm_list()
                     logging.info(f"Successfully started VM: {self.name}")
                     self.app.show_success_message(f"VM '{self.name}' started successfully.")
-                except libvirt.libvirtError as e:
+                except Exception as e:
                     self.app.show_error_message(f"Error on VM {self.name} during 'start': {e}")
 
         elif event.button.id == "stop":
@@ -479,7 +481,7 @@ class VMCard(Static):
                     disk_paths = []
                     if delete_storage:
                         xml_desc = self.vm.XMLDesc(0)
-                        disks = get_vm_disks_info(xml_desc)
+                        disks = get_vm_disks_info(self.vm.connect(), xml_desc)
                         disk_paths = [disk['path'] for disk in disks if disk.get('path')]
 
                     if self.vm.isActive():
