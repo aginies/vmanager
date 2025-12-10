@@ -55,6 +55,7 @@
 #create-vm-dialog Label,
 #add-pool-dialog Label,
 #server-selection-dialog Label,
+#select-pool-dialog Label,
 #select-disk-dialog Label,
 #create-volume-dialog Label,
 #add-edit-virtiofs-dialog Label,
@@ -124,6 +125,7 @@
 #server-pref-title Button,
 #add-pool-dialog Button,
 #edit-server-dialog Button,
+#select-pool-dialog Button,
 #add-server-dialog Button,
 #network-detail-dialog Button,
 #server-management-dialog Button,
@@ -162,7 +164,14 @@ Header, Footer {
 }
 
 #cpu-model-select Select,
+#remove-disk-dialog Select,
 #uefi-file-select Select,
+#select-pool-dialog Select {
+    width: 50;
+    height: 5;
+    border: none;
+    margin: 0 0;
+}
 Select {
     width: 50;
     height: 5;
@@ -176,7 +185,7 @@ Select {
     border-left: round;
 }
 .detail-disks {
-    width: 3vh;
+    width: 20%;
     background: $primary;
     height: 3vh;
 }
@@ -252,7 +261,13 @@ VMDetailModal {
 .info-details ListView > ListItem {
     height: 1;
 }
+.select-pool-dialog ListView > ListItem {
+    height: 1;
+}
 .select-disk-dialog ListView > ListItem {
+    height: 1;
+}
+.select-machine-type-dialog ListView > ListItem {
     height: 1;
 }
 #status-running {
@@ -329,7 +344,7 @@ Button {
 }
 
 #detail_add_disk, #detail_remove_disk, #detail_disable_disk, #detail_enable_disk {
-    width: 1fr;
+    width: 12%;
 }
 .networks-table {
     height: 18;
@@ -374,8 +389,10 @@ Button {
 #add-disk-dialog,
 #remove-disk-dialog,
 #select-machine-type-dialog,
+#select-pool-dialog,
 #select-disk-dialog {
-    width: auto;
+    height: auto;
+    width: 50;
     max-width: 90; /* Increased from 60 */
     border: round $primary;
     background: $surface;
