@@ -146,11 +146,13 @@ def rename_vm(domain, new_name, delete_snapshots=False):
 
 def add_disk(domain, disk_path, device_type='disk', create=False, size_gb=10, disk_format='qcow2'):
     """
-    Adds a disk to a VM. Can optionally create a new disk image.
+    Adds a disk to a VM. Can optionally create a new disk image in a libvirt storage pool.
     device_type can be 'disk' or 'cdrom'
     """
     if not domain:
         raise ValueError("Invalid domain object.")
+
+    conn = domain.connect()
 
     # Determine target device
     xml_desc = domain.XMLDesc(0)
@@ -183,30 +185,98 @@ def add_disk(domain, disk_path, device_type='disk', create=False, size_gb=10, di
     if not target_dev:
         raise Exception("No available device slots for new disk.")
 
-    if create:
-        try:
-            os.makedirs(os.path.dirname(disk_path), exist_ok=True)
-            subprocess.run(['qemu-img', 'create', '-f', disk_format, disk_path, f'{size_gb}G'], check=True)
-        except (subprocess.CalledProcessError, FileNotFoundError, OSError) as e:
-            raise Exception(f"Failed to create disk image: {e}")
+    disk_xml = ""
 
-    if device_type == 'disk':
+    if create:
+        if device_type != 'disk':
+            raise Exception("Cannot create non-disk device types.")
+
+        # Find storage pool from path
+        pool = None
+        pools = conn.listAllStoragePools(0)
+        for p in pools:
+            if p.isActive():
+                try:
+                    p_xml = p.XMLDesc(0)
+                    p_root = ET.fromstring(p_xml)
+                    target_path = p_root.findtext("target/path")
+                    if target_path and os.path.dirname(disk_path) == target_path:
+                        pool = p
+                        break
+                except libvirt.libvirtError:
+                    continue  # Some pools might not have paths, etc.
+
+        if not pool:
+            raise Exception(f"Could not find an active storage pool managing the path '{os.path.dirname(disk_path)}'.")
+
+        vol_name = os.path.basename(disk_path)
+
+        # Check if volume already exists
+        try:
+            pool.storageVolLookupByName(vol_name)
+            raise Exception(f"A storage volume named '{vol_name}' already exists in pool '{pool.name()}'.")
+        except libvirt.libvirtError as e:
+            if e.get_error_code() != libvirt.VIR_ERR_NO_STORAGE_VOL:
+                raise
+
+        vol_xml_def = f"""
+        <volume>
+            <name>{vol_name}</name>
+            <capacity unit="G">{size_gb}</capacity>
+            <target>
+                <format type='{disk_format}'/>
+            </target>
+        </volume>
+        """
+        try:
+            new_vol = pool.createXML(vol_xml_def, 0)
+        except libvirt.libvirtError as e:
+            raise Exception(f"Failed to create volume in libvirt pool: {e}")
+
         disk_xml = f"""
-        <disk type='file' device='disk'>
+        <disk type='volume' device='disk'>
             <driver name='qemu' type='{disk_format}'/>
-            <source file='{disk_path}'/>
+            <source pool='{pool.name()}' volume='{new_vol.name()}'/>
             <target dev='{target_dev}' bus='{bus}'/>
         </disk>
         """
-    else: # cdrom
-        disk_xml = f"""
-        <disk type='file' device='cdrom'>
-            <driver name='qemu' type='raw'/>
-            <source file='{disk_path}'/>
-            <target dev='{target_dev}' bus='{bus}'/>
-            <readonly/>
-        </disk>
-        """
+    else:  # not creating, just attaching
+        if device_type == 'cdrom':
+            disk_xml = f"""
+            <disk type='file' device='cdrom'>
+                <driver name='qemu' type='raw'/>
+                <source file='{disk_path}'/>
+                <target dev='{target_dev}' bus='{bus}'/>
+                <readonly/>
+            </disk>
+            """
+        else:  # device_type is 'disk'
+            vol, pool = _find_vol_by_path(conn, disk_path)
+            if vol and pool:  # It's a managed volume
+                # Extract format from volume XML
+                vol_xml_str = vol.XMLDesc(0)
+                vol_root = ET.fromstring(vol_xml_str)
+                format_elem = vol_root.find("target/format")
+                vol_format = format_elem.get('type') if format_elem is not None else disk_format
+
+                disk_xml = f"""
+                <disk type='volume' device='disk'>
+                    <driver name='qemu' type='{vol_format}'/>
+                    <source pool='{pool.name()}' volume='{vol.name()}'/>
+                    <target dev='{target_dev}' bus='{bus}'/>
+                </disk>
+                """
+            else:  # A non-managed file disk
+                disk_xml = f"""
+                <disk type='file' device='disk'>
+                    <driver name='qemu' type='{disk_format}'/>
+                    <source file='{disk_path}'/>
+                    <target dev='{target_dev}' bus='{bus}'/>
+                </disk>
+                """
+
+    if not disk_xml:
+        raise Exception("Could not generate disk XML for attaching.")
 
     flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
     if domain.isActive():
