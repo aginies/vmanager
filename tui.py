@@ -668,6 +668,115 @@ class CreateNatNetworkModal(BaseModal[None]):
             except Exception as e:
                 self.app.show_error_message(f"Error creating network: {e}")
 
+class AddPoolModal(BaseModal[bool | None]):
+    """Modal screen for adding a new storage pool."""
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="add-pool-dialog", classes="add-pool-dialog"):
+            yield Label("Add New Storage Pool")
+            yield Input(placeholder="Pool Name (e.g., my_pool)", id="pool-name-input")
+            yield Select(
+                [
+                    ("dir: Filesystem Directory", "dir"),
+                    ("netfs: Network Exported Directory", "netfs"),
+                ],
+                id="pool-type-select",
+                prompt="Pool Type",
+                value="dir"
+            )
+
+            # Fields for `dir` type
+            with Vertical(id="dir-fields"):
+                yield Label("Target Path")
+                yield Input(value="/var/lib/libvirt/images/", id="dir-target-path-input", placeholder="/var/lib/libvirt/images/<pool_name>")
+
+            # Fields for `netfs` type
+            with Vertical(id="netfs-fields"):
+                yield Label("Target Path (on this host)")
+                yield Input(placeholder="/mnt/nfs", id="netfs-target-path-input")
+                yield Label("Format")
+                yield Select(
+                    [("auto", "auto"), ("nfs", "nfs"), ("glusterfs", "glusterfs"), ("cifs", "cifs")],
+                    id="netfs-format-select",
+                    value="auto"
+                )
+                yield Label("Source Hostname")
+                yield Input(placeholder="nfs.example.com", id="netfs-host-input")
+                yield Label("Source Path (on remote host)")
+                yield Input(placeholder="host0", id="netfs-source-path-input")
+
+            with Horizontal(classes="modal-buttons"):
+                yield Button("Add", variant="primary", id="add-btn")
+                yield Button("Cancel", variant="default", id="cancel-btn")
+
+    def on_mount(self) -> None:
+        self.query_one("#netfs-fields").display = False
+        self.query_one("#dir-fields").display = True
+
+    @on(Select.Changed, "#pool-type-select")
+    def on_pool_type_select_changed(self, event: Select.Changed) -> None:
+        is_dir = event.value == "dir"
+        self.query_one("#dir-fields").display = is_dir
+        self.query_one("#netfs-fields").display = not is_dir
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "add-btn":
+            pool_name = self.query_one("#pool-name-input", Input).value
+            pool_type = self.query_one("#pool-type-select", Select).value
+
+            if not pool_name:
+                self.app.show_error_message("Pool name is required.")
+                return
+
+            pool_details = {"name": pool_name, "type": pool_type}
+
+            if pool_type == "dir":
+                target_path = self.query_one("#dir-target-path-input", Input).value
+                if not target_path:
+                    self.app.show_error_message("Target Path is required for `dir` type.")
+                    return
+                if target_path == "/var/lib/libvirt/images/":
+                    target_path = os.path.join(target_path, pool_name)
+                pool_details["target"] = target_path
+            elif pool_type == "netfs":
+                target_path = self.query_one("#netfs-target-path-input", Input).value
+                netfs_format = self.query_one("#netfs-format-select", Select).value
+                host = self.query_one("#netfs-host-input", Input).value
+                source_path = self.query_one("#netfs-source-path-input", Input).value
+                if not all([target_path, host, source_path]):
+                    self.app.show_error_message("For `netfs`, all fields are required.")
+                    return
+                pool_details["target"] = target_path
+                pool_details["format"] = netfs_format
+                pool_details["host"] = host
+                pool_details["source"] = source_path
+
+            try:
+                if pool_details['type'] == 'dir':
+                    storage_manager.create_storage_pool(
+                        self.app.conn,
+                        pool_details['name'],
+                        pool_details['type'],
+                        pool_details['target']
+                    )
+                elif pool_details['type'] == 'netfs':
+                    storage_manager.create_storage_pool(
+                        self.app.conn,
+                        pool_details['name'],
+                        pool_details['type'],
+                        pool_details['target'],
+                        source_host=pool_details['host'],
+                        source_path=pool_details['source'],
+                        source_format=pool_details['format']
+                    )
+                self.app.show_success_message(f"Storage pool '{pool_details['name']}' created and started.")
+                self.dismiss(True)
+            except Exception as e:
+                self.app.show_error_message(f"Error creating storage pool: {e}")
+
+        elif event.button.id == "cancel-btn":
+            self.dismiss(None)
+
 class CreateVolumeModal(BaseModal[dict | None]):
     """Modal screen for creating a new storage volume."""
 
@@ -727,9 +836,9 @@ class ServerPrefModal(BaseModal[None]):
                         with Horizontal():
                             yield Button(id="toggle-active-pool-btn", variant="primary", classes="toggle-detail-button")
                             yield Button(id="toggle-autostart-pool-btn", variant="primary", classes="toggle-detail-button")
-                            yield Button("New Volume", id="add-vol-btn", variant="success", classes="toggle-detail-button")
                             yield Button("Add Pool", id="add-pool-btn", variant="success", classes="toggle-detail-button")
                             yield Button("Delete Pool", id="del-pool-btn", variant="error", classes="toggle-detail-button")
+                            yield Button("New Volume", id="add-vol-btn", variant="success", classes="toggle-detail-button")
                             yield Button("Delete Volume", id="del-vol-btn", variant="error", classes="toggle-detail-button")
 
     def on_mount(self) -> None:
@@ -842,10 +951,8 @@ class ServerPrefModal(BaseModal[None]):
         del_pool_btn.display = is_pool
         add_pool_btn.display = is_pool
         
-        self.query_one("#add-vol-btn").display = is_volume
-        self.query_one("#add-vol-btn").display = is_volume
-        self.query_one("#add-vol-btn").display = is_volume
         self.query_one("#del-vol-btn").display = is_volume
+        self.query_one("#add-vol-btn").display = is_volume or is_pool
 
         if is_pool:
             is_active = node_data.get('status') == 'active'
@@ -928,12 +1035,11 @@ class ServerPrefModal(BaseModal[None]):
 
     @on(Button.Pressed, "#add-pool-btn")
     def on_add_pool_button_pressed(self, event: Button.Pressed) -> None:
-        try:
-            storage_manager.add_storage_pool(pool)
-            self.app.show_success_message(f"Storage pool '{pool_name}' added successfully.")
-            self._load_storage_pools()
-        except Exception as e:
-            self.app.show_error_message(str(e))
+        def on_create(success: bool | None) -> None:
+            if success:
+                self._load_storage_pools()
+
+        self.app.push_screen(AddPoolModal(), on_create)
 
     @on(Button.Pressed, "#del-pool-btn")
     def on_delete_pool_button_pressed(self, event: Button.Pressed) -> None:
