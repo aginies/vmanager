@@ -7,7 +7,7 @@ from textual.widgets import (
         Label, Button, DirectoryTree
         )
 from textual.app import ComposeResult
-from modals.base_modal import BaseModal
+from modals.base_modals import BaseModal
 
 class DirectorySelectionModal(BaseModal[str | None]):
     """A modal screen for selecting a directory."""
