@@ -5,14 +5,18 @@ import asyncio
 import traceback
 from collections import namedtuple
 
-from libvirt_error_handler import register_error_handler
 from textual.app import App, ComposeResult
-from textual.widgets import DirectoryTree, Header, Footer, Select, Button, Input, Label, Static, DataTable, Link, TextArea, ListView, ListItem, Checkbox, RadioButton, RadioSet, TabbedContent, TabPane, Tree
+from textual.widgets import (
+        DirectoryTree, Header, Footer, Select, Button, Input, Label, Static,
+        DataTable, Link, TextArea, ListView, ListItem, Checkbox, RadioButton,
+        RadioSet, TabbedContent, TabPane, Tree
+        )
 from textual.containers import ScrollableContainer, Horizontal, Vertical
 from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual import on
 import libvirt
+from libvirt_error_handler import register_error_handler
 from vmcard import VMCard, VMNameClicked, ConfirmationDialog, ChangeNetworkDialog
 from vm_queries import (
     get_status, get_vm_description, get_vm_machine_info, get_vm_firmware_info,
@@ -25,7 +29,7 @@ from vm_queries import (
 from vm_actions import (
     add_disk, remove_disk, set_vcpu, set_memory, set_machine_type, enable_disk,
     disable_disk, change_vm_network, set_shared_memory, remove_virtiofs,
-    add_virtiofs, set_boot_info, set_vm_video_model, set_cpu_model, set_uefi_file,
+    add_virtiofs, set_vm_video_model, set_cpu_model, set_uefi_file,
     set_vm_graphics
 )
 from network_manager import (
@@ -39,7 +43,9 @@ import storage_manager
 from config import load_config, save_config
 
 from modals.base_modal import BaseModal
-from modals.connection_modals import ConnectionModal, ServerSelectionModal, AddServerModal, EditServerModal
+from modals.connection_modals import (
+        ServerSelectionModal, AddServerModal, EditServerModal
+        )
 from modals.network_modals import CreateNetworkModal, NetworkXMLModal
 from modals.log_modal import LogModal
 from modals.server_modals import ServerManagementModal
