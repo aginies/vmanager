@@ -1,3 +1,6 @@
+"""
+Connection to hypervisor
+"""
 from typing import Tuple
 
 from textual.app import ComposeResult
