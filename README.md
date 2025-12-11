@@ -16,13 +16,14 @@ This project is part of a SUSE **hackweek** project, its not mature, under heavy
 
 ## Media
 
-![Screenshot](https://paste.opensuse.org/pastes/3e82e8b12deb/raw)
-![Screenshot](https://paste.opensuse.org/pastes/2b6dd3fb59dd/raw)
-![Screenshot](https://paste.opensuse.org/pastes/a894f2825956/raw)
-![Screenshot](https://paste.opensuse.org/pastes/09eefc77fd9d/raw)
-![Screenshot](https://paste.opensuse.org/pastes/370d17b6f927/raw)
-![Screenshot](https://paste.opensuse.org/pastes/87e5465e718b/raw)
-![Screenshot](https://paste.opensuse.org/pastes/cf8a73ab2a99/raw)
+![Screenshot](https://paste.opensuse.org/pastes/348109dfcd80/raw)
+![Screenshot](https://paste.opensuse.org/pastes/54611f2dc75a/raw)
+![Screenshot](https://paste.opensuse.org/pastes/dfb48c4390b5/raw)
+![Screenshot](https://paste.opensuse.org/pastes/37d250075470/raw)
+![Screenshot](https://paste.opensuse.org/pastes/c31c9cf0ee2c/raw)
+![Screenshot](https://paste.opensuse.org/pastes/b596408544c0/raw)
+![Screenshot](https://paste.opensuse.org/pastes/a37c655832a8/raw)
+![Screenshot](https://paste.opensuse.org/pastes/54a634950a79/raw)
 [Demo Video](https://www.youtube.com/watch?v=r49KpUghUI4)
 
 ## Features
@@ -37,8 +38,6 @@ General capabilities:
 
 - Fix CSS issue (there is a lot as this is not trivial to deal with CSS...)
 - Add all missing features on Adding/Removing stuff to VM
-- Re-organise code into sub files
-- Support adding devices to VM (WIP)
 - Being able to create VM based on scenario usage: API is ready, just need to call it (https://github.com/aginies/virt-scenario)
 
 ## Requirements
@@ -110,7 +109,7 @@ When you run the application, you'll see:
 - **Connect**: Launch virt-viewer to connect to the VM (launched in a non-blocking external process).
 - **Clone**: Clone the current VM selected
 - **Rename**: Rename the current VM
-- **Show Info**: Get some info about the VM
+- **Configure**: Configure the VM
 
 ### Connection Management
 
