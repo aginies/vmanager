@@ -1,3 +1,6 @@
+"""
+Server management 
+"""
 import logging
 
 from textual.app import ComposeResult
