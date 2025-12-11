@@ -5,6 +5,7 @@ import ipaddress
 import asyncio
 import traceback
 from typing import TypeVar
+from collections import namedtuple
 
 from libvirt_error_handler import register_error_handler
 from textual.app import App, ComposeResult
@@ -20,12 +21,13 @@ from vm_queries import (
     get_vm_networks_info, get_vm_network_ip, get_vm_network_dns_gateway_info,
     get_vm_disks_info, get_vm_devices_info, get_vm_shared_memory_info,
     get_supported_machine_types, get_boot_info, get_vm_video_model,
-    get_cpu_models, get_vm_cpu_model
+    get_cpu_models, get_vm_cpu_model, get_vm_sound_model, get_vm_graphics_info
 )
 from vm_actions import (
     add_disk, remove_disk, set_vcpu, set_memory, set_machine_type, enable_disk,
     disable_disk, change_vm_network, set_shared_memory, remove_virtiofs,
-    add_virtiofs, set_boot_info, set_vm_video_model, set_cpu_model, set_uefi_file
+    add_virtiofs, set_boot_info, set_vm_video_model, set_cpu_model, set_uefi_file,
+    set_vm_graphics
 )
 from network_manager import (
     list_networks, create_network, delete_network, get_vms_using_network,
@@ -1285,12 +1287,17 @@ class ServerPrefModal(BaseModal[None]):
             )
 
 
+
+BootDevice = namedtuple("BootDevice", ["type", "id", "description", "boot_order_idx"])
+
 class VMDetailModal(ModalScreen):
     """Modal screen to show detailed VM information."""
 
     BINDINGS = [("escape", "close_modal", "Close")]
 
     boot_order: reactive(list)
+    all_bootable_devices: reactive(list)
+    graphics_info: reactive(dict) # New reactive variable
 
     def __init__(self, vm_name: str, vm_info: dict, domain: libvirt.virDomain) -> None:
         super().__init__()
@@ -1301,8 +1308,10 @@ class VMDetailModal(ModalScreen):
         self.selected_virtiofs_target = None
         self.selected_virtiofs_info = None # Store full info for editing
         self.boot_order = self.vm_info.get('boot', {}).get('order', [])
+        self.all_bootable_devices = [] # Initialize the new reactive list
         self.sev_caps = {'sev': False, 'sev-es': False}
         self.uefi_path_map = {}
+        self.graphics_info = vm_queries.get_vm_graphics_info(self.domain.XMLDesc(0)) # Initialize here
 
 
     def on_mount(self) -> None:
@@ -1315,7 +1324,6 @@ class VMDetailModal(ModalScreen):
         self.query_one("#detail2-vm").add_class("hidden")
 
         # Populate Boot tab
-        self._populate_boot_list()
         boot_menu_enabled = self.vm_info.get('boot', {}).get('menu_enabled', False)
         self.query_one("#boot-menu-enable", Checkbox).value = boot_menu_enabled
 
@@ -1340,6 +1348,114 @@ class VMDetailModal(ModalScreen):
                     pass
 
             self._update_uefi_options()
+        
+        # Initialize Graphics tab values
+        self._update_graphics_ui()
+
+    def _get_bootable_devices(self) -> list[BootDevice]:
+        """Gathers all disks and network interfaces as bootable devices."""
+        devices = []
+        # Add disks
+        for disk in self.vm_info.get("disks", []):
+            path = disk.get('path')
+            if path:
+                boot_order_idx = None
+                try:
+                    boot_order_idx = self.boot_order.index(path) + 1
+                except ValueError:
+                    pass # Not in boot order
+
+                devices.append(BootDevice(
+                    type="Disk",
+                    id=path,
+                    description=os.path.basename(path),
+                    boot_order_idx=boot_order_idx
+                ))
+
+        # Add network interfaces
+        for net in self.vm_info.get("networks", []):
+            mac = net.get('mac')
+            if mac:
+                boot_order_idx = None
+                try:
+                    boot_order_idx = self.boot_order.index(mac) + 1
+                except ValueError:
+                    pass # Not in boot order
+                devices.append(BootDevice(
+                    type="NIC",
+                    id=mac,
+                    description=f"MAC: {mac} ({net.get('network', 'N/A')})",
+                    boot_order_idx=boot_order_idx
+                ))
+        return devices
+
+    def _update_graphics_ui(self) -> None:
+        """Updates the UI elements for the Graphics tab based on self.graphics_info."""
+        is_stopped = self.vm_info.get("status") == "Stopped"
+
+        try:
+            graphics_type_select = self.query_one("#graphics-type-select", Select)
+            graphics_type_select.value = self.graphics_info['type']
+            graphics_type_select.disabled = not is_stopped
+        except Exception:
+            pass
+
+        try:
+            listen_type_select = self.query_one("#graphics-listen-type-select", Select)
+            listen_type_select.value = self.graphics_info['listen_type']
+            listen_type_select.disabled = not is_stopped
+        except Exception:
+            pass
+
+        try:
+            address_radioset = self.query_one("#graphics-address-radioset", RadioSet)
+            if self.graphics_info['listen_type'] == 'none':
+                 address_radioset.disabled = True
+            elif self.graphics_info['address'] == '127.0.0.1':
+                address_radioset.set_pressed("graphics-address-localhost")
+                address_radioset.disabled = not is_stopped
+            elif self.graphics_info['address'] == '0.0.0.0':
+                address_radioset.set_pressed("graphics-address-all")
+                address_radioset.disabled = not is_stopped
+            else:
+                address_radioset.set_pressed("graphics-address-default")
+                address_radioset.disabled = not is_stopped
+            
+        except Exception:
+            pass
+
+        try:
+            port_input = self.query_one("#graphics-port-input", Input)
+            port_input.value = str(self.graphics_info['port']) if self.graphics_info['port'] else ""
+            port_input.disabled = not is_stopped or self.graphics_info['autoport']
+        except Exception:
+            pass
+
+        try:
+            autoport_checkbox = self.query_one("#graphics-autoport-checkbox", Checkbox)
+            autoport_checkbox.value = self.graphics_info['autoport']
+            autoport_checkbox.disabled = not is_stopped
+        except Exception:
+            pass
+
+        try:
+            password_enable_checkbox = self.query_one("#graphics-password-enable-checkbox", Checkbox)
+            password_enable_checkbox.value = self.graphics_info['password_enabled']
+            password_enable_checkbox.disabled = not is_stopped
+        except Exception:
+            pass
+
+        try:
+            password_input = self.query_one("#graphics-password-input", Input)
+            password_input.value = self.graphics_info['password'] if self.graphics_info['password_enabled'] else ""
+            password_input.disabled = not is_stopped or not self.graphics_info['password_enabled']
+        except Exception:
+            pass
+
+        try:
+            self.query_one("#graphics-apply-btn", Button).disabled = not is_stopped
+        except Exception:
+            pass
 
     def _update_uefi_options(self) -> None:
         """Filters and updates the UEFI file selection list."""
@@ -1385,23 +1501,6 @@ class VMDetailModal(ModalScreen):
 
         if current_basename and any(opt[1] == current_basename for opt in uefi_options):
             uefi_select.value = current_basename
-
-
-    def _populate_boot_list(self) -> None:
-        """Clears and repopulates the boot order ListView."""
-        boot_list_view = self.query_one("#boot-order-list", ListView)
-        boot_list_view.clear()
-        for device in self.boot_order:
-            boot_list_view.append(ListItem(Label(device)))
-
-    @on(ListView.Selected, "#boot-order-list")
-    def on_boot_list_selected(self, event: ListView.Selected) -> None:
-        is_stopped = self.vm_info.get("status") == "Stopped"
-        if not is_stopped: return
-
-        self.query_one("#boot-move-up").disabled = False
-        self.query_one("#boot-move-down").disabled = False
-        self.query_one("#boot-remove").disabled = False
 
     @on(Select.Changed)
     def on_network_change(self, event: Select.Changed) -> None:
@@ -1531,6 +1630,104 @@ class VMDetailModal(ModalScreen):
             # Revert checkbox state on failure
             event.checkbox.value = not event.value
 
+    # --- Graphics Tab Event Handlers ---
+    @on(Select.Changed, "#graphics-type-select")
+    def on_graphics_type_changed(self, event: Select.Changed) -> None:
+        self.graphics_info['type'] = event.value
+        self._update_graphics_ui()
+
+    @on(Select.Changed, "#graphics-listen-type-select")
+    def on_graphics_listen_type_changed(self, event: Select.Changed) -> None:
+        self.graphics_info['listen_type'] = event.value
+        # If listen type changes to none, clear address
+        if event.value == 'none':
+            self.graphics_info['address'] = ''
+        self._update_graphics_ui()
+
+    @on(RadioSet.Changed, "#graphics-address-radioset")
+    def on_graphics_address_changed(self, event: RadioSet.Changed) -> None:
+        if event.pressed.id == "graphics-address-localhost":
+            self.graphics_info['address'] = '127.0.0.1'
+        elif event.pressed.id == "graphics-address-all":
+            self.graphics_info['address'] = '0.0.0.0'
+        else:
+            # For "Hypervisor default", we'll send "0.0.0.0" as a generic default
+            # but libvirt might interpret this differently depending on its config.
+            # In the UI, it means "don't specify a particular address string".
+            self.graphics_info['address'] = '0.0.0.0'
+        self._update_graphics_ui()
+
+    @on(Checkbox.Changed, "#graphics-autoport-checkbox")
+    def on_graphics_autoport_changed(self, event: Checkbox.Changed) -> None:
+        self.graphics_info['autoport'] = event.value
+        self._update_graphics_ui()
+
+    @on(Checkbox.Changed, "#graphics-password-enable-checkbox")
+    def on_graphics_password_enable_changed(self, event: Checkbox.Changed) -> None:
+        self.graphics_info['password_enabled'] = event.value
+        self._update_graphics_ui()
+
+    @on(Input.Changed, "#graphics-port-input")
+    def on_graphics_port_input_changed(self, event: Input.Changed) -> None:
+        try:
+            self.graphics_info['port'] = int(event.value) if event.value else None
+        except ValueError:
+            self.graphics_info['port'] = None # Invalid input, treat as None
+        # No UI update needed here, as it's just updating internal state
+
+    @on(Input.Changed, "#graphics-password-input")
+    def on_graphics_password_input_changed(self, event: Input.Changed) -> None:
+        self.graphics_info['password'] = event.value
+        # No UI update needed here, as it's just updating internal state
+
+    @on(Button.Pressed, "#graphics-apply-btn")
+    def on_graphics_apply_button_pressed(self, event: Button.Pressed) -> None:
+        if self.vm_info.get("status") != "Stopped":
+            self.app.show_error_message("VM must be stopped to apply graphics settings.")
+            return
+
+        graphics_type = self.query_one("#graphics-type-select", Select).value
+        listen_type = self.query_one("#graphics-listen-type-select", Select).value
+        
+        # Determine address
+        address = None # Default for 'none' listen type
+        if listen_type == 'address':
+            address_radioset = self.query_one("#graphics-address-radioset", RadioSet)
+            if address_radioset.pressed_button.id == "graphics-address-localhost":
+                address = "127.0.0.1"
+            elif address_radioset.pressed_button.id == "graphics-address-all":
+                address = "0.0.0.0"
+            else: # Hypervisor default, which can be expressed as 0.0.0.0 in libvirt or omitted
+                address = "0.0.0.0"
+
+        autoport = self.query_one("#graphics-autoport-checkbox", Checkbox).value
+        port_input = self.query_one("#graphics-port-input", Input)
+        port = int(port_input.value) if port_input.value and not autoport else None
+
+        password_enabled = self.query_one("#graphics-password-enable-checkbox", Checkbox).value
+        password_input = self.query_one("#graphics-password-input", Input)
+        password = password_input.value if password_enabled else None
+
+        try:
+            set_vm_graphics(
+                self.domain,
+                graphics_type if graphics_type != "" else None, # Convert "None" string back to None
+                listen_type,
+                address,
+                port,
+                autoport,
+                password_enabled,
+                password
+            )
+            self.app.show_success_message("Graphics settings applied successfully.")
+            # Refresh graphics_info after successful application
+            self.graphics_info = vm_queries.get_vm_graphics_info(self.domain.XMLDesc(0))
+            self._update_graphics_ui()
+        except libvirt.libvirtError as e:
+            self.app.show_error_message(f"Error applying graphics settings: {e}")
+        except Exception as e:
+            self.app.show_error_message(f"An unexpected error occurred: {e}")
+
     def compose(self) -> ComposeResult:
         with Vertical(id="vm-detail-container"):
             yield Label(f"VM Details: {self.vm_name}", id="title")
@@ -1613,15 +1810,8 @@ class VMDetailModal(ModalScreen):
                     is_stopped = self.vm_info.get("status") == "Stopped"
                     with Vertical(classes="info-details"):
                         yield Checkbox("Enable boot menu", id="boot-menu-enable", disabled=not is_stopped)
-                        yield Label("Boot Order:", classes="boot_order_label")
-                        yield ListView(id="boot-order-list")
-                        with Horizontal():
-                            yield Button("Move Up", id="boot-move-up", disabled=True)
-                            yield Button("Move Down", id="boot-move-down", disabled=True)
-                        with Horizontal():
-                            yield Button("Add", id="boot-add", disabled=not is_stopped)
-                            yield Button("Remove", id="boot-remove", disabled=True)
-                        yield Button("Apply Boot Settings", id="boot-apply", disabled=not is_stopped)
+                        #yield Label("Boot Devices:", classes="boot_order_label")
+                        #yield DataTable(id="boot-devices-table")
 
                 with TabPane("Disks", id="detail-disk-tab"):
                     with ScrollableContainer(classes="info-details"):
@@ -1737,7 +1927,54 @@ class VMDetailModal(ModalScreen):
                         )
 
                 with TabPane("Graphics", id="detail-graphics-tab"):
-                    yield Label("Graphics")
+                    is_stopped = self.vm_info.get("status") == "Stopped"
+                    with ScrollableContainer(): #classes="info-details"):
+                        yield Label("Type:")
+                        yield Select(
+                            [("VNC", "vnc"), ("Spice", "spice"), ("None", "")],
+                            value=self.graphics_info['type'],
+                            id="graphics-type-select",
+                            disabled=not is_stopped
+                        )
+                        yield Label("Listen Type:")
+                        yield Select(
+                            [("Address", "address"), ("None", "none")],
+                            value=self.graphics_info['listen_type'],
+                            id="graphics-listen-type-select",
+                            disabled=not is_stopped
+                        )
+                        yield Label("Address:")
+                        with RadioSet(id="graphics-address-radioset", disabled=not is_stopped or self.graphics_info['listen_type'] != 'address'):
+                            yield RadioButton("Hypervisor default", id="graphics-address-default", value=self.graphics_info['address'] not in ['127.0.0.1', '0.0.0.0'])
+                            yield RadioButton("Localhost only", id="graphics-address-localhost", value=self.graphics_info['address'] == '127.0.0.1')
+                            yield RadioButton("All interfaces", id="graphics-address-all", value=self.graphics_info['address'] == '0.0.0.0')
+                        yield Checkbox(
+                            "Auto Port",
+                            value=self.graphics_info['autoport'],
+                            id="graphics-autoport-checkbox",
+                            disabled=not is_stopped
+                        )
+                        yield Input(
+                            placeholder="Port (e.g., 5900)",
+                            value=str(self.graphics_info['port']) if self.graphics_info['port'] else "",
+                            id="graphics-port-input",
+                            type="integer",
+                            disabled=not is_stopped or self.graphics_info['autoport']
+                        )
+                        yield Checkbox(
+                            "Enable Password",
+                            value=self.graphics_info['password_enabled'],
+                            id="graphics-password-enable-checkbox",
+                            disabled=not is_stopped
+                        )
+                        yield Input(
+                            placeholder="Password",
+                            value=self.graphics_info['password'] if self.graphics_info['password_enabled'] else "",
+                            id="graphics-password-input",
+                            password=True, # Hide password input
+                            disabled=not is_stopped or not self.graphics_info['password_enabled']
+                        )
+                        yield Button("Apply Graphics Settings", id="graphics-apply-btn", variant="primary", disabled=not is_stopped)
  
             with TabbedContent(id="detail2-vm"):
         # TOFIX !
@@ -1835,60 +2072,8 @@ class VMDetailModal(ModalScreen):
         self.selected_virtiofs_target = None
         self.selected_virtiofs_info = None
         self.query_one("#delete-virtiofs-btn", Button).disabled = True
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id.startswith("boot-"):
-            boot_list_view = self.query_one("#boot-order-list", ListView)
-            current_index = boot_list_view.index
-
-            if event.button.id == "boot-move-up":
-                if current_index is not None and current_index > 0:
-                    self.boot_order.insert(current_index - 1, self.boot_order.pop(current_index))
-                    self._populate_boot_list()
-                    boot_list_view.index = current_index - 1
-                return
-
-            if event.button.id == "boot-move-down":
-                if current_index is not None and current_index < len(self.boot_order) - 1:
-                    self.boot_order.insert(current_index + 1, self.boot_order.pop(current_index))
-                    self._populate_boot_list()
-                    boot_list_view.index = current_index + 1
-                return
-
-            if event.button.id == "boot-add":
-                def add_boot_device_callback(device_to_add: str | None):
-                    if device_to_add:
-                        self.boot_order.append(device_to_add)
-                        self._populate_boot_list()
-
-                possible_devices = {'hd', 'cdrom', 'network', 'fd'}
-                available_to_add = sorted(list(possible_devices - set(self.boot_order)))
-                self.app.push_screen(
-                    SelectDiskModal(available_to_add, "Select boot device to add"),
-                    add_boot_device_callback
-                )
-                return
-
-            if event.button.id == "boot-remove":
-                if current_index is not None:
-                    del self.boot_order[current_index]
-                    self._populate_boot_list()
-                    boot_list_view.index = None
-                    self.query_one("#boot-move-up").disabled = True
-                    self.query_one("#boot-move-down").disabled = True
-                    self.query_one("#boot-remove").disabled = True
-                return
-
-            if event.button.id == "boot-apply":
-                try:
-                    menu_enabled = self.query_one("#boot-menu-enable", Checkbox).value
-                    set_boot_info(self.domain, menu_enabled, self.boot_order)
-                    self.app.show_success_message("Boot settings updated successfully.")
-                    # Update internal state
-                    self.vm_info['boot']['menu_enabled'] = menu_enabled
-                    self.vm_info['boot']['order'] = self.boot_order
-                except libvirt.libvirtError as e:
-                    self.app.show_error_message(f"Error applying boot settings: {e}")
-                return
 
         if event.button.id == "toggle-detail-button":
             vm = self.query_one("#detail-vm")
