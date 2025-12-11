@@ -7,7 +7,7 @@ from textual.widgets import Button, Input, Label, RadioSet, RadioButton, Checkbo
 from textual.containers import Vertical, Horizontal, ScrollableContainer
 from textual import on
 
-from modals.base_modal import BaseModal
+from modals.base_modals import BaseModal
 from network_manager import (
     create_network, get_host_network_interfaces, get_existing_subnets
 )

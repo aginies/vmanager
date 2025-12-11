@@ -7,7 +7,7 @@ from textual.app import ComposeResult
 from textual.widgets import Button, Input, Label, DataTable
 from textual.containers import Vertical, Horizontal, ScrollableContainer
 
-from modals.base_modal import BaseModal
+from modals.base_modals import BaseModal
 
 class ConnectionModal(BaseModal[str | None]):
 
