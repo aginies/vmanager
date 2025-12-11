@@ -367,8 +367,8 @@ class ServerPrefModal(BaseModal[None]):
         node = event.node
         node_data = node.data if node else None
 
-        is_pool = node_data and node_data.get("type") == "pool"
-        is_volume = node_data and node_data.get("type") == "volume"
+        is_pool = bool(node_data and node_data.get("type") == "pool")
+        is_volume = bool(node_data and node_data.get("type") == "volume")
 
         toggle_active_btn = self.query_one("#toggle-active-pool-btn")
         toggle_autostart_btn = self.query_one("#toggle-autostart-pool-btn")
