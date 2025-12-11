@@ -226,6 +226,7 @@ class SelectMachineTypeModal(BaseModal[str | None]):
     def on_mount(self) -> None:
         list_view = self.query_one(ListView)
         try:
+            #self.query_one(DirectoryTree).focus()
             current_index = self.machine_types.index(self.current_machine_type)
             list_view.index = current_index
         except (ValueError, IndexError):
@@ -236,20 +237,6 @@ class SelectMachineTypeModal(BaseModal[str | None]):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "cancel-btn":
-            self.dismiss(None)
-
-    def on_mount(self) -> None:
-        self.query_one(DirectoryTree).focus()
-
-    def on_directory_tree_directory_selected(self, event: DirectoryTree.DirectorySelected) -> None:
-        self._selected_path = event.path
-        self.query_one("#select-btn").disabled = False
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "select-btn":
-            if self._selected_path:
-                self.dismiss(str(self._selected_path))
-        elif event.button.id == "cancel-btn":
             self.dismiss(None)
 
 class ServerPrefModal(BaseModal[None]):
