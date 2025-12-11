@@ -577,17 +577,48 @@ def set_vcpu(domain, vcpu_count: int):
 def set_memory(domain, memory_mb: int):
     """
     Sets the memory for a VM in megabytes.
+    Handles both simple and complex (with attributes) memory definitions.
     """
     if not domain:
         raise ValueError("Invalid domain object.")
 
     memory_kb = memory_mb * 1024
+    conn = domain.connect()
 
-    flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
+    xml_flags = libvirt.VIR_DOMAIN_XML_INACTIVE if domain.isPersistent() else 0
+    xml_desc = domain.XMLDesc(xml_flags)
+    root = ET.fromstring(xml_desc)
+
+    # Update max memory
+    memory_elem = root.find('memory')
+    if memory_elem is None:
+        memory_elem = ET.SubElement(root, 'memory')
+    memory_elem.text = str(memory_kb)
+    memory_elem.set('unit', 'KiB')
+
+    # Update current memory
+    current_memory_elem = root.find('currentMemory')
+    if current_memory_elem is None:
+        current_memory_elem = ET.SubElement(root, 'currentMemory')
+    current_memory_elem.text = str(memory_kb)
+    current_memory_elem.set('unit', 'KiB')
+
+    new_xml = ET.tostring(root, encoding='unicode')
+
+    # Update the persistent definition of the VM.
+    conn.defineXML(new_xml)
+
+    # For a running VM, we use setMemoryFlags for a live update.
     if domain.isActive():
-        flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
-
-    domain.setMemoryFlags(memory_kb, flags)
+        try:
+            # Attempt a live update.
+            domain.setMemoryFlags(memory_kb, libvirt.VIR_DOMAIN_AFFECT_LIVE)
+        except libvirt.libvirtError as e:
+            # If live update fails, inform the user. The persistent config is still updated.
+            raise libvirt.libvirtError(
+                f"Live memory update failed: {e}. "
+                "The configuration has been saved and will apply on the next reboot."
+            )
 
 @log_function_call
 def set_machine_type(domain, new_machine_type):
