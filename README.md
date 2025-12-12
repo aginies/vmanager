@@ -39,6 +39,8 @@ General capabilities:
 - Fix CSS issue (there is a lot as this is not trivial to deal with CSS...)
 - Add all missing features on Adding/Removing stuff to VM
 - Being able to create VM based on scenario usage: API is ready, just need to call it (https://github.com/aginies/virt-scenario)
+- vmanager command console with CMD, launch command on "pattern" selected VM
+- transhypervisor view, connected to multiple server
 
 ## Requirements
 
