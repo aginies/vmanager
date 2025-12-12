@@ -52,7 +52,6 @@ from utils import (
 )
 from modals.base_modals import BaseModal
 from modals.utils_modals import ConfirmationDialog
-from modals.connection_modals import ServerSelectionModal
 from modals.network_modals import CreateNetworkModal, NetworkXMLModal
 from modals.log_modal import LogModal
 from modals.server_modals import ServerManagementModal
@@ -1878,7 +1877,6 @@ class VMManagerTUI(App):
         ("v", "view_log", "Log"),
         ("ctrl+v", "virsh_shell", "Virsh Shell"),
         ("f", "filter_view", "Filter"),
-        ("s", "select_server", "Select Server"),
         ("p", "server_preferences", "Server Pref"),
         ("m", "manage_server", "Servers List"),
         ("q", "quit", "Quit"),
@@ -1917,7 +1915,6 @@ class VMManagerTUI(App):
             yield Button("Server Pref", id="server_preferences_button", classes="Buttonpage")
             yield Button("Servers List", id="manage_servers_button", classes="Buttonpage")
             #yield Button("Create VM", id="create_vm_button", classes="Buttonpage")
-            yield Button("Select Server", id="select_server_button", classes="Buttonpage")
             yield Button("Filter VM", id="filter_button", classes="Buttonpage")
             #yield Button("Virsh Shell", id="virsh_shell_button", classes="Buttonpage")
             yield Button("View Log", id="view_log_button", classes="Buttonpage")
@@ -2064,12 +2061,6 @@ class VMManagerTUI(App):
                 self.search_text = new_search
                 self.current_page = 0
                 self.refresh_vm_list()
-
-    @on(Button.Pressed, "#select_server_button")
-    def action_select_server(self) -> None:
-        """Select a server to connect to."""
-        if self.servers:
-            self.push_screen(ServerSelectionModal(self.servers), self.handle_server_selection_result)
 
     def handle_server_selection_result(self, uri: str | None) -> None:
         """Handle the result from the server selection modal."""
