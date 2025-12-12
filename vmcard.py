@@ -24,7 +24,7 @@ from vm_queries import get_vm_disks_info, get_vm_graphics_info
 from vm_actions import clone_vm, rename_vm, start_vm
 
 from modals.base_modals import BaseDialog
-from modals.utils_modals import ConfirmationDialog
+from modals.utils_modals import ConfirmationDialog, LoadingModal
 from utils import find_free_port
 
 T = TypeVar("T")
@@ -736,13 +736,27 @@ class VMCard(Static):
 
             def handle_clone_name(new_name: str | None) -> None:
                 if new_name:
-                    try:
-                        clone_vm(self.vm, new_name)
-                        self.app.show_success_message(f"VM '{self.name}' cloned as '{new_name}' successfully.")
-                        self.app.refresh_vm_list()
-                        logging.info(f"Successfully cloned VM '{self.name}' to '{new_name}'")
-                    except Exception as e:
-                        self.app.show_error_message(f"Error cloning VM {self.name}: {e}")
+                    loading_modal = LoadingModal()
+                    self.app.push_screen(loading_modal)
+
+                    def do_clone() -> None:
+                        try:
+                            clone_vm(self.vm, new_name)
+                            self.app.call_from_thread(
+                                self.app.show_success_message,
+                                f"VM '{self.name}' cloned as '{new_name}' successfully."
+                            )
+                            self.app.call_from_thread(self.app.refresh_vm_list)
+                            logging.info(f"Successfully cloned VM '{self.name}' to '{new_name}'")
+                        except Exception as e:
+                            self.app.call_from_thread(
+                                self.app.show_error_message,
+                                f"Error cloning VM {self.name}: {e}"
+                            )
+                        finally:
+                            self.app.call_from_thread(loading_modal.dismiss)
+
+                    self.app.run_worker(do_clone, thread=True)
 
             self.app.push_screen(CloneNameDialog(), handle_clone_name)
 
