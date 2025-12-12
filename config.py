@@ -4,6 +4,8 @@ from pathlib import Path
 
 DEFAULT_CONFIG = {
     'VMS_PER_PAGE': 4,
+    'WC_PORT_RANGE_START': 40000,
+    'WC_PORT_RANGE_END': 40050,
     'servers': [
         {'name': 'Localhost', 'uri': 'qemu:///system'},
     ]
@@ -19,13 +21,12 @@ def get_config_paths():
 def load_config():
     """
     Loads the configuration from the first found config file.
-    If no config file is found, creates a default one.
-    Ensures that the 'servers' list always contains the default 'Localhost' server
-    if it's missing or empty in the loaded configuration.
+    If no config file is found, returns the default configuration.
+    Merges the loaded configuration with default values to ensure all keys are present.
     """
     config_paths = get_config_paths()
     config_path = None
-    loaded_config = {}
+    user_config = {}
 
     for path in config_paths:
         if path.exists():
@@ -34,17 +35,18 @@ def load_config():
 
     if config_path:
         with open(config_path, 'r') as f:
-            loaded_config = yaml.safe_load(f) or {} # Ensure it's a dict even if file is empty
-    else:
-        # No config file found, return the DEFAULT_CONFIG directly
-        return DEFAULT_CONFIG
+            user_config = yaml.safe_load(f) or {}
 
+    # Start with default config and update with user's config
+    config = DEFAULT_CONFIG.copy()
+    if user_config:
+        config.update(user_config)
 
-    # Ensure 'servers' key exists and has default if empty or missing
-    if not isinstance(loaded_config.get('servers'), list) or not loaded_config.get('servers'):
-        loaded_config['servers'] = DEFAULT_CONFIG['servers']
+    # Ensure 'servers' key exists and is a non-empty list
+    if not isinstance(config.get('servers'), list) or not config.get('servers'):
+        config['servers'] = DEFAULT_CONFIG['servers']
 
-    return loaded_config
+    return config
 
 def save_config(config):
     """Saves the configuration to the user's config file."""
