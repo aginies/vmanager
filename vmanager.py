@@ -6,6 +6,7 @@ import sys
 import logging
 import asyncio
 import traceback
+import argparse
 from collections import namedtuple
 
 from textual.app import App, ComposeResult
@@ -2344,13 +2345,21 @@ class VMManagerTUI(App):
         self.exit()
 
 if __name__ == "__main__":
-    terminal_size = os.get_terminal_size()
-    if terminal_size.lines < 34:
-        print(f"Terminal height is too small ({terminal_size.lines} lines). Please resize to at least 34 lines.")
-        sys.exit(1)
-    if terminal_size.columns < 92:
-        print(f"Terminal width is too small ({terminal_size.columns} columns). Please resize to at least 92 columns.")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="A Textual application to manage VMs.")
+    parser.add_argument("--cmd", action="store_true", help="Run in command-line interpreter mode.")
+    args = parser.parse_args()
 
-    app = VMManagerTUI()
-    app.run()
+    if args.cmd:
+        from vmanager_cmd import VManagerCMD
+        VManagerCMD().cmdloop()
+    else:
+        terminal_size = os.get_terminal_size()
+        if terminal_size.lines < 34:
+            print(f"Terminal height is too small ({terminal_size.lines} lines). Please resize to at least 34 lines.")
+            sys.exit(1)
+        if terminal_size.columns < 92:
+            print(f"Terminal width is too small ({terminal_size.columns} columns). Please resize to at least 92 columns.")
+            sys.exit(1)
+
+        app = VMManagerTUI()
+        app.run()
