@@ -21,7 +21,7 @@ from textual.message import Message
 from textual import on
 from textual.events import Click
 from textual.css.query import NoMatches
-from vm_queries import get_vm_disks_info, get_vm_graphics_info
+from vm_queries import get_vm_disks_info, get_vm_graphics_info, get_status
 from vm_actions import clone_vm, rename_vm, start_vm
 
 from modals.base_modals import BaseDialog
@@ -288,8 +288,8 @@ class VMCard(Static):
                     with Horizontal():
                         with Vertical():
                             yield Button("Start", id="start", variant="success")
-                            yield Button("Stop", id="stop", variant="error")
-                            yield Static(classes="button-separator")
+                            yield Button("Shutdown", id="shutdown", variant="primary")
+                            yield Button("Force Off", id="stop", variant="error")
                             yield Button("Pause", id="pause", variant="primary")
                             yield Button("Resume", id="resume", variant="success")
                         with Vertical():
@@ -338,6 +338,24 @@ class VMCard(Static):
     def update_stats(self) -> None:
         """Update CPU and memory statistics."""
         self._update_webc_status() # Call on mount
+
+        if self.vm:
+            try:
+                new_status = get_status(self.vm)
+                if self.status != new_status:
+                    self.status = new_status
+                    status_widget = self.query_one("#status")
+                    status_widget.update(f"Status: {self.status}{self.webc_status_indicator}")
+                    self._update_status_styling()
+                    self.update_button_layout()
+            except libvirt.libvirtError as e:
+                if e.get_error_code() == libvirt.VIR_ERR_NO_DOMAIN:
+                    self.app.refresh_vm_list()
+                    return
+                logging.warning(f"Libvirt error on refresh for {self.name}: {e}")
+            except Exception as e:
+                logging.error(f"Unexpected error refreshing status for {self.name}: {e}")
+
         if self.vm and self.vm.isActive():
             try:
                 # CPU Usage
@@ -377,6 +395,7 @@ class VMCard(Static):
     def update_button_layout(self):
         """Update the button layout based on current VM status."""
         start_button = self.query_one("#start", Button)
+        shutdown_button = self.query_one("#shutdown", Button)
         stop_button = self.query_one("#stop", Button)
         pause_button = self.query_one("#pause", Button)
         resume_button = self.query_one("#resume", Button)
@@ -398,6 +417,7 @@ class VMCard(Static):
         has_snapshots = self.vm and self.vm.snapshotNum(0) > 0
 
         start_button.display = is_stopped
+        shutdown_button.display = is_running
         stop_button.display = is_running or is_paused
         delete_button.display = is_running or is_paused or is_stopped
         clone_button.display = is_stopped
@@ -437,20 +457,37 @@ class VMCard(Static):
                 except Exception as e:
                     self.app.show_error_message(f"Error on VM {self.name} during 'start': {e}")
 
-        elif event.button.id == "stop":
-            logging.info(f"Attempting to stop VM: {self.name}")
+        elif event.button.id == "shutdown":
+            logging.info(f"Attempting to gracefully shutdown VM: {self.name}")
             if self.vm.isActive():
                 try:
-                    self.vm.destroy()
-                    self.status = "Stopped"
-                    self.query_one("#status").update(f"Status: {self.status}")
-                    self._update_status_styling()
-                    self.update_button_layout()
-                    self.app.refresh_vm_list()
-                    logging.info(f"Successfully stopped VM: {self.name}")
-                    self.app.show_success_message(f"VM '{self.name}' stopped successfully.")
+                    self.vm.shutdown()
+                    self.app.show_success_message(f"Shutdown signal sent to VM '{self.name}'.")
                 except libvirt.libvirtError as e:
-                    self.app.show_error_message(f"Error on VM {self.name} during 'stop': {e}")
+                    self.app.show_error_message(f"Error on VM {self.name} during 'shutdown': {e}")
+
+        elif event.button.id == "stop":
+            logging.info(f"Attempting to stop VM: {self.name}")
+
+            def on_confirm(confirmed: bool) -> None:
+                if not confirmed:
+                    return
+
+                if self.vm.isActive():
+                    try:
+                        self.vm.destroy()
+                        self.status = "Stopped"
+                        self.query_one("#status").update(f"Status: {self.status}")
+                        self._update_status_styling()
+                        self.update_button_layout()
+                        self.app.refresh_vm_list()
+                        logging.info(f"Successfully stopped VM: {self.name}")
+                        self.app.show_success_message(f"VM '{self.name}' stopped successfully.")
+                    except libvirt.libvirtError as e:
+                        self.app.show_error_message(f"Error on VM {self.name} during 'stop': {e}")
+
+            message = f"This is a hard stop, like unplugging the power cord.\nAre you sure you want to stop '{self.name}'?"
+            self.app.push_screen(ConfirmationDialog(message), on_confirm)
 
         elif event.button.id == "pause":
             logging.info(f"Attempting to pause VM: {self.name}")
