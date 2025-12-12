@@ -8,6 +8,7 @@ from datetime import datetime
 import os
 from pathlib import Path
 import libvirt
+from urllib.parse import urlparse
 
 from textual.widgets import (
         Static, Button, Input, ListView, ListItem, Label, TabbedContent,
@@ -112,11 +113,11 @@ class WebConsoleDialog(BaseDialog[str | None]):
         yield Vertical(
             Label("Web Console is running at"),
             Input(value=self.url, disabled=True),
-            Link("Open Browser", url=self.url),
+            Link("Open Link To a Browser", url=self.url),
             Label(""),
             Horizontal(
-                Button("Stop", variant="error", id="stop"),
-                Button("Close", variant="primary", id="close"),
+                Button("Stop Web Console service", variant="error", id="stop"),
+                Button("Close this Window", variant="primary", id="close"),
                 id="dialog-buttons",
             ),
             id="dialog",
@@ -550,7 +551,8 @@ class VMCard(Static):
                 
                 vnc_host = graphics_info.get('address', '127.0.0.1')
                 if vnc_host in ['0.0.0.0', '::']:
-                    vnc_host = '127.0.0.1'
+                    parsed_uri = urlparse(self.app.connection_uri)
+                    vnc_host = parsed_uri.hostname or '127.0.0.1'
 
                 web_port = find_free_port(int(self.app.WC_PORT_RANGE_START),
                                           int(self.app.WC_PORT_RANGE_END)
