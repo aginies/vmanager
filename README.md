@@ -36,10 +36,10 @@ General capabilities:
 
 ## TODO
 
-- Fix CSS issue (there is a lot as this is not trivial to deal with CSS...)
+- Disks: choose the cache mode for disk
+- vmanager command console with CMD, launch command on "pattern" selected VM
 - Add all missing features on Adding/Removing stuff to VM
 - Being able to create VM based on scenario usage: API is ready, just need to call it (https://github.com/aginies/virt-scenario)
-- vmanager command console with CMD, launch command on "pattern" selected VM
 - transhypervisor view, connected to multiple server
 
 ## Requirements
@@ -85,9 +85,8 @@ When you run the application, you'll see:
    - Current connection URI
 
 2. **Top Controls**: Provides global actions and filtering options:
-   - **Server Pref** configure network and storage
-   - **Server List**: Server management list, add, edit, delete
-   - **Select Server**: connect to a server in the list, or via input
+   - **Sever Pref**: configure Network and Storage
+   - **Servers List**: Server management list, add, edit, delete, custom connect, direct connect
    - **Filter VM** to sort VMs by name and status (All, Running, Paused, Stopped)
    - **View Log** button to open the application's error log file
 
@@ -105,15 +104,18 @@ When you run the application, you'll see:
 ### Available Actions Buttons on VM cards
 
 - **Start**: Start a stopped VM
-- **Stop**: Stop a running VM
+- **Shutdown**: Shutdown a running VM
+- **Force Off**: Destroy a VM
 - **Pause**: Pause a running VM
 - **Resume**: Resume a paused VM
 - **Delete**: Delete a VM
-- **Take Snapshot**: Create a new snapshot of the VM.
-- **Restore Snapshot**: Revert the VM to a previously taken snapshot.
-- **Delete Snapshot**: Delete an existing snapshot.
-- **View XML**: Display the VM's XML configuration in a temporary file
-- **Connect**: Launch virt-viewer to connect to the VM (launched in a non-blocking external process).
+- **Take Snapshot**: Create a new snapshot of the VM
+- **Restore Snapshot**: Revert the VM to a previously taken snapshot
+- **Delete Snapshot**: Delete an existing snapshot
+- **View XML**: Display the VM's XML configuration
+- **Edit XML**: With Stopped VM you can edit the XML configuration
+- **Connect**: Launch virt-viewer to connect to the VM (launched in a non-blocking external process)
+- **Web Console**: if novnc and websockify isntalled, you can view VM display on a Browser
 - **Clone**: Clone the current VM selected
 - **Rename**: Rename the current VM
 - **Configure**: Configure the VM
@@ -121,7 +123,7 @@ When you run the application, you'll see:
 ### Connection Management
 
 To change the connection URI:
-1. Select "Select Server" from the top controls.
+1. Select "Server List" from the top controls.
 2. Clicl on "Custom URL"
 3. Enter a QEMU connection URI (e.g., `qemu+ssh://user@host/system` or `qemu:///system`)
 4. Click "Connect"
