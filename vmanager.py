@@ -1772,6 +1772,7 @@ class VirshShellScreen(ModalScreen):
         with Vertical(id="virsh-shell-container"):
             yield Header()
             yield Label("Virsh Interactive Shell (esc to quit)", id="virsh-shell-title")
+            yield Label("Note: This shell starts a new `virsh` process, which may require re-authentication for remote connections. Using SSH keys is recommended.", classes="virsh-shell-note")
             yield TextArea(
                 id="virsh-output",
                 read_only=True,
@@ -1805,7 +1806,7 @@ class VirshShellScreen(ModalScreen):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
-            self.output_textarea.write(f"Connected to: {uri}\n")
+            self.output_textarea.text += f"Connected to: {uri}\n"
 
             self.read_stdout_task = asyncio.create_task(self._read_stream(self.virsh_process.stdout))
             self.read_stderr_task = asyncio.create_task(self._read_stream(self.virsh_process.stderr))
@@ -1824,10 +1825,10 @@ class VirshShellScreen(ModalScreen):
     async def _read_stream(self, stream: asyncio.StreamReader) -> None:
         while True:
             try:
-                line = await stream.readline()
-                if not line:
+                data = await stream.read(4096)
+                if not data:
                     break
-                self.output_textarea.write(line.decode())
+                self.output_textarea.text += data.decode(errors='replace')
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -1842,7 +1843,7 @@ class VirshShellScreen(ModalScreen):
         if not command:
             return
 
-        self.output_textarea.write(f"virsh> {command}\n")
+        self.output_textarea.text += f"virsh> {command}\n"
 
         if self.virsh_process and self.virsh_process.stdin:
             try:
