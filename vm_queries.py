@@ -48,7 +48,6 @@ def get_vm_network_dns_gateway_info(domain: str):
     """
     pass
 
-@log_function_call
 def get_status(domain):
     """
     state of a VM
@@ -101,7 +100,6 @@ def get_vm_firmware_info(xml_content: str) -> dict:
 
     return firmware_info
 
-@log_function_call
 def get_vm_machine_info(xml_content: str) -> str:
     """
     Extracts machine type from a VM's XML definition.
