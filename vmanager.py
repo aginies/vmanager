@@ -2068,10 +2068,22 @@ class VMManagerTUI(App):
             logging.info(f"Server selected: {uri}")
             self.change_connection(uri)
 
+    def on_server_management(self, result: list | str | None) -> None:
+        """Callback for ServerManagementModal."""
+        if result is None:
+            return
+        if isinstance(result, list):
+            self.reload_servers(result)
+            return
+
+        server_uri = result
+        if server_uri:
+            self.change_connection(server_uri)
+
     @on(Button.Pressed, "#manage_servers_button")
     def action_manage_server(self) -> None:
         """Manage the list of servers."""
-        self.push_screen(ServerManagementModal(self.servers), self.reload_servers)
+        self.push_screen(ServerManagementModal(self.servers), self.on_server_management)
 
     @on(Button.Pressed, "#create_vm_button")
     def on_create_vm_button_pressed(self, event: Button.Pressed) -> None:

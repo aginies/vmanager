@@ -128,7 +128,9 @@ class ServerManagementModal(ModalScreen):
         if event.button.id == "close-btn":
             self.dismiss(self.servers)
         elif event.button.id == "select-btn":
-            self.dismiss(self.selected_row)
+            if self.selected_row is not None:
+                server_uri = self.servers[self.selected_row]['uri']
+                self.dismiss(server_uri)
         elif event.button.id == "add-server-btn":
             def add_server_callback(result):
                 if result:
@@ -163,6 +165,7 @@ class ServerManagementModal(ModalScreen):
                         self.selected_row = None
                         self.query_one("#edit-server-btn").disabled = True
                         self.query_one("#delete-server-btn").disabled = True
+                        self.query_one("#select-btn").disabled = True
                         self.app.show_success_message(f"Server '{server_name_to_delete}' deleted successfully.")
                         logging.info(f"Successfully deleted Server '{server_name_to_delete}'")
                     except Exception as e:
