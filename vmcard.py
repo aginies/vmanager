@@ -591,7 +591,7 @@ class VMCard(Static):
 
                     proc = subprocess.Popen(websockify_cmd, stdout=subprocess.DEVNULL, stderr=log_file_handle)
                     
-                    url = f"{url_scheme}://localhost:{web_port}/vnc.html?path=websockify"
+                    url = f"{url_scheme}://{vnc_host}:{web_port}/vnc.html?path=websockify"
                     self.app.websockify_processes[uuid] = (proc, web_port, url)
                     
                     self.app.push_screen(WebConsoleDialog(url), handle_web_console_dialog)
