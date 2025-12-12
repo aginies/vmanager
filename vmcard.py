@@ -244,6 +244,18 @@ class VMCard(Static):
         self.last_cpu_time = 0
         self.last_cpu_time_ts = 0
 
+    def _get_snapshot_tab_title(self) -> str:
+        if self.vm:
+            try:
+                num_snapshots = self.vm.snapshotNum(0)
+                if num_snapshots > 0 and num_snapshots < 2:
+                    return f"Snapshot({num_snapshots})"
+                elif num_snapshots > 1:
+                    return f"Snapshots({num_snapshots})"
+            except libvirt.libvirtError:
+                pass # Domain might be transient or invalid
+        return "Snapshot"
+
     def _update_webc_status(self) -> None:
         """Updates the web console status indicator."""
         if hasattr(self.app, 'websockify_processes') and self.vm:
@@ -296,7 +308,7 @@ class VMCard(Static):
                             yield Button( "Configure", id="configure-button", variant="primary")
                             yield Button("Web Console", id="web_console", variant="default")
                             yield Button("Connect", id="connect", variant="default")
-                with TabPane("Snapshot", id="snapshot-tab"):
+                with TabPane(self._get_snapshot_tab_title(), id="snapshot-tab"):
                     with Horizontal():
                         with Vertical():
                             yield Button("Snapshot", id="snapshot_take", variant="primary")
@@ -416,6 +428,12 @@ class VMCard(Static):
         is_running = self.status == "Running"
         is_paused = self.status == "Paused"
         has_snapshots = self.vm and self.vm.snapshotNum(0) > 0
+
+        # Update Snapshot TabPane title
+        tabbed_content = self.query_one(TabbedContent)
+        snapshot_tab_pane = tabbed_content.get_pane("snapshot-tab")
+        if snapshot_tab_pane:
+            snapshot_tab_pane.title = self._get_snapshot_tab_title()
 
         start_button.display = is_stopped
         shutdown_button.display = is_running
