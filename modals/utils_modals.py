@@ -1,13 +1,13 @@
 """
-DirectorySelectionModal
+Usefull Modal screen
 """
 import os
 from textual.containers import Horizontal, Vertical
 from textual.widgets import (
-        Label, Button, DirectoryTree
+        Label, Button, DirectoryTree, LoadingIndicator
         )
 from textual.app import ComposeResult
-from modals.base_modals import BaseModal
+from modals.base_modals import BaseModal, BaseDialog
 
 class DirectorySelectionModal(BaseModal[str | None]):
     """A modal screen for selecting a directory."""
@@ -38,3 +38,45 @@ class DirectorySelectionModal(BaseModal[str | None]):
                 self.dismiss(str(self._selected_path))
         elif event.button.id == "cancel-btn":
             self.dismiss(None)
+
+class LoadingModal(BaseModal[None]):
+    """A modal screen that displays a loading indicator."""
+
+    BINDINGS = [] # Override BaseModal's bindings to prevent user dismissal with escape
+
+    DEFAULT_CSS = """
+    LoadingModal {
+        align: center middle;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        yield LoadingIndicator()
+
+class ConfirmationDialog(BaseDialog[bool]):
+    """A dialog to confirm an action."""
+
+    def __init__(self, prompt: str) -> None:
+        super().__init__()
+        self.prompt = prompt
+
+    def compose(self):
+        yield Vertical(
+            Label(self.prompt, id="question"),
+            Horizontal(
+                Button("Yes", variant="error", id="yes", classes="dialog-buttons"),
+                Button("No", variant="primary", id="no", classes="dialog-buttons"),
+                id="dialog-buttons",
+            ),
+            id="dialog",
+        )
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "yes":
+            self.dismiss(True)
+        else:
+            self.dismiss(False)
+
+    def action_cancel_modal(self) -> None:
+        """Cancel the modal."""
+        self.dismiss(False)
