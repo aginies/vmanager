@@ -456,7 +456,7 @@ class ServerPrefModal(BaseModal[None]):
                         result['size_gb'],
                         result['format']
                     )
-                    self.app.show_success_message(f"Volume '{result['name']}' created successfully.")
+                    self.app.show_success_message(f"Volume '{result['name']}' '{result['size_gb']}' '{result['format']}' created successfully.")
                     # Refresh the node
                     if tree.cursor_node:
                         tree.cursor_node.remove_children()
@@ -499,9 +499,7 @@ class ServerPrefModal(BaseModal[None]):
                     self.app.show_error_message(str(e))
 
         self.app.push_screen(
-                ConfirmationDialog(f"Are you sure you want to delete storage pool:\n'{pool_name}'\nThis will delete the pool definition but not the data on it."),
-            on_confirm
-        )
+                ConfirmationDialog(f"Are you sure you want to delete storage pool:\n' {pool_name}'\nThis will delete the pool definition but not the data on it."), on_confirm)
 
     @on(Button.Pressed, "#del-vol-btn")
     def on_delete_volume_button_pressed(self, event: Button.Pressed) -> None:
