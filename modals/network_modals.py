@@ -96,7 +96,7 @@ class CreateNetworkModal(BaseModal[None]):
                 ip_network = ipaddress.ip_network(ip, strict=False)
 
                 # Check for subnet overlap
-                existing_subnets = get_existing_subnets(self.app.conn)
+                existing_subnets = get_existing_subnets(self.conn)
                 for existing_subnet in existing_subnets:
                     if ip_network.overlaps(existing_subnet):
                         self.app.show_error_message(f"Subnet {ip_network} overlaps with existing network's subnet {existing_subnet}.")
@@ -123,7 +123,7 @@ class CreateNetworkModal(BaseModal[None]):
                 return
 
             try:
-                create_network(self.app.conn, name, typenet, forward, ip, dhcp, dhcp_start, dhcp_end, domain_name)
+                create_network(self.conn, name, typenet, forward, ip, dhcp, dhcp_start, dhcp_end, domain_name)
                 self.app.show_success_message(f"Network {name} created successfully.")
                 self.dismiss(True) # True to indicate success
             except Exception as e:

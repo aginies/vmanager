@@ -19,6 +19,10 @@ class VirshShellScreen(ModalScreen):
         ("escape", "app.pop_screen", "Close Shell"),
     ]
 
+    def __init__(self, uri: str) -> None:
+        super().__init__()
+        self.uri = uri
+
     def compose(self) -> ComposeResult:
         with Vertical(id="virsh-shell-container"):
             yield Header()
@@ -48,8 +52,7 @@ class VirshShellScreen(ModalScreen):
         self.app.show_success_message(starting_virsh_text)
 
         try:
-            # We need to connect to the current libvirt URI
-            uri = self.app.connection_uri if hasattr(self.app, 'connection_uri') else "qemu:///system"
+            uri = self.uri
 
             self.virsh_process = await asyncio.create_subprocess_exec(
                 "/usr/bin/virsh", "-c", uri,

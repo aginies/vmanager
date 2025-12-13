@@ -64,9 +64,24 @@ class ServerPrefModal(BaseModal[None]):
                             yield Button("Delete Volume", id="del-vol-btn", variant="error", classes="toggle-detail-button")
 
     def on_mount(self) -> None:
+        if len(self.app.active_uris) == 0:
+            self.app.show_error_message("Not connected to any server.")
+            self.dismiss()
+            return
+        if len(self.app.active_uris) > 1:
+            self.app.show_error_message("Server Preferences are available only when connected to a single server.")
+            self.dismiss()
+            return
+
+        self.conn = self.app.connection_manager.connect(self.app.active_uris[0])
+        if not self.conn:
+            self.app.show_error_message("Failed to get connection for server preferences.")
+            self.dismiss()
+            return
+
         self._load_networks()
-        disk_map = get_all_vm_disk_usage(self.app.conn)
-        nvram_map = get_all_vm_nvram_usage(self.app.conn)
+        disk_map = get_all_vm_disk_usage(self.conn)
+        nvram_map = get_all_vm_nvram_usage(self.conn)
         self.file_to_vm_map = {**disk_map, **nvram_map}
         self._load_storage_pools()
 
@@ -83,7 +98,7 @@ class ServerPrefModal(BaseModal[None]):
         tree: Tree[dict] = self.query_one("#storage-tree")
         tree.clear()
         tree.root.data = {"type": "root"}
-        pools = storage_manager.list_storage_pools(self.app.conn)
+        pools = storage_manager.list_storage_pools(self.conn)
         for pool_data in pools:
             pool_name = pool_data['name']
             status = pool_data['status']
@@ -106,8 +121,8 @@ class ServerPrefModal(BaseModal[None]):
 
         table.clear()
 
-        network_usage = get_all_network_usage(self.app.conn)
-        self.networks_list = list_networks(self.app.conn)
+        network_usage = get_all_network_usage(self.conn)
+        self.networks_list = list_networks(self.conn)
 
         for net in self.networks_list:
             vms_str = ", ".join(network_usage.get(net['name'], [])) or "Not in use"
@@ -348,7 +363,7 @@ class ServerPrefModal(BaseModal[None]):
 
         if net_info:
             try:
-                set_network_active(self.app.conn, net_name, not net_info['active'])
+                set_network_active(self.conn, net_name, not net_info['active'])
                 self.app.show_success_message(f"Network '{net_name}' is now {'inactive' if net_info['active'] else 'active'}.")
                 self._load_networks()
             except Exception as e:
@@ -365,7 +380,7 @@ class ServerPrefModal(BaseModal[None]):
 
         if net_info:
             try:
-                set_network_autostart(self.app.conn, net_name, not net_info['autostart'])
+                set_network_autostart(self.conn, net_name, not net_info['autostart'])
                 self.app.show_success_message(f"Autostart for network '{net_name}' is now {'off' if net_info['autostart'] else 'on'}.")
                 self._load_networks()
             except Exception as e:
@@ -382,7 +397,7 @@ class ServerPrefModal(BaseModal[None]):
             row_key, _ = table.coordinate_to_cell_key(table.cursor_coordinate)
             network_name = row_key.value
             try:
-                conn = self.app.conn
+                conn = self.conn
                 if conn is None:
                     self.app.show_error_message("Not connected to libvirt.")
                     return
@@ -406,7 +421,7 @@ class ServerPrefModal(BaseModal[None]):
 
             row_key, _ = table.coordinate_to_cell_key(table.cursor_coordinate)
             network_name = row_key.value
-            vms_using_network = get_vms_using_network(self.app.conn, network_name)
+            vms_using_network = get_vms_using_network(self.conn, network_name)
 
             confirm_message = f"Are you sure you want to delete network:\n'{network_name}'"
             if vms_using_network:
@@ -416,7 +431,7 @@ class ServerPrefModal(BaseModal[None]):
             def on_confirm(confirmed: bool) -> None:
                 if confirmed:
                     try:
-                        delete_network(self.app.conn, network_name)
+                        delete_network(self.conn, network_name)
                         self.app.show_success_message(f"Network '{network_name}' deleted successfully.")
                         self._load_networks()
                     except Exception as e:

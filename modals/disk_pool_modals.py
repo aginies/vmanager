@@ -244,14 +244,14 @@ class AddPoolModal(BaseModal[bool | None]):
             try:
                 if pool_details['type'] == 'dir':
                     create_storage_pool(
-                        self.app.conn,
+                        self.conn,
                         pool_details['name'],
                         pool_details['type'],
                         pool_details['target']
                     )
                 elif pool_details['type'] == 'netfs':
                     create_storage_pool(
-                        self.app.conn,
+                        self.conn,
                         pool_details['name'],
                         pool_details['type'],
                         pool_details['target'],

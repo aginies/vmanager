@@ -67,11 +67,12 @@ class VMDetailModal(ModalScreen):
     all_bootable_devices: reactive(list)
     graphics_info: reactive(dict) # New reactive variable
 
-    def __init__(self, vm_name: str, vm_info: dict, domain: libvirt.virDomain) -> None:
+    def __init__(self, vm_name: str, vm_info: dict, domain: libvirt.virDomain, conn: libvirt.virConnect) -> None:
         super().__init__()
         self.vm_name = vm_name
         self.vm_info = vm_info
         self.domain = domain
+        self.conn = conn
         self.available_networks = []
         self.selected_virtiofs_target = None
         self.selected_virtiofs_info = None # Store full info for editing
@@ -83,7 +84,7 @@ class VMDetailModal(ModalScreen):
 
     def on_mount(self) -> None:
         try:
-            all_networks_info = list_networks(self.app.conn)
+            all_networks_info = list_networks(self.conn)
             self.available_networks = [net['name'] for net in all_networks_info]
         except (libvirt.libvirtError, Exception) as e:
             self.app.show_error_message(f"Could not load networks: {e}")
@@ -99,7 +100,7 @@ class VMDetailModal(ModalScreen):
 
         if firmware_type == 'UEFI':
             try:
-                self.sev_caps = get_host_sev_capabilities(self.domain.connect())
+                self.sev_caps = get_host_sev_capabilities(self.conn)
                 sev_checkbox = self.query_one("#sev-checkbox", Checkbox)
                 sev_es_checkbox = self.query_one("#sev-es-checkbox", Checkbox)
                 sev_checkbox.display = self.sev_caps['sev']
@@ -518,7 +519,7 @@ class VMDetailModal(ModalScreen):
                         arch_elem = xml_root.find(".//os/type")
                         arch = arch_elem.get('arch') if arch_elem is not None else 'x86_64'
 
-                        cpu_models = get_cpu_models(self.domain.connect(), arch)
+                        cpu_models = get_cpu_models(self.conn, arch)
                         # Ensure 'host-passthrough' and 'default' are in the list
                         if 'host-passthrough' not in cpu_models:
                             cpu_models.append('host-passthrough')
@@ -773,7 +774,7 @@ class VMDetailModal(ModalScreen):
     def _update_disk_list(self):
         self.disk_list_view.clear()
         new_xml = self.domain.XMLDesc(0)
-        disks_info = get_vm_disks_info(self.app.conn, new_xml)
+        disks_info = get_vm_disks_info(self.conn, new_xml)
         self.vm_info['disks'] = disks_info  # Update the stored info
 
         disk_items = []
@@ -957,7 +958,7 @@ class VMDetailModal(ModalScreen):
                         self.app.show_error_message(f"Error adding disk: {e}")
             self.app.push_screen(AddDiskModal(), add_disk_callback)
         elif event.button.id == "detail_attach_disk":
-            all_pools = storage_manager.list_storage_pools(self.app.conn)
+            all_pools = storage_manager.list_storage_pools(self.conn)
             active_pools = [p for p in all_pools if p['status'] == 'active']
 
             if not active_pools:
@@ -976,8 +977,8 @@ class VMDetailModal(ModalScreen):
                 all_volumes_in_pool = storage_manager.list_storage_volumes(selected_pool_obj)
                 all_volume_paths = [vol['volume'].path() for vol in all_volumes_in_pool]
 
-                used_disks = get_all_vm_disk_usage(self.app.conn)
-                used_nvrams = get_all_vm_nvram_usage(self.app.conn)
+                used_disks = get_all_vm_disk_usage(self.conn)
+                used_nvrams = get_all_vm_nvram_usage(self.conn)
                 used_paths = set(used_disks.keys()) | set(used_nvrams.keys())
 
                 available_disks = [path for path in all_volume_paths if path not in used_paths]
@@ -1123,7 +1124,7 @@ class VMDetailModal(ModalScreen):
             self.app.push_screen(EditMemoryModal(current_memory=str(self.vm_info.get('memory', ''))), edit_memory_callback)
 
         elif event.button.id == "edit-machine-type":
-            machine_types = get_supported_machine_types(self.domain.connect(), self.domain)
+            machine_types = get_supported_machine_types(self.conn, self.domain)
             if not machine_types:
                 self.app.show_error_message("Could not retrieve machine types.")
                 return
@@ -1143,7 +1144,7 @@ class VMDetailModal(ModalScreen):
         elif event.button.id == "change-network-button":
             logging.info(f"Attempting to change network for VM: {self.vm_name}")
             try:
-                available_networks_info = list_networks(self.app.conn)
+                available_networks_info = list_networks(self.conn)
                 available_networks = [net['name'] for net in available_networks_info]
 
                 vm_xml = self.domain.XMLDesc(0)
