@@ -282,489 +282,529 @@ class VMCard(Static):
         status_widget.add_class(self.status.lower())
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "start":
-            logging.info(f"Attempting to start VM: {self.name}")
-            if not self.vm.isActive():
-                try:
-                    start_vm(self.vm)
-                    #self.vm.create()
-                    self.status = "Running"
-                    status_widget = self.query_one("#status")
-                    status_widget.update(f"Status: {self.status}{self.webc_status_indicator}")
-                    self._update_status_styling()
-                    self.update_button_layout()
-                    self.app.refresh_vm_list()
-                    logging.info(f"Successfully started VM: {self.name}")
-                    self.app.show_success_message(f"VM '{self.name}' started successfully.")
-                except Exception as e:
-                    self.app.show_error_message(f"Error on VM {self.name} during 'start': {e}")
+        """Handle button presses."""
+        button_handlers = {
+            "start": self._handle_start_button,
+            "shutdown": self._handle_shutdown_button,
+            "stop": self._handle_stop_button,
+            "pause": self._handle_pause_button,
+            "resume": self._handle_resume_button,
+            "xml": self._handle_xml_button,
+            "connect": self._handle_connect_button,
+            "web_console": self._handle_web_console_button,
+            "snapshot_take": self._handle_snapshot_take_button,
+            "snapshot_restore": self._handle_snapshot_restore_button,
+            "snapshot_delete": self._handle_snapshot_delete_button,
+            "delete": self._handle_delete_button,
+            "clone": self._handle_clone_button,
+            "rename-button": self._handle_rename_button,
+            "configure-button": self._handle_configure_button,
+        }
+        handler = button_handlers.get(event.button.id)
+        if handler:
+            handler(event)
 
-        elif event.button.id == "shutdown":
-            logging.info(f"Attempting to gracefully shutdown VM: {self.name}")
-            if self.vm.isActive():
-                try:
-                    self.vm.shutdown()
-                    self.app.show_success_message(f"Shutdown signal sent to VM '{self.name}'.")
-                except libvirt.libvirtError as e:
-                    self.app.show_error_message(f"Error on VM {self.name} during 'shutdown': {e}")
-
-        elif event.button.id == "stop":
-            logging.info(f"Attempting to stop VM: {self.name}")
-
-            def on_confirm(confirmed: bool) -> None:
-                if not confirmed:
-                    return
-
-                if self.vm.isActive():
-                    try:
-                        self.vm.destroy()
-                        self.status = "Stopped"
-                        self.query_one("#status").update(f"Status: {self.status}")
-                        self._update_status_styling()
-                        self.update_button_layout()
-                        self.app.refresh_vm_list()
-                        logging.info(f"Successfully stopped VM: {self.name}")
-                        self.app.show_success_message(f"VM '{self.name}' stopped successfully.")
-                    except libvirt.libvirtError as e:
-                        self.app.show_error_message(f"Error on VM {self.name} during 'stop': {e}")
-
-            message = f"This is a hard stop, like unplugging the power cord.\nAre you sure you want to stop '{self.name}'?"
-            self.app.push_screen(ConfirmationDialog(message), on_confirm)
-
-        elif event.button.id == "pause":
-            logging.info(f"Attempting to pause VM: {self.name}")
-            if self.vm.isActive():
-                try:
-                    self.vm.suspend()
-                    self.status = "Paused"
-                    status_widget = self.query_one("#status")
-                    status_widget.update(f"Status: {self.status}{self.webc_status_indicator}")
-                    self._update_status_styling()
-                    self.update_button_layout()
-                    self.app.refresh_vm_list()
-                    logging.info(f"Successfully paused VM: {self.name}")
-                    self.app.show_success_message(f"VM '{self.name}' paused successfully.")
-                except libvirt.libvirtError as e:
-                    self.app.show_error_message(f"Error on VM {self.name} during 'pause': {e}")
-        elif event.button.id == "resume":
-            logging.info(f"Attempting to resume VM: {self.name}")
+    def _handle_start_button(self, event: Button.Pressed) -> None:
+        """Handles the start button press."""
+        logging.info(f"Attempting to start VM: {self.name}")
+        if not self.vm.isActive():
             try:
-                self.vm.resume()
+                start_vm(self.vm)
+                #self.vm.create()
                 self.status = "Running"
                 status_widget = self.query_one("#status")
                 status_widget.update(f"Status: {self.status}{self.webc_status_indicator}")
-                self._update_webc_status()
                 self._update_status_styling()
+                self.update_button_layout()
                 self.app.refresh_vm_list()
-                logging.info(f"Successfully resumed VM: {self.name}")
-                self.app.show_success_message(f"VM '{self.name}' resumed successfully.")
-            except libvirt.libvirtError as e:
-                self.app.show_error_message(f"Error on VM {self.name} during 'resume': {e}")
-        elif event.button.id == "xml":
-            if self.status == "Stopped":
-                # EDIT LOGIC
-                logging.info(f"Attempting to edit XML for VM: {self.name}")
-                original_xml = self.vm.XMLDesc(0)
-                tmp_file_path = None
-                try:
-                    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".xml", encoding="utf-8") as f:
-                        tmp_file_path = f.name
-                        f.write(original_xml)
+                logging.info(f"Successfully started VM: {self.name}")
+                self.app.show_success_message(f"VM '{self.name}' started successfully.")
+            except Exception as e:
+                self.app.show_error_message(f"Error on VM {self.name} during 'start': {e}")
 
-                    editor = os.environ.get('EDITOR', 'vim')
-
-                    with self.app.suspend():
-                        subprocess.run([editor, tmp_file_path], check=True)
-
-                    with open(tmp_file_path, 'r', encoding="utf-8") as f:
-                        modified_xml = f.read()
-
-                    if original_xml.strip() != modified_xml.strip():
-                        try:
-                            conn = self.vm.connect()
-                            conn.defineXML(modified_xml)
-                            self.app.show_success_message(f"VM '{self.name}' configuration updated successfully.")
-                            logging.info(f"Successfully updated XML for VM: {self.name}")
-                            self.app.refresh_vm_list()
-                        except libvirt.libvirtError as e:
-                            error_msg = f"Invalid XML for '{self.name}': {e}. Your changes have been discarded."
-                            self.app.show_error_message(error_msg)
-                            logging.error(error_msg)
-                    else:
-                        self.app.show_success_message("No changes made to the XML configuration.")
-
-                except FileNotFoundError:
-                    self.app.show_error_message(f"Editor '{os.environ.get('EDITOR', 'vim')}' not found. Please set your $EDITOR environment variable.")
-                except subprocess.CalledProcessError:
-                    self.app.show_error_message("Editor closed with an error. No changes were applied.")
-                except libvirt.libvirtError as e:
-                    self.app.show_error_message(f"Error processing XML for VM {self.name}: {e}")
-                except Exception as e:
-                    self.app.show_error_message(f"An unexpected error occurred: {e}")
-                    logging.error(f"Unexpected error editing XML: {traceback.format_exc()}")
-                finally:
-                    if tmp_file_path and os.path.exists(tmp_file_path):
-                        os.remove(tmp_file_path)
-            else:
-                # VIEW LOGIC
-                logging.info(f"Attempting to view XML for VM: {self.name}")
-                tmp_file_path = None
-                try:
-                    xml_content = self.vm.XMLDesc(0)
-                    with tempfile.NamedTemporaryFile(
-                        mode="w", delete=False, suffix=".xml", encoding="utf-8"
-                    ) as tmpfile:
-                        tmp_file_path = tmpfile.name
-                        tmpfile.write(xml_content)
-
-                    viewer = "view"
-                    with self.app.suspend():
-                        subprocess.run([viewer, tmp_file_path], check=True)
-                    logging.info(f"Successfully viewed XML for VM: {self.name}")
-                except FileNotFoundError:
-                     self.app.show_error_message(f"Viewer '{viewer}' not found.")
-                except (libvirt.libvirtError, subprocess.CalledProcessError) as e:
-                    self.app.show_error_message(f"Error on VM {self.name} during 'View XML': {e}")
-                finally:
-                    if tmp_file_path and os.path.exists(tmp_file_path):
-                        os.remove(tmp_file_path)
-        elif event.button.id == "connect":
-            logging.info(f"Attempting to connect to VM: {self.name}")
+    def _handle_shutdown_button(self, event: Button.Pressed) -> None:
+        """Handles the shutdown button press."""
+        logging.info(f"Attempting to gracefully shutdown VM: {self.name}")
+        if self.vm.isActive():
             try:
-                subprocess.Popen(
-                    ["virt-viewer", "--connect", self.app.connection_uri, self.name],
-                )
-                logging.info(f"Successfully launched virt-viewer for VM: {self.name}")
-            except (FileNotFoundError, subprocess.CalledProcessError) as e:
-                self.app.show_error_message(f"Error on VM {self.name} during 'connect': {e}")
-        elif event.button.id == "web_console":
-            logging.info(f"Web console requested for VM: {self.name}")
+                self.vm.shutdown()
+                self.app.show_success_message(f"Shutdown signal sent to VM '{self.name}'.")
+            except libvirt.libvirtError as e:
+                self.app.show_error_message(f"Error on VM {self.name} during 'shutdown': {e}")
 
-            def handle_web_console_dialog(result: str | None):
-                if result == "stop":
-                    uuid = self.vm.UUIDString()
-                    if uuid in self.app.websockify_processes:
-                        websockify_proc, _, _, ssh_info = self.app.websockify_processes[uuid]
-                        websockify_proc.terminate() # Stop websockify
+    def _handle_stop_button(self, event: Button.Pressed) -> None:
+        """Handles the stop button press."""
+        logging.info(f"Attempting to stop VM: {self.name}")
 
-                        if ssh_info and ssh_info.get("control_socket"):
-                            control_socket = ssh_info["control_socket"]
-                            try:
-                                stop_cmd = ["ssh", "-S", control_socket, "-O", "exit", "dummy-host"]
-                                subprocess.run(stop_cmd, check=True, timeout=5, capture_output=True)
-                                logging.info(f"SSH tunnel stopped for VM {self.name} using socket {control_socket}")
-                            except FileNotFoundError:
-                                self.app.show_error_message("'ssh' command not found.")
-                            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-                                logging.warning(f"Could not stop SSH tunnel cleanly for VM {self.name}: {e.stderr.decode() if e.stderr else e}")
-                            finally:
-                                if os.path.exists(control_socket):
-                                    os.remove(control_socket)
+        def on_confirm(confirmed: bool) -> None:
+            if not confirmed:
+                return
 
-                        del self.app.websockify_processes[uuid]
-                        self.app.show_success_message("Web console stopped.")
-                        self._update_webc_status() # Update status after stopping
+            if self.vm.isActive():
+                try:
+                    self.vm.destroy()
+                    self.status = "Stopped"
+                    self.query_one("#status").update(f"Status: {self.status}")
+                    self._update_status_styling()
+                    self.update_button_layout()
+                    self.app.refresh_vm_list()
+                    logging.info(f"Successfully stopped VM: {self.name}")
+                    self.app.show_success_message(f"VM '{self.name}' stopped successfully.")
+                except libvirt.libvirtError as e:
+                    self.app.show_error_message(f"Error on VM {self.name} during 'stop': {e}")
 
-            if not hasattr(self.app, 'websockify_processes'):
-                self.app.websockify_processes = {}
+        message = f"This is a hard stop, like unplugging the power cord.\nAre you sure you want to stop '{self.name}'?"
+        self.app.push_screen(ConfirmationDialog(message), on_confirm)
 
-            uuid = self.vm.UUIDString()
-            if uuid in self.app.websockify_processes:
-                proc, _, url, _ = self.app.websockify_processes[uuid]
-                if proc.poll() is None:
-                    self.app.push_screen(WebConsoleDialog(url), handle_web_console_dialog)
-                    return
-                else: # Process has terminated, remove it
-                    del self.app.websockify_processes[uuid]
-                    self._update_webc_status()
+    def _handle_pause_button(self, event: Button.Pressed) -> None:
+        """Handles the pause button press."""
+        logging.info(f"Attempting to pause VM: {self.name}")
+        if self.vm.isActive():
+            try:
+                self.vm.suspend()
+                self.status = "Paused"
+                status_widget = self.query_one("#status")
+                status_widget.update(f"Status: {self.status}{self.webc_status_indicator}")
+                self._update_status_styling()
+                self.update_button_layout()
+                self.app.refresh_vm_list()
+                logging.info(f"Successfully paused VM: {self.name}")
+                self.app.show_success_message(f"VM '{self.name}' paused successfully.")
+            except libvirt.libvirtError as e:
+                self.app.show_error_message(f"Error on VM {self.name} during 'pause': {e}")
 
+    def _handle_resume_button(self, event: Button.Pressed) -> None:
+        """Handles the resume button press."""
+        logging.info(f"Attempting to resume VM: {self.name}")
+        try:
+            self.vm.resume()
+            self.status = "Running"
+            status_widget = self.query_one("#status")
+            status_widget.update(f"Status: {self.status}{self.webc_status_indicator}")
+            self._update_webc_status()
+            self._update_status_styling()
+            self.app.refresh_vm_list()
+            logging.info(f"Successfully resumed VM: {self.name}")
+            self.app.show_success_message(f"VM '{self.name}' resumed successfully.")
+        except libvirt.libvirtError as e:
+            self.app.show_error_message(f"Error on VM {self.name} during 'resume': {e}")
+
+    def _handle_xml_button(self, event: Button.Pressed) -> None:
+        """Handles the xml button press."""
+        if self.status == "Stopped":
+            # EDIT LOGIC
+            logging.info(f"Attempting to edit XML for VM: {self.name}")
+            original_xml = self.vm.XMLDesc(0)
+            tmp_file_path = None
+            try:
+                with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".xml", encoding="utf-8") as f:
+                    tmp_file_path = f.name
+                    f.write(original_xml)
+
+                editor = os.environ.get('EDITOR', 'vim')
+
+                with self.app.suspend():
+                    subprocess.run([editor, tmp_file_path], check=True)
+
+                with open(tmp_file_path, 'r', encoding="utf-8") as f:
+                    modified_xml = f.read()
+
+                if original_xml.strip() != modified_xml.strip():
+                    try:
+                        conn = self.vm.connect()
+                        conn.defineXML(modified_xml)
+                        self.app.show_success_message(f"VM '{self.name}' configuration updated successfully.")
+                        logging.info(f"Successfully updated XML for VM: {self.name}")
+                        self.app.refresh_vm_list()
+                    except libvirt.libvirtError as e:
+                        error_msg = f"Invalid XML for '{self.name}': {e}. Your changes have been discarded."
+                        self.app.show_error_message(error_msg)
+                        logging.error(error_msg)
+                else:
+                    self.app.show_success_message("No changes made to the XML configuration.")
+
+            except FileNotFoundError:
+                self.app.show_error_message(f"Editor '{os.environ.get('EDITOR', 'vim')}' not found. Please set your $EDITOR environment variable.")
+            except subprocess.CalledProcessError:
+                self.app.show_error_message("Editor closed with an error. No changes were applied.")
+            except libvirt.libvirtError as e:
+                self.app.show_error_message(f"Error processing XML for VM {self.name}: {e}")
+            except Exception as e:
+                self.app.show_error_message(f"An unexpected error occurred: {e}")
+                logging.error(f"Unexpected error editing XML: {traceback.format_exc()}")
+            finally:
+                if tmp_file_path and os.path.exists(tmp_file_path):
+                    os.remove(tmp_file_path)
+        else:
+            # VIEW LOGIC
+            logging.info(f"Attempting to view XML for VM: {self.name}")
+            tmp_file_path = None
             try:
                 xml_content = self.vm.XMLDesc(0)
-                graphics_info = get_vm_graphics_info(xml_content)
+                with tempfile.NamedTemporaryFile(
+                    mode="w", delete=False, suffix=".xml", encoding="utf-8"
+                ) as tmpfile:
+                    tmp_file_path = tmpfile.name
+                    tmpfile.write(xml_content)
 
-                if graphics_info['type'] != 'vnc':
-                    self.app.show_error_message("Web console only supports VNC graphics.")
-                    return
+                viewer = "view"
+                with self.app.suspend():
+                    subprocess.run([viewer, tmp_file_path], check=True)
+                logging.info(f"Successfully viewed XML for VM: {self.name}")
+            except FileNotFoundError:
+                 self.app.show_error_message(f"Viewer '{viewer}' not found.")
+            except (libvirt.libvirtError, subprocess.CalledProcessError) as e:
+                self.app.show_error_message(f"Error on VM {self.name} during 'View XML': {e}")
+            finally:
+                if tmp_file_path and os.path.exists(tmp_file_path):
+                    os.remove(tmp_file_path)
 
-                vnc_port = graphics_info.get('port')
-                if not vnc_port or vnc_port == '-1':
-                    self.app.show_error_message("Could not determine VNC port for the VM.")
-                    return
+    def _handle_connect_button(self, event: Button.Pressed) -> None:
+        """Handles the connect button press."""
+        logging.info(f"Attempting to connect to VM: {self.name}")
+        try:
+            subprocess.Popen(
+                ["virt-viewer", "--connect", self.app.connection_uri, self.name],
+            )
+            logging.info(f"Successfully launched virt-viewer for VM: {self.name}")
+        except (FileNotFoundError, subprocess.CalledProcessError) as e:
+            self.app.show_error_message(f"Error on VM {self.name} during 'connect': {e}")
 
-                # --- SSH Tunnel Logic ---
-                ssh_info = {}
-                parsed_uri = urlparse(self.app.connection_uri)
-                is_remote_ssh = parsed_uri.hostname not in (None, 'localhost', '127.0.0.1') and parsed_uri.scheme == 'qemu+ssh'
+    def _handle_web_console_button(self, event: Button.Pressed) -> None:
+        """Handles the web console button press."""
+        logging.info(f"Web console requested for VM: {self.name}")
 
-                vnc_target_host = graphics_info.get('address', '127.0.0.1')
-                vnc_target_port = vnc_port
+        def handle_web_console_dialog(result: str | None):
+            if result == "stop":
+                uuid = self.vm.UUIDString()
+                if uuid in self.app.websockify_processes:
+                    websockify_proc, _, _, ssh_info = self.app.websockify_processes[uuid]
+                    websockify_proc.terminate() # Stop websockify
 
-                if is_remote_ssh:
-                    self.app.show_success_message(f"Remote connection detected. Setting up SSH tunnel...")
-                    user = parsed_uri.username
-                    host = parsed_uri.hostname
-                    remote_user_host = f"{user}@{host}" if user else host
+                    if ssh_info and ssh_info.get("control_socket"):
+                        control_socket = ssh_info["control_socket"]
+                        try:
+                            stop_cmd = ["ssh", "-S", control_socket, "-O", "exit", "dummy-host"]
+                            subprocess.run(stop_cmd, check=True, timeout=5, capture_output=True)
+                            logging.info(f"SSH tunnel stopped for VM {self.name} using socket {control_socket}")
+                        except FileNotFoundError:
+                            self.app.show_error_message("'ssh' command not found.")
+                        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+                            logging.warning(f"Could not stop SSH tunnel cleanly for VM {self.name}: {e.stderr.decode() if e.stderr else e}")
+                        finally:
+                            if os.path.exists(control_socket):
+                                os.remove(control_socket)
 
-                    # Create a temporary socket for ssh control
-                    # We use a temp directory to store the socket
-                    temp_dir = tempfile.gettempdir()
-                    socket_name = f"vmanager_ssh_{uuid}_{datetime.now().strftime('%Y%m%d%H%M%S')}.sock"
-                    control_socket = os.path.join(temp_dir, socket_name)
+                    del self.app.websockify_processes[uuid]
+                    self.app.show_success_message("Web console stopped.")
+                    self._update_webc_status() # Update status after stopping
 
-                    tunnel_port = find_free_port(int(self.app.WC_PORT_RANGE_START),
-                                                 int(self.app.WC_PORT_RANGE_END)
-                                                 )
+        if not hasattr(self.app, 'websockify_processes'):
+            self.app.websockify_processes = {}
 
-                    ssh_cmd = [
-                        "ssh",
-                        "-M", "-S", control_socket,
-                        "-f", "-N",
-                        "-L", f"{tunnel_port}:127.0.0.1:{vnc_port}",
-                        remote_user_host
-                    ]
+        uuid = self.vm.UUIDString()
+        if uuid in self.app.websockify_processes:
+            proc, _, url, _ = self.app.websockify_processes[uuid]
+            if proc.poll() is None:
+                self.app.push_screen(WebConsoleDialog(url), handle_web_console_dialog)
+                return
+            else: # Process has terminated, remove it
+                del self.app.websockify_processes[uuid]
+                self._update_webc_status()
 
-                    try:
-                        subprocess.run(ssh_cmd, check=True, timeout=10)
-                        logging.info(f"SSH tunnel created for VM {self.name} via {control_socket}")
-                        ssh_info = {"control_socket": control_socket}
+        try:
+            xml_content = self.vm.XMLDesc(0)
+            graphics_info = get_vm_graphics_info(xml_content)
 
-                        # Websockify now connects to the local end of the tunnel
-                        vnc_target_host = '127.0.0.1'
-                        vnc_target_port = tunnel_port
+            if graphics_info['type'] != 'vnc':
+                self.app.show_error_message("Web console only supports VNC graphics.")
+                return
 
-                    except FileNotFoundError:
-                        self.app.show_error_message("SSH command not found. Cannot create tunnel.")
-                        return
-                    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-                        self.app.show_error_message(f"Failed to create SSH tunnel: {e}")
-                        logging.error(f"SSH tunnel command failed: {' '.join(ssh_cmd)}")
-                        return
+            vnc_port = graphics_info.get('port')
+            if not vnc_port or vnc_port == '-1':
+                self.app.show_error_message("Could not determine VNC port for the VM.")
+                return
 
-                elif vnc_target_host in ['0.0.0.0', '::']:
-                    vnc_target_host = '127.0.0.1'
+            # --- SSH Tunnel Logic ---
+            ssh_info = {}
+            parsed_uri = urlparse(self.app.connection_uri)
+            is_remote_ssh = parsed_uri.hostname not in (None, 'localhost', '127.0.0.1') and parsed_uri.scheme == 'qemu+ssh'
 
-                web_port = find_free_port(int(self.app.WC_PORT_RANGE_START), int(self.app.WC_PORT_RANGE_END))
-                
-                websockify_path = _config.get('websockify_path', '/usr/bin/websockify')
-                novnc_path = _config.get("novnc_path", "/usr/share/novnc/")
+            vnc_target_host = graphics_info.get('address', '127.0.0.1')
+            vnc_target_port = vnc_port
 
-                websockify_cmd = [
-                    websockify_path, "--run-once", str(web_port),
-                    f"{vnc_target_host}:{vnc_target_port}", "--web", novnc_path
+            if is_remote_ssh:
+                self.app.show_success_message(f"Remote connection detected. Setting up SSH tunnel...")
+                user = parsed_uri.username
+                host = parsed_uri.hostname
+                remote_user_host = f"{user}@{host}" if user else host
+
+                # Create a temporary socket for ssh control
+                # We use a temp directory to store the socket
+                temp_dir = tempfile.gettempdir()
+                socket_name = f"vmanager_ssh_{uuid}_{datetime.now().strftime('%Y%m%d%H%M%S')}.sock"
+                control_socket = os.path.join(temp_dir, socket_name)
+
+                tunnel_port = find_free_port(int(self.app.WC_PORT_RANGE_START),
+                                             int(self.app.WC_PORT_RANGE_END)
+                                             )
+
+                ssh_cmd = [
+                    "ssh",
+                    "-M", "-S", control_socket,
+                    "-f", "-N",
+                    "-L", f"{tunnel_port}:127.0.0.1:{vnc_port}",
+                    remote_user_host
                 ]
 
-                config_dir = Path.home() / '.config' / 'vmanager'
-                cert_file = config_dir / 'cert.pem'
-                key_file = config_dir / 'key.pem'
-                url_scheme = "http"
-
-                log_file_path = "vm_manager.log"
-                with open(log_file_path, 'a') as log_file_handle:
-                    if cert_file.exists() and key_file.exists():
-                        websockify_cmd.extend(["--cert", str(cert_file), "--key", str(key_file)])
-                        url_scheme = "https"
-                        self.app.show_success_message("Found cert/key, using secure wss connection.")
-
-                    proc = subprocess.Popen(websockify_cmd, stdout=subprocess.DEVNULL, stderr=log_file_handle)
-                    
-                    url = f"{url_scheme}://localhost:{web_port}/vnc.html?path=websockify"
-                    self.app.websockify_processes[uuid] = (proc, web_port, url, ssh_info)
-                    
-                    self.app.push_screen(WebConsoleDialog(url), handle_web_console_dialog)
-                    self._update_webc_status()
-
-            except (libvirt.libvirtError, FileNotFoundError, Exception) as e:
-                self.app.show_error_message(f"Failed to start web console: {e}")
-                logging.error(f"Error during web console startup for VM {self.name}: {traceback.format_exc()}")
-
-
-        elif event.button.id == "snapshot_take":
-            logging.info(f"Attempting to take snapshot for VM: {self.name}")
-            def handle_snapshot_name(name: str | None) -> None:
-                if name:
-                    xml = f"<domainsnapshot><name>{name}</name></domainsnapshot>"
-                    try:
-                        self.vm.snapshotCreateXML(xml, 0)
-                        self.app.show_success_message(f"Snapshot '{name}' created successfully.")
-                        self.update_button_layout()
-                    except libvirt.libvirtError as e:
-                        self.app.show_error_message(f"Snapshot error for {self.name}: {e}")
-
-            self.app.push_screen(SnapshotNameDialog(), handle_snapshot_name)
-
-        elif event.button.id == "snapshot_restore":
-            logging.info(f"Attempting to restore snapshot for VM: {self.name}")
-            snapshots = self.vm.listAllSnapshots(0)
-            if not snapshots:
-                self.app.show_error_message("No snapshots to restore.")
-                return
-
-            def restore_snapshot(snapshot_name: str | None) -> None:
-                if snapshot_name:
-                    try:
-                        snapshot = self.vm.snapshotLookupByName(snapshot_name, 0)
-                        self.vm.revertToSnapshot(snapshot, 0)
-
-                        # Get new state and update card
-                        state, _ = self.vm.state()
-                        if state == libvirt.VIR_DOMAIN_RUNNING:
-                            self.status = "Running"
-                        elif state == libvirt.VIR_DOMAIN_PAUSED:
-                            self.status = "Paused"
-                        else:
-                            self.status = "Stopped"
-
-                        status_widget = self.query_one("#status")
-                        status_widget.update(f"Status: {self.status}{self.webc_status_indicator}")
-                        self._update_status_styling()
-                        self.update_button_layout()
-
-                        self.app.refresh_vm_list()
-                        self.app.show_success_message(f"Restored to snapshot '{snapshot_name}' successfully.")
-                        logging.info(f"Successfully restored snapshot '{snapshot_name}' for VM: {self.name}")
-                    except libvirt.libvirtError as e:
-                        self.app.show_error_message(f"Error on VM {self.name} during 'snapshot restore': {e}")
-
-            self.app.push_screen(SelectSnapshotDialog(snapshots, "Select snapshot to restore:"), restore_snapshot)
-
-        elif event.button.id == "snapshot_delete":
-            logging.info(f"Attempting to delete snapshot for VM: {self.name}")
-            snapshots = self.vm.listAllSnapshots(0)
-            if not snapshots:
-                self.app.show_error_message("No snapshots to delete.")
-                return
-
-            def delete_snapshot(snapshot_name: str | None) -> None:
-                if snapshot_name:
-                    def on_confirm(confirmed: bool) -> None:
-                        if confirmed:
-                            try:
-                                snapshot = self.vm.snapshotLookupByName(snapshot_name, 0)
-                                snapshot.delete(0)
-                                self.app.show_success_message(f"Snapshot '{snapshot_name}' deleted successfully.")
-                                self.update_button_layout()
-                                logging.info(f"Successfully deleted snapshot '{snapshot_name}' for VM: {self.name}")
-                            except libvirt.libvirtError as e:
-                                self.app.show_error_message(f"Error on VM {self.name} during 'snapshot delete': {e}")
-
-                    self.app.push_screen(
-                        ConfirmationDialog(f"Are you sure you want to delete snapshot '{snapshot_name}'?"), on_confirm
-                    )
-
-            self.app.push_screen(SelectSnapshotDialog(snapshots, "Select snapshot to delete:"), delete_snapshot)
-
-        elif event.button.id == "delete":
-            logging.info(f"Attempting to delete VM: {self.name}")
-
-            def on_confirm(result: tuple[bool, bool]) -> None:
-                confirmed, delete_storage = result
-                if not confirmed:
-                    return
-
                 try:
-                    disk_paths = []
-                    if delete_storage:
-                        xml_desc = self.vm.XMLDesc(0)
-                        disks = get_vm_disks_info(self.vm.connect(), xml_desc)
-                        disk_paths = [disk['path'] for disk in disks if disk.get('path')]
+                    subprocess.run(ssh_cmd, check=True, timeout=10)
+                    logging.info(f"SSH tunnel created for VM {self.name} via {control_socket}")
+                    ssh_info = {"control_socket": control_socket}
 
-                    if self.vm.isActive():
-                        self.vm.destroy()
-                    self.vm.undefine()
+                    # Websockify now connects to the local end of the tunnel
+                    vnc_target_host = '127.0.0.1'
+                    vnc_target_port = tunnel_port
 
-                    if delete_storage:
-                        for path in disk_paths:
-                            try:
-                                if path and os.path.exists(path):
-                                    os.remove(path)
-                                    logging.info(f"Successfully deleted storage file: {path}")
-                                    self.app.show_success_message(f"Storage '{path}' deleted.")
-                                else:
-                                    logging.warning(f"Storage file not found, skipping: {path}")
-                            except OSError as e:
-                                logging.error(f"Error deleting storage file {path}: {e}")
-                                self.app.show_error_message(f"Error deleting storage '{path}': {e}")
-
-                    self.app.show_success_message(f"VM '{self.name}' deleted successfully.")
-                    self.app.refresh_vm_list()
-                    logging.info(f"Successfully deleted VM: {self.name}")
-                except libvirt.libvirtError as e:
-                    self.app.show_error_message(f"Error on VM {self.name} during 'delete VM': {e}")
-                except Exception as e:
-                    logging.error(f"An unexpected error occurred during VM deletion: {e}")
-                    self.app.show_error_message(f"An unexpected error occurred: {e}")
-
-            self.app.push_screen(
-                DeleteVMConfirmationDialog(self.name), on_confirm
-            )
-
-        elif event.button.id == "clone":
-            logging.info(f"Attempting to clone VM: {self.name}")
-
-            def handle_clone_name(new_name: str | None) -> None:
-                if new_name:
-                    loading_modal = LoadingModal()
-                    self.app.push_screen(loading_modal)
-
-                    def do_clone() -> None:
-                        try:
-                            clone_vm(self.vm, new_name)
-                            self.app.call_from_thread(
-                                self.app.show_success_message,
-                                f"VM '{self.name}' cloned as '{new_name}' successfully."
-                            )
-                            self.app.call_from_thread(self.app.refresh_vm_list)
-                            logging.info(f"Successfully cloned VM '{self.name}' to '{new_name}'")
-                        except Exception as e:
-                            self.app.call_from_thread(
-                                self.app.show_error_message,
-                                f"Error cloning VM {self.name}: {e}"
-                            )
-                        finally:
-                            self.app.call_from_thread(loading_modal.dismiss)
-
-                    self.app.run_worker(do_clone, thread=True)
-
-            self.app.push_screen(CloneNameDialog(), handle_clone_name)
-
-        elif event.button.id == "rename-button":
-            logging.info(f"Attempting to rename VM: {self.name}")
-
-            def handle_rename(new_name: str | None) -> None:
-                if not new_name:
+                except FileNotFoundError:
+                    self.app.show_error_message("SSH command not found. Cannot create tunnel.")
+                    return
+                except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+                    self.app.show_error_message(f"Failed to create SSH tunnel: {e}")
+                    logging.error(f"SSH tunnel command failed: {' '.join(ssh_cmd)}")
                     return
 
-                def do_rename(delete_snapshots=False):
+            elif vnc_target_host in ['0.0.0.0', '::']:
+                vnc_target_host = '127.0.0.1'
+
+            web_port = find_free_port(int(self.app.WC_PORT_RANGE_START), int(self.app.WC_PORT_RANGE_END))
+            
+            websockify_path = _config.get('websockify_path', '/usr/bin/websockify')
+            novnc_path = _config.get("novnc_path", "/usr/share/novnc/")
+
+            websockify_cmd = [
+                websockify_path, "--run-once", str(web_port),
+                f"{vnc_target_host}:{vnc_target_port}", "--web", novnc_path
+            ]
+
+            config_dir = Path.home() / '.config' / 'vmanager'
+            cert_file = config_dir / 'cert.pem'
+            key_file = config_dir / 'key.pem'
+            url_scheme = "http"
+
+            log_file_path = "vm_manager.log"
+            with open(log_file_path, 'a') as log_file_handle:
+                if cert_file.exists() and key_file.exists():
+                    websockify_cmd.extend(["--cert", str(cert_file), "--key", str(key_file)])
+                    url_scheme = "https"
+                    self.app.show_success_message("Found cert/key, using secure wss connection.")
+
+                proc = subprocess.Popen(websockify_cmd, stdout=subprocess.DEVNULL, stderr=log_file_handle)
+                
+                url = f"{url_scheme}://localhost:{web_port}/vnc.html?path=websockify"
+                self.app.websockify_processes[uuid] = (proc, web_port, url, ssh_info)
+                
+                self.app.push_screen(WebConsoleDialog(url), handle_web_console_dialog)
+                self._update_webc_status()
+
+        except (libvirt.libvirtError, FileNotFoundError, Exception) as e:
+            self.app.show_error_message(f"Failed to start web console: {e}")
+            logging.error(f"Error during web console startup for VM {self.name}: {traceback.format_exc()}")
+
+    def _handle_snapshot_take_button(self, event: Button.Pressed) -> None:
+        """Handles the snapshot take button press."""
+        logging.info(f"Attempting to take snapshot for VM: {self.name}")
+        def handle_snapshot_name(name: str | None) -> None:
+            if name:
+                xml = f"<domainsnapshot><name>{name}</name></domainsnapshot>"
+                try:
+                    self.vm.snapshotCreateXML(xml, 0)
+                    self.app.show_success_message(f"Snapshot '{name}' created successfully.")
+                    self.update_button_layout()
+                except libvirt.libvirtError as e:
+                    self.app.show_error_message(f"Snapshot error for {self.name}: {e}")
+
+        self.app.push_screen(SnapshotNameDialog(), handle_snapshot_name)
+
+    def _handle_snapshot_restore_button(self, event: Button.Pressed) -> None:
+        """Handles the snapshot restore button press."""
+        logging.info(f"Attempting to restore snapshot for VM: {self.name}")
+        snapshots = self.vm.listAllSnapshots(0)
+        if not snapshots:
+            self.app.show_error_message("No snapshots to restore.")
+            return
+
+        def restore_snapshot(snapshot_name: str | None) -> None:
+            if snapshot_name:
+                try:
+                    snapshot = self.vm.snapshotLookupByName(snapshot_name, 0)
+                    self.vm.revertToSnapshot(snapshot, 0)
+
+                    # Get new state and update card
+                    state, _ = self.vm.state()
+                    if state == libvirt.VIR_DOMAIN_RUNNING:
+                        self.status = "Running"
+                    elif state == libvirt.VIR_DOMAIN_PAUSED:
+                        self.status = "Paused"
+                    else:
+                        self.status = "Stopped"
+
+                    status_widget = self.query_one("#status")
+                    status_widget.update(f"Status: {self.status}{self.webc_status_indicator}")
+                    self._update_status_styling()
+                    self.update_button_layout()
+
+                    self.app.refresh_vm_list()
+                    self.app.show_success_message(f"Restored to snapshot '{snapshot_name}' successfully.")
+                    logging.info(f"Successfully restored snapshot '{snapshot_name}' for VM: {self.name}")
+                except libvirt.libvirtError as e:
+                    self.app.show_error_message(f"Error on VM {self.name} during 'snapshot restore': {e}")
+
+        self.app.push_screen(SelectSnapshotDialog(snapshots, "Select snapshot to restore:"), restore_snapshot)
+
+    def _handle_snapshot_delete_button(self, event: Button.Pressed) -> None:
+        """Handles the snapshot delete button press."""
+        logging.info(f"Attempting to delete snapshot for VM: {self.name}")
+        snapshots = self.vm.listAllSnapshots(0)
+        if not snapshots:
+            self.app.show_error_message("No snapshots to delete.")
+            return
+
+        def delete_snapshot(snapshot_name: str | None) -> None:
+            if snapshot_name:
+                def on_confirm(confirmed: bool) -> None:
+                    if confirmed:
+                        try:
+                            snapshot = self.vm.snapshotLookupByName(snapshot_name, 0)
+                            snapshot.delete(0)
+                            self.app.show_success_message(f"Snapshot '{snapshot_name}' deleted successfully.")
+                            self.update_button_layout()
+                            logging.info(f"Successfully deleted snapshot '{snapshot_name}' for VM: {self.name}")
+                        except libvirt.libvirtError as e:
+                            self.app.show_error_message(f"Error on VM {self.name} during 'snapshot delete': {e}")
+
+                self.app.push_screen(
+                    ConfirmationDialog(f"Are you sure you want to delete snapshot '{snapshot_name}'?"), on_confirm
+                )
+
+        self.app.push_screen(SelectSnapshotDialog(snapshots, "Select snapshot to delete:"), delete_snapshot)
+
+    def _handle_delete_button(self, event: Button.Pressed) -> None:
+        """Handles the delete button press."""
+        logging.info(f"Attempting to delete VM: {self.name}")
+
+        def on_confirm(result: tuple[bool, bool]) -> None:
+            confirmed, delete_storage = result
+            if not confirmed:
+                return
+
+            try:
+                disk_paths = []
+                if delete_storage:
+                    xml_desc = self.vm.XMLDesc(0)
+                    disks = get_vm_disks_info(self.vm.connect(), xml_desc)
+                    disk_paths = [disk['path'] for disk in disks if disk.get('path')]
+
+                if self.vm.isActive():
+                    self.vm.destroy()
+                self.vm.undefine()
+
+                if delete_storage:
+                    for path in disk_paths:
+                        try:
+                            if path and os.path.exists(path):
+                                os.remove(path)
+                                logging.info(f"Successfully deleted storage file: {path}")
+                                self.app.show_success_message(f"Storage '{path}' deleted.")
+                            else:
+                                logging.warning(f"Storage file not found, skipping: {path}")
+                        except OSError as e:
+                            logging.error(f"Error deleting storage file {path}: {e}")
+                            self.app.show_error_message(f"Error deleting storage '{path}': {e}")
+
+                self.app.show_success_message(f"VM '{self.name}' deleted successfully.")
+                self.app.refresh_vm_list()
+                logging.info(f"Successfully deleted VM: {self.name}")
+            except libvirt.libvirtError as e:
+                self.app.show_error_message(f"Error on VM {self.name} during 'delete VM': {e}")
+            except Exception as e:
+                logging.error(f"An unexpected error occurred during VM deletion: {e}")
+                self.app.show_error_message(f"An unexpected error occurred: {e}")
+
+        self.app.push_screen(
+            DeleteVMConfirmationDialog(self.name), on_confirm
+        )
+
+    def _handle_clone_button(self, event: Button.Pressed) -> None:
+        """Handles the clone button press."""
+        logging.info(f"Attempting to clone VM: {self.name}")
+
+        def handle_clone_name(new_name: str | None) -> None:
+            if new_name:
+                loading_modal = LoadingModal()
+                self.app.push_screen(loading_modal)
+
+                def do_clone() -> None:
                     try:
-                        rename_vm(self.vm, new_name, delete_snapshots=delete_snapshots)
-                        msg = f"VM '{self.name}' renamed to '{new_name}' successfully."
-                        if delete_snapshots:
-                            msg = f"Snapshots deleted and VM '{self.name}' renamed to '{new_name}' successfully."
-                        self.app.show_success_message(msg)
-                        self.app.refresh_vm_list()
-                        logging.info(f"Successfully renamed VM '{self.name}' to '{new_name}'")
+                        clone_vm(self.vm, new_name)
+                        self.app.call_from_thread(
+                            self.app.show_success_message,
+                            f"VM '{self.name}' cloned as '{new_name}' successfully."
+                        )
+                        self.app.call_from_thread(self.app.refresh_vm_list)
+                        logging.info(f"Successfully cloned VM '{self.name}' to '{new_name}'")
                     except Exception as e:
-                        self.app.show_error_message(f"Error renaming VM {self.name}: {e}")
+                        self.app.call_from_thread(
+                            self.app.show_error_message,
+                            f"Error cloning VM {self.name}: {e}"
+                        )
+                    finally:
+                        self.app.call_from_thread(loading_modal.dismiss)
 
-                num_snapshots = self.vm.snapshotNum(0)
-                if num_snapshots > 0:
-                    def on_confirm_delete(confirmed: bool) -> None:
-                        if confirmed:
-                            do_rename(delete_snapshots=True)
-                        else:
-                            self.app.show_success_message("VM rename cancelled.")
+                self.app.run_worker(do_clone, thread=True)
 
-                    self.app.push_screen(
-                        ConfirmationDialog(f"VM has {num_snapshots} snapshot(s). To rename, they must be deleted.\nDelete snapshots and continue?"),
-                        on_confirm_delete
-                    )
-                else:
-                    do_rename()
+        self.app.push_screen(CloneNameDialog(), handle_clone_name)
 
-            self.app.push_screen(RenameVMDialog(current_name=self.name), handle_rename)
+    def _handle_rename_button(self, event: Button.Pressed) -> None:
+        """Handles the rename button press."""
+        logging.info(f"Attempting to rename VM: {self.name}")
 
-        elif event.button.id == "configure-button":
-            self.post_message(VMNameClicked(vm_name=self.name))
+        def handle_rename(new_name: str | None) -> None:
+            if not new_name:
+                return
+
+            def do_rename(delete_snapshots=False):
+                try:
+                    rename_vm(self.vm, new_name, delete_snapshots=delete_snapshots)
+                    msg = f"VM '{self.name}' renamed to '{new_name}' successfully."
+                    if delete_snapshots:
+                        msg = f"Snapshots deleted and VM '{self.name}' renamed to '{new_name}' successfully."
+                    self.app.show_success_message(msg)
+                    self.app.refresh_vm_list()
+                    logging.info(f"Successfully renamed VM '{self.name}' to '{new_name}'")
+                except Exception as e:
+                    self.app.show_error_message(f"Error renaming VM {self.name}: {e}")
+
+            num_snapshots = self.vm.snapshotNum(0)
+            if num_snapshots > 0:
+                def on_confirm_delete(confirmed: bool) -> None:
+                    if confirmed:
+                        do_rename(delete_snapshots=True)
+                    else:
+                        self.app.show_success_message("VM rename cancelled.")
+
+                self.app.push_screen(
+                    ConfirmationDialog(f"VM has {num_snapshots} snapshot(s). To rename, they must be deleted.\nDelete snapshots and continue?"),
+                    on_confirm_delete
+                )
+            else:
+                do_rename()
+
+        self.app.push_screen(RenameVMDialog(current_name=self.name), handle_rename)
+
+    def _handle_configure_button(self, event: Button.Pressed) -> None:
+        """Handles the configure button press."""
+        self.post_message(VMNameClicked(vm_name=self.name))
 
     @on(Click, "#cpu-mem-info")
     def on_click_cpu_mem_info(self) -> None:
