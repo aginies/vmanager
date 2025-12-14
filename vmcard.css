@@ -17,7 +17,7 @@ VMCard {
     color: white;
     padding: 0 0;
     content-align: center middle;
-    border: green;
+    /* Border properties change based on server which belong VM */
     width: 41;
     height: 14;
 }

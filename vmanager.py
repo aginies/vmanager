@@ -40,7 +40,9 @@ from modals.server_prefs_modals import ServerPrefModal
 from modals.vmanager_vmdetails_modals import VMDetailModal
 from modals.vmanager_virsh_modals import VirshShellScreen
 from modals.base_modals import BaseModal
-
+from modals.utils_modals import LoadingModal
+from connection_manager import ConnectionManager
+from webconsole_manager import WebConsoleManager
 
 # Configure logging
 logging.basicConfig(
@@ -48,11 +50,6 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
-
-from connection_manager import ConnectionManager
-from webconsole_manager import WebConsoleManager
-from modals.utils_modals import LoadingModal
-
 
 class SelectServerModal(BaseModal[None]):
     """Screen to select servers to connect to."""
@@ -72,7 +69,7 @@ class SelectServerModal(BaseModal[None]):
     def compose(self) -> ComposeResult:
         with Vertical(id="select-server-container", classes="modal-container"):
             yield Label("Select Servers to Display")
-            
+
             server_iter = iter(self.servers)
             for server1 in server_iter:
                 with Horizontal():
@@ -194,13 +191,32 @@ class VMManagerTUI(App):
     search_text = reactive("")
     num_pages = reactive(1)
 
+    SERVER_COLOR_PALETTE = [
+        "#50c878",  # Emerald Green
+        "#2e8b57",  # Sea Green
+        "#8fbc8f",  # Dark Sea Green
+        "#20b2aa",  # Light Sea Green
+        "#008080",  # Teal
+        "#3cb371",  # Medium Sea Green
+    ]
+
     CSS_PATH = ["vmanager.css", "vmcard.css", "dialog.css"]
 
     def __init__(self):
         super().__init__()
         self.connection_manager = ConnectionManager()
         self.webconsole_manager = WebConsoleManager(self)
+        self.server_color_map = {}
+        self._color_index = 0
         #self.resize_timer = ""
+
+    def get_server_color(self, uri: str) -> str:
+        """Assigns and returns a consistent color for a given server URI."""
+        if uri not in self.server_color_map:
+            color = self.SERVER_COLOR_PALETTE[self._color_index % len(self.SERVER_COLOR_PALETTE)]
+            self.server_color_map[uri] = color
+            self._color_index += 1
+        return self.server_color_map[uri]
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
@@ -623,7 +639,7 @@ class VMManagerTUI(App):
             xml_content = domain.XMLDesc(0)
             graphics_info = get_vm_graphics_info(xml_content)
             vm_card.graphics_type = graphics_info.get("type", "vnc")
-            vm_card.color = "#323232"
+            vm_card.server_border_color = self.get_server_color(conn.getURI()) # New line
             vms_container.mount(vm_card)
 
     def update_pagination_controls(self, total_filtered_vms: int, total_vms_unfiltered: int):

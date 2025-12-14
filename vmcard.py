@@ -3,12 +3,9 @@ Main Interface
 """
 import subprocess
 import logging
-import tempfile
 import traceback
 from datetime import datetime
 import os
-from pathlib import Path
-from urllib.parse import urlparse
 import libvirt
 
 from textual.widgets import (
@@ -21,16 +18,16 @@ from textual.message import Message
 from textual import on
 from textual.events import Click
 from textual.css.query import NoMatches
-from vm_queries import get_vm_disks_info, get_vm_graphics_info, get_status
+from vm_queries import get_vm_disks_info, get_status
 from vm_actions import clone_vm, rename_vm, start_vm
 
 from modals.vmanager_xml_modals import XMLDisplayModal
 from modals.utils_modals import ConfirmationDialog, LoadingModal
 from vmcard_dialog import (
-        DeleteVMConfirmationDialog, WebConsoleDialog,
+        DeleteVMConfirmationDialog,
         CloneNameDialog, RenameVMDialog, SelectSnapshotDialog, SnapshotNameDialog
         )
-from utils import find_free_port, extract_server_name_from_uri
+from utils import extract_server_name_from_uri
 from config import load_config
 
 # Load configuration once at module level
@@ -54,9 +51,10 @@ class VMCard(Static):
     memory = reactive(0)
     vm = reactive(None)
     conn = reactive(None)
-    color = reactive("blue")
+
     webc_status_indicator = reactive("")
     graphics_type = reactive("vnc")
+    server_border_color = reactive("green")
 
     def __init__(self, cpu_history: list[float] = None, mem_history: list[float] = None) -> None:
         super().__init__()
@@ -160,12 +158,17 @@ class VMCard(Static):
                             yield Button( "Rename", id="rename-button", variant="primary", classes="rename-button")
 
     def on_mount(self) -> None:
-        self.styles.background = self.color
+        self.styles.background = "#323232"
+        self.styles.border = ("solid", self.server_border_color)
         self.update_button_layout()
         self._update_status_styling()
         self._update_webc_status() # Call on mount
-        self.update_stats()  # Initial update
+        self.update_stats()
         self.timer = self.set_interval(5, self.update_stats)
+
+    def watch_server_border_color(self, old_color: str, new_color: str) -> None:
+        """Called when server_border_color changes."""
+        self.styles.border = ("solid", new_color)
 
     def on_unmount(self) -> None:
         """Stop the timer when the widget is removed."""
