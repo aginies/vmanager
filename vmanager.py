@@ -6,7 +6,7 @@ import sys
 import logging
 import argparse
 
-from textual.app import App, ComposeResult
+from textual.app import App, ComposeResult, on
 from textual.widgets import (
         Header, Footer, Button, Label, Static,
         Link, Checkbox, Select
@@ -15,7 +15,6 @@ from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual import on
-import libvirt
 
 from libvirt_error_handler import register_error_handler
 from vmcard import VMCard, VMNameClicked
@@ -51,14 +50,19 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
+from connection_manager import ConnectionManager
+from modals.utils_modals import LoadingModal
+
+
 class SelectServerModal(BaseModal[None]):
     """Screen to select servers to connect to."""
 
-    def __init__(self, servers, active_uris):
+    def __init__(self, servers, active_uris, connection_manager: ConnectionManager):
         super().__init__()
         self.servers = servers
         self.active_uris = active_uris
         self.id_to_uri_map = {}
+        self.connection_manager = connection_manager
 
     def sanitize_for_id(self, text: str) -> str:
         """Create a valid Textual ID from a string."""
@@ -68,23 +72,62 @@ class SelectServerModal(BaseModal[None]):
     def compose(self) -> ComposeResult:
         with Vertical(id="select-server-container", classes="modal-container"):
             yield Label("Select Servers to Display")
-            for server in self.servers:
-                is_active = server['uri'] in self.active_uris
-                sanitized_id = self.sanitize_for_id(server['uri'])
-                self.id_to_uri_map[sanitized_id] = server['uri']
-                yield Checkbox(server['name'], value=is_active, id=sanitized_id)
+            
+            server_iter = iter(self.servers)
+            for server1 in server_iter:
+                with Horizontal():
+                    is_active1 = server1['uri'] in self.active_uris
+                    sanitized_id1 = self.sanitize_for_id(server1['uri'])
+                    self.id_to_uri_map[sanitized_id1] = server1['uri']
+                    yield Checkbox(server1['name'], value=is_active1, id=sanitized_id1)
+
+                    try:
+                        server2 = next(server_iter)
+                        is_active2 = server2['uri'] in self.active_uris
+                        sanitized_id2 = self.sanitize_for_id(server2['uri'])
+                        self.id_to_uri_map[sanitized_id2] = server2['uri']
+                        yield Checkbox(server2['name'], value=is_active2, id=sanitized_id2)
+                    except StopIteration:
+                        pass # Handle odd number of servers
+
             with Horizontal(classes="modal-buttons"):
-                yield Button("Apply", id="apply-servers", variant="primary")
+                yield Button("Done", id="done-servers", variant="primary")
                 yield Button("Cancel", id="cancel-servers")
+
+    @on(Checkbox.Changed)
+    def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
+        """Handle checkbox changes to connect or disconnect from servers."""
+        checkbox_id = str(event.checkbox.id)
+        uri = self.id_to_uri_map.get(checkbox_id)
+
+        if not uri:
+            return
+
+        if event.value:  # If checkbox is checked
+            loading_modal = LoadingModal()
+            self.app.push_screen(loading_modal)
+
+            def connect_and_update():
+                conn = self.connection_manager.connect(uri)
+                self.app.call_from_thread(loading_modal.dismiss)
+                if conn is None:
+                    self.app.call_from_thread(
+                        self.app.show_error_message,
+                        f"Failed to connect to {uri}"
+                    )
+                    # Revert checkbox state on failure
+                    checkbox = self.query(f"#{checkbox_id}").first()
+                    self.app.call_from_thread(setattr, checkbox, "value", False)
+                else:
+                    if uri not in self.active_uris:
+                        self.active_uris.append(uri)
+
+            self.app.run_worker(connect_and_update, thread=True)
 
     @on(Button.Pressed)
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "apply-servers":
-            selected_uris = []
-            for checkbox in self.query(Checkbox):
-                if checkbox.value and checkbox.id:
-                    selected_uris.append(self.id_to_uri_map[str(checkbox.id)])
-            self.dismiss(selected_uris)
+        if event.button.id == "done-servers":
+            self.dismiss(self.active_uris)
         elif event.button.id == "cancel-servers":
             self.dismiss(None)
 
@@ -259,25 +302,24 @@ class VMManagerTUI(App):
     @on(Button.Pressed, "#select_server_button")
     def action_select_server(self) -> None:
         """Select servers to connect to."""
-        self.push_screen(SelectServerModal(self.servers, self.active_uris), self.handle_select_server_result)
+        self.push_screen(SelectServerModal(self.servers, self.active_uris, self.connection_manager), self.handle_select_server_result)
 
     def handle_select_server_result(self, selected_uris: list[str] | None) -> None:
         """Handle the result from the SelectServer screen."""
-        if selected_uris is not None:
-            logging.info(f"Servers selected: {selected_uris}")
+        if selected_uris is None: # User cancelled
+            return
             
-            # Disconnect from servers that are no longer selected
-            uris_to_disconnect = [uri for uri in self.active_uris if uri not in selected_uris]
-            for uri in uris_to_disconnect:
-                self.connection_manager.disconnect(uri)
+        logging.info(f"Servers selected: {selected_uris}")
+        
+        # Disconnect from servers that are no longer selected
+        uris_to_disconnect = [uri for uri in self.active_uris if uri not in selected_uris]
+        for uri in uris_to_disconnect:
+            self.connection_manager.disconnect(uri)
 
-            self.active_uris = selected_uris
-            self.current_page = 0
-            
-            for uri in self.active_uris:
-                self.connect_libvirt(uri)
-            
-            self.refresh_vm_list()
+        self.active_uris = selected_uris
+        self.current_page = 0
+        
+        self.refresh_vm_list()
 
     @on(Button.Pressed, "#filter_button")
     def action_filter_view(self) -> None:
