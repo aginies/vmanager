@@ -41,6 +41,8 @@ from modals.server_prefs_modals import ServerPrefModal
 from modals.vmanager_vmdetails_modals import VMDetailModal
 from modals.vmanager_virsh_modals import VirshShellScreen
 from connection_manager import ConnectionManager
+from modals.base_modals import BaseModal
+
 
 # Configure logging
 logging.basicConfig(
@@ -49,7 +51,7 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-class SelectServer(ModalScreen):
+class SelectServerModal(BaseModal[None]):
     """Screen to select servers to connect to."""
 
     def __init__(self, servers, active_uris):
@@ -257,7 +259,7 @@ class VMManagerTUI(App):
     @on(Button.Pressed, "#select_server_button")
     def action_select_server(self) -> None:
         """Select servers to connect to."""
-        self.push_screen(SelectServer(self.servers, self.active_uris), self.handle_select_server_result)
+        self.push_screen(SelectServerModal(self.servers, self.active_uris), self.handle_select_server_result)
 
     def handle_select_server_result(self, selected_uris: list[str] | None) -> None:
         """Handle the result from the SelectServer screen."""
