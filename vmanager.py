@@ -5,6 +5,7 @@ import os
 import sys
 import logging
 import argparse
+import libvirt
 
 from textual.app import App, ComposeResult, on
 from textual.widgets import (
@@ -14,7 +15,6 @@ from textual.widgets import (
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
 from textual.screen import ModalScreen
-from textual import on
 
 from libvirt_error_handler import register_error_handler
 from vmcard import VMCard, VMNameClicked
@@ -200,6 +200,7 @@ class VMManagerTUI(App):
     def __init__(self):
         super().__init__()
         self.connection_manager = ConnectionManager()
+        #self.resize_timer = ""
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
@@ -266,13 +267,51 @@ class VMManagerTUI(App):
         vms_container = self.query_one("#vms-container")
         vms_container.styles.grid_size_columns = 2
         
+        self._update_layout_for_size()
+
         if not self.servers:
             self.show_success_message("No servers configured. Please add one via 'Servers List'.")
 
         for uri in self.active_uris:
             self.connect_libvirt(uri)
         self.update_header()
-        self.list_vms()
+        #self.list_vms()
+
+    def _update_layout_for_size(self):
+        """Update the layout based on the terminal size."""
+        vms_container = self.query_one("#vms-container")
+        if self.size.width > 127 and self.size.width < 169:
+            vms_container.styles.grid_size_columns = 3
+            if self.size.width  > 42:
+                self.VMS_PER_PAGE = 9
+                vms_container.styles.width = 129
+            else:
+                self.VMS_PER_PAGE = 6
+                vms_container.styles.width = 128
+        elif self.size.width > 168:
+            vms_container.styles.grid_size_columns = 4
+            if self.size.width  > 42:
+                self.VMS_PER_PAGE = 12
+                vms_container.styles.width = 170
+            else:
+                self.VMS_PER_PAGE = 8
+                vms_container.styles.width = 169
+        else:
+            vms_container.styles.grid_size_columns = 2
+            if self.size.width  > 42:
+                self.VMS_PER_PAGE = 6
+                vms_container.styles.width = 86
+            else:
+                self.VMS_PER_PAGE = self.config.get('VMS_PER_PAGE', 4)
+                vms_container.styles.width = 84
+
+        self.refresh_vm_list()
+
+    def on_resize(self, event):
+        """Handle terminal resize events."""
+        if hasattr(self, 'resize_timer'):
+            self.resize_timer.stop()
+        self.resize_timer = self.set_timer(0.5, self._update_layout_for_size)
 
     def on_unload(self) -> None:
         """Called when the app is about to be unloaded."""
@@ -650,6 +689,5 @@ if __name__ == "__main__":
         if terminal_size.columns < 92:
             print(f"Terminal width is too small ({terminal_size.columns} columns). Please resize to at least 92 columns.")
             sys.exit(1)
-
         app = VMManagerTUI()
         app.run()
