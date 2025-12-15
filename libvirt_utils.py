@@ -3,12 +3,10 @@ Utility functions for libvirt XML parsing and common helpers.
 """
 import xml.etree.ElementTree as ET
 import libvirt
-from utils import log_function_call
 
 VMANAGER_NS = "http://github.com/aginies/vmanager"
 ET.register_namespace("vmanager", VMANAGER_NS)
 
-@log_function_call
 def _find_vol_by_path(conn, vol_path):
     """Finds a storage volume by its path and returns the volume and its pool."""
     # Slower but more compatible way to find a volume by path
@@ -52,7 +50,6 @@ def _get_disabled_disks_elem(root):
         disabled_disks_elem = ET.SubElement(vmanager_meta_elem, f'{{{VMANAGER_NS}}}disabled-disks')
     return disabled_disks_elem
 
-@log_function_call
 def get_cpu_models(conn, arch):
     """
     Get a list of CPU models for a given architecture.

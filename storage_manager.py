@@ -3,9 +3,7 @@ Module for managing libvirt storage pools and volumes.
 """
 import libvirt
 from typing import List, Dict, Any
-from utils import log_function_call
 
-@log_function_call
 def list_storage_pools(conn: libvirt.virConnect) -> List[Dict[str, Any]]:
     """
     Lists all storage pools with their status and details.
@@ -56,7 +54,6 @@ def list_storage_pools(conn: libvirt.virConnect) -> List[Dict[str, Any]]:
 
     return pools_info
 
-@log_function_call
 def list_storage_volumes(pool: libvirt.virStoragePool) -> List[Dict[str, Any]]:
     """
     Lists all storage volumes in a given pool.
@@ -84,7 +81,6 @@ def list_storage_volumes(pool: libvirt.virStoragePool) -> List[Dict[str, Any]]:
         pass # Or log error
     return volumes_info
 
-@log_function_call
 def set_pool_active(pool: libvirt.virStoragePool, active: bool):
     """
     Sets a storage pool's active state.
@@ -98,7 +94,6 @@ def set_pool_active(pool: libvirt.virStoragePool, active: bool):
         state = "activate" if active else "deactivate"
         raise Exception(f"Error trying to {state} pool '{pool.name()}': {e}") from e
 
-@log_function_call
 def set_pool_autostart(pool: libvirt.virStoragePool, autostart: bool):
     """
     Sets a storage pool's autostart flag.
@@ -108,7 +103,6 @@ def set_pool_autostart(pool: libvirt.virStoragePool, autostart: bool):
     except libvirt.libvirtError as e:
         raise Exception(f"Error setting autostart for pool '{pool.name()}': {e}") from e
 
-@log_function_call
 def create_storage_pool(conn, name, pool_type, target, source_host=None, source_path=None, source_format=None):
     """
     Creates and starts a new storage pool.
@@ -133,7 +127,6 @@ def create_storage_pool(conn, name, pool_type, target, source_host=None, source_
     pool.setAutostart(1)
     return pool
 
-@log_function_call
 def create_volume(pool: libvirt.virStoragePool, name: str, size_gb: int, vol_format: str):
     """
     Creates a new storage volume in a pool.
@@ -157,7 +150,6 @@ def create_volume(pool: libvirt.virStoragePool, name: str, size_gb: int, vol_for
     except libvirt.libvirtError as e:
         raise Exception(f"Error creating volume '{name}': {e}") from e
 
-@log_function_call
 def delete_volume(vol: libvirt.virStorageVol):
     """
     Deletes a storage volume.
@@ -169,7 +161,6 @@ def delete_volume(vol: libvirt.virStorageVol):
         # Re-raise with a more informative message
         raise Exception(f"Error deleting volume '{vol.name()}': {e}") from e
 
-@log_function_call
 def delete_storage_pool(pool: libvirt.virStoragePool):
     """
     Deletes a storage pool.
