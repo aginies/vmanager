@@ -156,6 +156,7 @@
     background: red;
     border: hidden;
     align: center middle;
+    margin: 1 1;
 }
 
 Header, Footer {
@@ -185,7 +186,7 @@ Select {
     border-left: round;
 }
 .detail-disks {
-    width: 20%;
+    width: 15%;
     background: $primary;
     /*height: 3vh;*/
 }
