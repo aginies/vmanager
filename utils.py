@@ -126,8 +126,8 @@ def generate_webconsole_keys_if_needed() -> List[Tuple[str, str]]:
         except Exception as e:
             error_message = f"Unexpected error generating WebConsole keys: {str(e)}"
             messages.append(('error', error_message))
-    else:
-        messages.append(('info', "WebConsole TLS keys already exist."))
+    #else:
+    #    messages.append(('info', "WebConsole TLS keys already exist."))
 
     return messages
 
