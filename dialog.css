@@ -54,7 +54,7 @@ ConfirmationDialog {
 
 ConfirmationDialog #dialog {
     width: 60;
-    height: 10;
+    height: 15;
     padding: 1;
     border: round $error;
     background: $surface;
