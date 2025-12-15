@@ -425,7 +425,54 @@ def add_virtiofs(domain: libvirt.virDomain, source_path: str, target_path: str, 
 
 
 @log_function_call
-def change_vm_network(domain: libvirt.virDomain, mac_address: str, new_network: str):
+def add_network_interface(domain: libvirt.virDomain, network: str, model: str):
+    """Adds a network interface to a VM."""
+    if not domain:
+        raise ValueError("Invalid domain object.")
+
+    interface_xml = f"""
+    <interface type='network'>
+        <source network='{network}'/>
+        <model type='{model}'/>
+    </interface>
+    """
+
+    flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
+    if domain.isActive():
+        flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
+
+    domain.attachDeviceFlags(interface_xml, flags)
+
+@log_function_call
+def remove_network_interface(domain: libvirt.virDomain, mac_address: str):
+    """Removes a network interface from a VM."""
+    if not domain:
+        raise ValueError("Invalid domain object.")
+
+    xml_desc = domain.XMLDesc(0)
+    root = ET.fromstring(xml_desc)
+
+    interface_to_remove = None
+    for iface in root.findall(".//devices/interface"):
+        mac_node = iface.find("mac")
+        if mac_node is not None and mac_node.get("address") == mac_address:
+            interface_to_remove = iface
+            break
+
+    if interface_to_remove is None:
+        raise ValueError(f"Interface with MAC {mac_address} not found.")
+
+    interface_xml = ET.tostring(interface_to_remove, 'unicode')
+
+    flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
+    if domain.isActive():
+        flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
+
+    domain.detachDeviceFlags(interface_xml, flags)
+
+
+@log_function_call
+def change_vm_network(domain: libvirt.virDomain, mac_address: str, new_network: str, new_model: str = None):
     """Changes the network for a VM's network interface."""
     xml_desc = domain.XMLDesc(0)
     root = ET.fromstring(xml_desc)
@@ -444,11 +491,18 @@ def change_vm_network(domain: libvirt.virDomain, mac_address: str, new_network: 
     if source_node is None:
         raise ValueError("Interface does not have a source element.")
 
+    model_node = interface_to_update.find("model")
+    if model_node is None:
+        model_node = ET.SubElement(interface_to_update, "model")
+
     # Check if network is already the same
-    if source_node.get("network") == new_network:
+    if source_node.get("network") == new_network and (new_model is None or model_node.get("type") == new_model):
         return # Nothing to do
 
     source_node.set("network", new_network)
+    if new_model:
+        model_node.set("type", new_model)
+
     interface_xml = ET.tostring(interface_to_update, 'unicode')
 
     state = domain.info()[0]
