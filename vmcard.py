@@ -127,7 +127,7 @@ class VMCard(Static):
                             yield Button("Pause", id="pause", variant="primary")
                             yield Button("Resume", id="resume", variant="success")
                         with Vertical():
-                            yield Button( "Configure", id="configure-button", variant="primary")
+                            yield Button("Configure", id="configure-button", variant="primary")
                             yield Button("Web Console", id="web_console", variant="default")
                             yield Button("Connect", id="connect", variant="default")
                 with TabPane(self._get_snapshot_tab_title(), id="snapshot-tab"):
