@@ -26,6 +26,7 @@
     padding: 1 1;
     align: center middle;
 }
+#add-edit-network-dialog,
 #edit-server-dialog,
 #select-server-container,
 #add-pool-dialog,
@@ -49,7 +50,7 @@
     background: $surface;
     padding: 1 2;
 }
-
+#add-edit-network-dialog Label,
 #server-pref-title Label,
 #connection-dialog Label,
 #select-server-container Label,
@@ -82,6 +83,7 @@
     border: none;
 }
 
+#add-edit-network-dialog Input,
 #connection-dialog Input,
 #edit-server-dialog Input,
 #add-server-dialog Input,
@@ -99,6 +101,7 @@
     margin-bottom: 1;
 }
 
+#add-edit-network-dialog Horizontal,
 #connection-dialog Horizontal,
 #add-server-dialog Horizontal,
 #select-server-container Horizontal,
@@ -123,6 +126,7 @@
     align: center middle;
 }
 
+#add-edit-network-dialog Button,
 #connection-dialog Button,
 #select-server-container Button,
 #server-selection-dialog Button,
