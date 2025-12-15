@@ -9,7 +9,7 @@ from collections import namedtuple
 from textual.app import ComposeResult
 from textual.widgets import (
         Select, Button, Input, Label, Static,
-        DataTable, ListView, ListItem, Checkbox, RadioButton,
+        DataTable, Checkbox, RadioButton,
         RadioSet, TabbedContent, TabPane
         )
 from textual.containers import ScrollableContainer, Horizontal, Vertical
@@ -29,7 +29,7 @@ from vm_actions import (
     add_disk, remove_disk, set_vcpu, set_memory, set_machine_type, enable_disk,
     disable_disk, change_vm_network, set_shared_memory, remove_virtiofs,
     add_virtiofs, set_vm_video_model, set_cpu_model, set_uefi_file,
-    set_vm_graphics
+    set_vm_graphics, set_disk_properties
 )
 from network_manager import (
     list_networks,
@@ -46,7 +46,7 @@ from modals.vmanager_modals import (
         )
 from modals.disk_pool_modals import (
           SelectPoolModal, AddDiskModal,
-          SelectDiskModal
+          SelectDiskModal, EditDiskModal
           )
 
 # Configure logging
@@ -116,9 +116,51 @@ class VMDetailModal(ModalScreen):
                     pass
 
             self._update_uefi_options()
-        
+
         # Initialize Graphics tab values
         self._update_graphics_ui()
+        self._populate_disks_table()
+
+    def _populate_disks_table(self):
+        disks_table = self.query_one("#disks-table", DataTable)
+        disks_table.clear()
+        if not disks_table.columns:
+            disks_table.add_column("Path", key="path")
+            disks_table.add_column("Cache", key="cache")
+            disks_table.add_column("Discard", key="discard")
+            disks_table.add_column("Status", key="status")
+
+        disks_info = self.vm_info.get("disks", [])
+
+        for disk in disks_info:
+            path = disk.get('path', 'N/A')
+            status = disk.get('status', 'unknown')
+            cache_mode = disk.get('cache', 'none')
+            discard_mode = disk.get('discard', 'unmap')
+
+            if status == 'disabled':
+                disks_table.add_row(
+                    path,
+                    "",
+                    "",
+                    "(disabled)",
+                    key=path
+                )
+            else:
+                disks_table.add_row(
+                    path,
+                    cache_mode,
+                    discard_mode,
+                    "enabled",
+                    key=path
+                )
+
+        has_enabled_disks = any(d['status'] == 'enabled' for d in disks_info)
+        has_disabled_disks = any(d['status'] == 'disabled' for d in disks_info)
+
+        self.query_one("#detail_remove_disk", Button).display = has_enabled_disks
+        self.query_one("#detail_disable_disk", Button).display = has_enabled_disks
+        self.query_one("#detail_enable_disk", Button).display = has_disabled_disks
 
     def _get_bootable_devices(self) -> list[BootDevice]:
         """Gathers all disks and network interfaces as bootable devices."""
@@ -583,24 +625,9 @@ class VMDetailModal(ModalScreen):
 
                 with TabPane("Disks", id="detail-disk-tab"):
                     with ScrollableContainer(classes="info-details"):
-                        disks_info = self.vm_info.get("disks", [])
-                        disk_items = []
-                        if disks_info:
-                            for disk in disks_info:
-                                path = disk.get('path', 'N/A')
-                                status = disk.get('status', 'unknown')
-                                label = f"{path}"
-                                if status == 'disabled':
-                                    label += " (disabled)"
-                                disk_items.append(ListItem(Label(label)))
-                        else:
-                            disk_items.append(ListItem(Label("No disks found.")))
+                        yield DataTable(id="disks-table", cursor_type="row")
 
-                        self.disk_list_view = ListView(*disk_items)
-                        num_disks = len(disks_info)
-                        self.disk_list_view.styles.height = num_disks if num_disks > 0 else 1
-                        yield self.disk_list_view
-
+                    disks_info = self.vm_info.get("disks", [])
                     has_enabled_disks = any(d['status'] == 'enabled' for d in disks_info)
                     has_disabled_disks = any(d['status'] == 'disabled' for d in disks_info)
                     remove_button = Button("Remove Disk", id="detail_remove_disk", classes="detail-disks")
@@ -614,10 +641,12 @@ class VMDetailModal(ModalScreen):
                         with Horizontal():
                             yield Button("Add Disk", id="detail_add_disk", classes="detail-disks")
                             yield Button("Attach Existing Disk", id="detail_attach_disk", classes="detail-disks")
+                            yield Button("Edit Disk", id="detail_edit_disk", classes="detail-disks", disabled=True)
                             yield remove_button
-                            with Vertical():
-                                yield disable_button
-                                yield enable_button
+
+                    with Horizontal(classes="button-details"):
+                        yield disable_button
+                        yield enable_button
 
                 with TabPane("Networks", id="networks"):
                     with ScrollableContainer(classes="info-details"):
@@ -743,6 +772,9 @@ class VMDetailModal(ModalScreen):
                             disabled=not is_stopped or not self.graphics_info['password_enabled']
                         )
                         yield Button("Apply Graphics Settings", id="graphics-apply-btn", variant="primary", disabled=not is_stopped)
+                with TabPane("TPM", id="detail-tpm-tab"):
+                    yield Label("TPM")
+
  
             with TabbedContent(id="detail2-vm"):
         # TOFIX !
@@ -772,38 +804,14 @@ class VMDetailModal(ModalScreen):
             yield Button("Close", variant="default", id="close-btn", classes="close-button")
 
     def _update_disk_list(self):
-        self.disk_list_view.clear()
         new_xml = self.domain.XMLDesc(0)
         disks_info = get_vm_disks_info(self.conn, new_xml)
-        self.vm_info['disks'] = disks_info  # Update the stored info
+        self.vm_info['disks'] = disks_info
+        self._populate_disks_table()
 
-        disk_items = []
-        for disk in disks_info:
-            path = disk.get('path', 'N/A')
-            status = disk.get('status', 'unknown')
-            label = f"{path}"
-            if status == 'disabled':
-                label += " (disabled)"
-            disk_items.append(ListItem(Label(label)))
-
-        if disk_items:
-            for item in disk_items:
-                self.disk_list_view.append(item)
-        else:
-            self.disk_list_view.append(ListItem(Label("No disks found.")))
-
-        num_disks = len(disks_info)
-        self.disk_list_view.styles.height = num_disks if num_disks > 0 else 1
-
-        # Update button visibility
-        has_enabled_disks = any(d['status'] == 'enabled' for d in disks_info)
-        has_disabled_disks = any(d['status'] == 'disabled' for d in disks_info)
-
-        self.query_one("#detail_remove_disk", Button).display = has_enabled_disks
-        self.query_one("#detail_disable_disk", Button).display = has_enabled_disks
-        self.query_one("#detail_enable_disk", Button).display = has_disabled_disks
-
-        self.query_one("#detail_enable_disk", Button).display = has_disabled_disks
+    @on(DataTable.RowSelected, "#disks-table")
+    def on_disks_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        self.query_one("#detail_edit_disk", Button).disabled = False
 
     @on(DataTable.RowSelected, "#virtiofs-table")
     def on_virtiofs_table_row_selected(self, event: DataTable.RowSelected) -> None:
@@ -1009,8 +1017,9 @@ class VMDetailModal(ModalScreen):
                 SelectPoolModal([p['name'] for p in active_pools], "Select a storage pool"),
                 select_pool_callback
             )
+
         elif event.button.id == "detail_remove_disk":
-            highlighted_index = self.disk_list_view.index
+            highlighted_index = self.query_one("#disks-table").cursor_row
             if highlighted_index is None:
                 self.app.show_error_message("No disk selected.")
                 return
@@ -1039,7 +1048,7 @@ class VMDetailModal(ModalScreen):
             self.app.push_screen(ConfirmationDialog(f"Are you sure you want to remove disk:\n{disk_path}"), on_confirm)
 
         elif event.button.id == "detail_disable_disk":
-            highlighted_index = self.disk_list_view.index
+            highlighted_index = self.query_one("#disks-table").cursor_row
             if highlighted_index is None:
                 self.app.show_error_message("No disk selected.")
                 return
@@ -1068,7 +1077,7 @@ class VMDetailModal(ModalScreen):
             self.app.push_screen(ConfirmationDialog(f"Are you sure you want to disable disk:\n{disk_path}"), on_confirm)
 
         elif event.button.id == "detail_enable_disk":
-            highlighted_index = self.disk_list_view.index
+            highlighted_index = self.query_one("#disks-table").cursor_row
             if highlighted_index is None:
                 self.app.show_error_message("No disk selected.")
                 return
