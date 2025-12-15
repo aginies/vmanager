@@ -23,12 +23,14 @@ from vm_queries import (
     get_vm_disks_info, get_vm_devices_info,
     get_supported_machine_types, get_vm_graphics_info,
     get_all_vm_nvram_usage, get_all_vm_disk_usage, get_vm_sound_model,
+    get_vm_network_ip,
     )
 from vm_actions import (
         add_disk, remove_disk, set_vcpu, set_memory, set_machine_type, enable_disk,
         disable_disk, change_vm_network, set_shared_memory, remove_virtiofs,
         add_virtiofs, set_vm_video_model, set_cpu_model, set_uefi_file,
-        set_vm_graphics, set_disk_properties, set_vm_sound_model
+        set_vm_graphics, set_disk_properties, set_vm_sound_model,
+        add_network_interface, remove_network_interface
 )
 from network_manager import (
     list_networks,
@@ -47,6 +49,7 @@ from modals.disk_pool_modals import (
           SelectPoolModal, AddDiskModal,
           SelectDiskModal, EditDiskModal
           )
+from modals.network_modals import AddEditNetworkInterfaceModal
 
 # Configure logging
 logging.basicConfig(
@@ -75,6 +78,7 @@ class VMDetailModal(ModalScreen):
         self.available_networks = []
         self.selected_virtiofs_target = None
         self.selected_virtiofs_info = None # Store full info for editing
+        self.selected_network_interface = None
         self.boot_order = self.vm_info.get('boot', {}).get('order', [])
         self.all_bootable_devices = [] # Initialize the new reactive list
         self.sev_caps = {'sev': False, 'sev-es': False}
@@ -120,6 +124,7 @@ class VMDetailModal(ModalScreen):
         # Initialize Graphics tab values
         self._update_graphics_ui()
         self._populate_disks_table()
+        self._populate_networks_table()
 
     def _populate_disks_table(self):
         disks_table = self.query_one("#disks-table", DataTable)
@@ -163,6 +168,46 @@ class VMDetailModal(ModalScreen):
         self.query_one("#detail_remove_disk", Button).display = has_enabled_disks
         self.query_one("#detail_disable_disk", Button).display = has_enabled_disks
         self.query_one("#detail_enable_disk", Button).display = has_disabled_disks
+
+    def _populate_networks_table(self):
+        networks_table = self.query_one("#networks-table", DataTable)
+        networks_table.clear()
+        self.query_one("#edit-network-interface-button", Button).disabled = True
+        self.query_one("#remove-network-interface-button", Button).disabled = True
+
+        networks_list = self.vm_info.get("networks", [])
+        detail_network_list = self.vm_info.get("detail_network", [])
+        dns_gateway_list = self.vm_info.get("network_dns_gateway", [])
+
+        mac_to_ip = {}
+        if detail_network_list:
+            for detail in detail_network_list:
+                ips = detail.get('ipv4', []) + detail.get('ipv6', [])
+                if ips:
+                    mac_to_ip[detail['mac']] = ", ".join(ips)
+
+        network_to_dns_gateway = {net['network_name']: net for net in dns_gateway_list}
+
+        if networks_list:
+            for net in networks_list:
+                ip_address = mac_to_ip.get(net['mac'], "")
+
+                net_name = net.get('network')
+                dns_gateway_info = network_to_dns_gateway.get(net_name, {})
+                gateway = dns_gateway_info.get('gateway', '')
+                dns = ", ".join(dns_gateway_info.get('dns_servers', []))
+
+                networks_table.add_row(
+                    net['mac'],
+                    net_name,
+                    net.get('model', 'N/A'),
+                    ip_address,
+                    gateway,
+                    dns,
+                    key=net['mac']
+                )
+        else:
+            networks_table.add_row("No network interfaces found.", "", "", "", "", "", key="none")
 
     def _get_bootable_devices(self) -> list[BootDevice]:
         """Gathers all disks and network interfaces as bootable devices."""
@@ -670,38 +715,20 @@ class VMDetailModal(ModalScreen):
 
                 with TabPane("Networks", id="networks"):
                     with ScrollableContainer(classes="info-details"):
-                        networks_list = self.vm_info.get("networks", [])
-                        detail_network_list = self.vm_info.get("detail_network", [])
-                        mac_to_ip = {}
-                        if detail_network_list:
-                            for detail in detail_network_list:
-                                ips = detail.get('ipv4', []) + detail.get('ipv6', [])
-                                if ips:
-                                    mac_to_ip[detail['mac']] = ", ".join(ips)
+                        networks_table = DataTable(id="networks-table", cursor_type="row")
+                        networks_table.add_column("MAC", key="mac")
+                        networks_table.add_column("Network", key="network")
+                        networks_table.add_column("Model", key="model")
+                        networks_table.add_column("IP Address", key="ip")
+                        networks_table.add_column("Gateway", key="gateway")
+                        networks_table.add_column("DNS", key="dns")
+                        yield networks_table
 
-                        if networks_list:
-                            for net in networks_list:
-                                yield Label(f"MAC: {net['mac']}", classes="tabd")
-                                yield Label(f"Network: {net.get('network', 'N/A')}", classes="tabd")
-                                ip_address = mac_to_ip.get(net['mac'], "N/A")
-                                yield Label(f"IP: {ip_address}", classes="tabd")
-                                yield Static(classes="separator")
-                        else:
-                            yield Label("No network interfaces found.")
-                    yield Button("Change Network", id="change-network-button", variant="primary")
-
-                    if self.vm_info.get("network_dns_gateway"):
-                        yield Label("Network DNS & Gateway", classes="tabd")
-                        with ScrollableContainer(classes="info-section"):
-                            for net_detail in self.vm_info["network_dns_gateway"]:
-                                with Vertical(classes="info-details"):
-                                    yield Static(f"  Network: {net_detail.get('network_name', 'N/A')}")
-                                    if net_detail.get("gateway"):
-                                        yield Static(f"    Gateway: {net_detail['gateway']}")
-                                    if net_detail.get("dns_servers"):
-                                        yield Static("    DNS Servers:")
-                                        for dns_server in net_detail["dns_servers"]:
-                                            yield Static(f"      • {dns_server}")
+                    with Vertical(classes="button-details"):
+                        with Horizontal():
+                            yield Button("Edit Interface", id="edit-network-interface-button", classes="detail-disks", variant="primary", disabled=True)
+                            yield Button("Add Interface", id="add-network-interface-button", classes="detail-disks", variant="primary")
+                            yield Button("Remove Interface", id="remove-network-interface-button", classes="detail-disks", variant="error", disabled=True)
 
                 if self.vm_info.get("devices"):
                     with TabPane("VirtIO-FS", id="detail-virtiofs-tab"):
@@ -811,7 +838,7 @@ class VMDetailModal(ModalScreen):
                 with TabPane("TPM", id="detail-tpm-tab"):
                     yield Label("TPM")
 
- 
+
             with TabbedContent(id="detail2-vm"):
         # TOFIX !
                 with TabPane("Serial", id="detail-serial-tab"):
@@ -861,6 +888,12 @@ class VMDetailModal(ModalScreen):
         self.query_one("#delete-virtiofs-btn", Button).disabled = False
         self.query_one("#edit-virtiofs-btn", Button).disabled = False
 
+    @on(DataTable.RowSelected, "#networks-table")
+    def on_networks_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        self.selected_network_interface = event.row_key.value
+        self.query_one("#edit-network-interface-button", Button).disabled = False
+        self.query_one("#remove-network-interface-button", Button).disabled = False
+
 
     def _update_virtiofs_table(self) -> None:
         """Refreshes the virtiofs table."""
@@ -882,6 +915,13 @@ class VMDetailModal(ModalScreen):
         self.selected_virtiofs_target = None
         self.selected_virtiofs_info = None
         self.query_one("#delete-virtiofs-btn", Button).disabled = True
+
+    def _update_networks_table(self):
+        """Refreshes the networks table."""
+        new_xml = self.domain.XMLDesc(0)
+        self.vm_info['networks'] = get_vm_networks_info(new_xml)
+        self.vm_info['detail_network'] = get_vm_network_ip(self.domain)
+        self._populate_networks_table()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
 
@@ -914,6 +954,77 @@ class VMDetailModal(ModalScreen):
                     except Exception as e:
                         self.app.show_error_message(f"An unexpected error occurred: {e}")
             self.app.push_screen(AddEditVirtIOFSModal(is_edit=False), add_virtiofs_callback)
+
+        elif event.button.id == "edit-network-interface-button":
+            if self.selected_network_interface:
+                interface_to_edit = next((net for net in self.vm_info['networks'] if net['mac'] == self.selected_network_interface), None)
+                if interface_to_edit:
+                    def edit_interface_callback(result):
+                        if result:
+                            new_network_name = result["network"]
+                            new_model = result["model"]
+
+                            original_network_name = interface_to_edit["network"]
+                            original_model = interface_to_edit["model"]
+                            original_mac = interface_to_edit["mac"]
+
+                            if new_network_name == original_network_name and new_model == original_model:
+                                self.app.show_success_message("No changes detected for network interface.")
+                                return
+
+                            message = (f"Are you sure you want to modify network interface\n'{original_mac}'\n"
+                                       f"It will be removed and re-added, which may result\nin a NEW MAC ADDRESS.\n\n"
+                                       f"Original: Network={original_network_name}, Model={original_model}\n"
+                                       f"New: Network={new_network_name}, Model={new_model}")
+
+                            def on_confirm_edit(confirmed: bool) -> None:
+                                if confirmed:
+                                    try:
+                                        if self.domain.isActive():
+                                            self.app.show_error_message("VM must be stopped to modify network interfaces.")
+                                            return
+
+                                        remove_network_interface(self.domain, original_mac)
+                                        add_network_interface(self.domain, new_network_name, new_model)
+
+                                        self.app.show_success_message(f"Network interface '{original_mac}' modified successfully. A new MAC address may have been assigned.")
+                                        self._update_networks_table()
+                                    except (libvirt.libvirtError, ValueError) as e:
+                                        self.app.show_error_message(f"Error modifying network interface: {e}")
+                                    except Exception as e:
+                                        self.app.show_error_message(f"An unexpected error occurred: {e}")
+                            self.app.push_screen(ConfirmationDialog(message), on_confirm_edit)
+                    self.app.push_screen(AddEditNetworkInterfaceModal(is_edit=True, networks=self.available_networks, interface_info=interface_to_edit), edit_interface_callback)
+                else:
+                    self.app.show_error_message("Could not retrieve information for the selected network interface.")
+
+        elif event.button.id == "add-network-interface-button":
+            def add_interface_callback(result):
+                if result:
+                    try:
+                        add_network_interface(
+                            self.domain,
+                            result["network"],
+                            result["model"]
+                        )
+                        self.app.show_success_message("Network interface added successfully.")
+                        self._update_networks_table()
+                    except (libvirt.libvirtError, ValueError) as e:
+                        self.app.show_error_message(f"Error adding network interface: {e}")
+            self.app.push_screen(AddEditNetworkInterfaceModal(is_edit=False, networks=self.available_networks), add_interface_callback)
+
+        elif event.button.id == "remove-network-interface-button":
+            if self.selected_network_interface:
+                message = f"Are you sure you want to remove network interface:\n'{self.selected_network_interface}'?"
+                def on_confirm(confirmed: bool) -> None:
+                    if confirmed:
+                        try:
+                            remove_network_interface(self.domain, self.selected_network_interface)
+                            self.app.show_success_message(f"Network interface '{self.selected_network_interface}' removed successfully.")
+                            self._update_networks_table()
+                        except (libvirt.libvirtError, ValueError) as e:
+                            self.app.show_error_message(f"Error removing network interface: {e}")
+                self.app.push_screen(ConfirmationDialog(message), on_confirm)
 
         elif event.button.id == "edit-virtiofs-btn":
             if self.selected_virtiofs_info:
@@ -1236,36 +1347,6 @@ class VMDetailModal(ModalScreen):
                         self.app.show_error_message(f"Error setting machine type: {e}")
 
             self.app.push_screen(SelectMachineTypeModal(machine_types, current_machine_type=self.vm_info.get('machine_type', '')), set_machine_type_callback)
-
-        elif event.button.id == "change-network-button":
-            logging.info(f"Attempting to change network for VM: {self.vm_name}")
-            try:
-                available_networks_info = list_networks(self.conn)
-                available_networks = [net['name'] for net in available_networks_info]
-
-                vm_xml = self.domain.XMLDesc(0)
-                vm_interfaces = get_vm_networks_info(vm_xml)
-
-                if not vm_interfaces:
-                    self.app.show_error_message(f"No network interfaces found for VM {self.vm_name}.")
-                    return
-
-                def handle_change_network(result: dict | None):
-                    if result:
-                        mac = result['mac_address']
-                        new_net = result['new_network']
-                        try:
-                            change_vm_network(self.domain, mac, new_net)
-                            self.app.show_success_message(f"Network for interface {mac} changed to {new_net}.")
-                            self.dismiss() # Dismiss the current modal to force a refresh on the parent
-                        except Exception as e:
-                            logging.error(traceback.format_exc())
-                            self.app.show_error_message(f"Error changing network: {e}")
-
-                self.app.push_screen(ChangeNetworkDialog(vm_interfaces, available_networks), handle_change_network)
-
-            except Exception as e:
-                self.app.show_error_message(f"Error preparing to change network: {e}")
 
     def action_close_modal(self) -> None:
         """Close the modal."""
