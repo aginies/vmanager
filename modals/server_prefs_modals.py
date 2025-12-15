@@ -288,7 +288,7 @@ class ServerPrefModal(BaseModal[None]):
             if success:
                 self._load_storage_pools()
 
-        self.app.push_screen(AddPoolModal(), on_create)
+        self.app.push_screen(AddPoolModal(self.conn), on_create)
 
     @on(Button.Pressed, "#del-pool-btn")
     def on_delete_pool_button_pressed(self, event: Button.Pressed) -> None:
