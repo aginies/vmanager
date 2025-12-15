@@ -27,6 +27,7 @@
     align: center middle;
 }
 #edit-server-dialog,
+#select-server-container,
 #add-pool-dialog,
 #add-server-dialog,
 #add-disk-dialog,
@@ -51,6 +52,7 @@
 
 #server-pref-title Label,
 #connection-dialog Label,
+#select-server-container Label,
 #filter-dialog Label,
 #create-vm-dialog Label,
 #add-pool-dialog Label,
@@ -99,6 +101,7 @@
 
 #connection-dialog Horizontal,
 #add-server-dialog Horizontal,
+#select-server-container Horizontal,
 #edit-server-dialog Horizontal,
 #server-selection-dialog Horizontal,
 #directory-selection-dialog Horizontal,
@@ -121,6 +124,7 @@
 }
 
 #connection-dialog Button,
+#select-server-container Button,
 #server-selection-dialog Button,
 #server-pref-title Button,
 #add-pool-dialog Button,
