@@ -105,29 +105,20 @@ Button {
     padding: 0 1;
 }
 /* Custom button styles */
-#pause,
 #xml,
 #snapshot_take,
 #snapshot_restore,
-#snapshot_delete,
-#connect {
+#snapshot_delete {
     color: white;
-    max-height: 3vh; /* 3vh; */
+    background: red;
+    height: 3vh;
 }
-#pause, #xml, #connect {
+#xml {
     padding: 0 1;
 }
 #snapshot_take, #snapshot_restore, #snapshot_delete {
     padding: 0 0;
 }
-
-#pause {
-    background: #FFA500; /* Orange */
-}
-#xml {
-    background: grey;
-}
-
 #snapshot_take {
     background: #00008B; /* Dark blue */
 }
@@ -137,10 +128,6 @@ Button {
 #snapshot_delete {
     background: red;
 }
-#connect {
-    background: #FF00FF; /* Magenta */
-}
-
 #snapshot-tab,
 #manage-tab {
     border: hidden;
@@ -190,59 +177,20 @@ Button {
     overflow-y: auto;
     border: hidden;
 }
-
-#button-container {
-    width: 100%;
-    height: 100%;
-    margin: 1 1;
-    padding: 0 1;
-}
 #status-cpu-mem {
     width: 100%;
     height: 100%;
     padding: 0 1;
 }
-/* Custom button styles */
-#pause,
-#xml,
-#snapshot_take,
-#snapshot_restore,
-#snapshot_delete,
-#connect {
-    color: white;
-    max-height: 3vh; /* 3vh; */
-}
-#pause, #xml, #connect {
-    padding: 0 1;
-}
-#snapshot_take, #snapshot_restore, #snapshot_delete {
-    padding: 0 0;
-}
-
 #pause {
     background: #FFA500; /* Orange */
 }
 #xml {
     background: grey;
 }
-
-#snapshot_take {
-    background: #00008B; /* Dark blue */
-}
-#snapshot_restore {
-    background: #0000FF; /* Blue */
-}
-#snapshot_delete {
-    background: red;
-}
 #connect {
+    height: 3vh;
+    max-height: 3vh; /* 3vh; */
+    background: red; /*
     background: #FF00FF; /* Magenta */
-}
-
-#snapshot-tab,
-#manage-tab {
-    border: hidden;
-}
-.button-separator {
-    height: 1;
 }
