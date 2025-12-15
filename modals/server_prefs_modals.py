@@ -425,7 +425,7 @@ class ServerPrefModal(BaseModal[None]):
             def on_create(success: bool):
                 if success:
                     self._load_networks()
-            self.app.push_screen(CreateNetworkModal(), on_create)
+            self.app.push_screen(CreateNetworkModal(self.conn), on_create)
         elif event.button.id == "delete-net-btn":
             table = self.query_one("#networks-table", DataTable)
             if not table.cursor_coordinate:
