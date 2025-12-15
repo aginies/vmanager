@@ -100,20 +100,12 @@ def get_domain_capabilities_xml(
         logging.error(f"Error getting domain capabilities: {e}")
         return None
 
-def parse_domain_capabilities_xml(xml_content: str) -> dict:
+def get_video_domain_capabilities(xml_content: str) -> dict:
     """
-    Parses the domain capabilities XML to extract supported video and sound models.
-
-    Args:
-        xml_content: The XML string from conn.getDomainCapabilities.
-
-    Returns:
-        A dictionary with 'video_models' and 'sound_models' lists.
+    Parses the domain capabilities XML to extract supported video
     """
     supported_models = {
         'video_models': [],
-        'sound_models': [],
-        'network_models': []
     }
 
     if not xml_content:
@@ -128,17 +120,32 @@ def parse_domain_capabilities_xml(xml_content: str) -> dict:
                 if value_elem.text:
                     supported_models['video_models'].append(value_elem.text)
 
+    except ET.ParseError as e:
+        logging.error(f"Error parsing domain capabilities XML: {e}")
+    except Exception as e:
+        logging.error(f"An unexpected error occurred during XML parsing: {e}")
+
+    return supported_models
+
+def get_sound_domain_capabilities(xml_content: str) -> dict:
+    """
+    Parses the domain capabilities XML to extract supported sound models.
+    """
+    supported_models = {
+        'sound_models': [],
+    }
+
+    if not xml_content:
+        return supported_models
+
+    try:
+        root = ET.fromstring(xml_content)
+
         # Extract supported sound models
-        for sound_elem in root.findall(".//sound[@supported='yes']/enum[@name='modelType']"):
+        for sound_elem in root.findall(".//sound[@supported='yes']/enum[@name='model']"):
             for value_elem in sound_elem.findall('value'):
                 if value_elem.text:
                     supported_models['sound_models'].append(value_elem.text)
-        
-        # Extract supported network models
-        for interface_elem in root.findall(".//interface[@type='network']/model[@supported='yes']/enum[@name='modelType']"):
-            for value_elem in interface_elem.findall('value'):
-                if value_elem.text:
-                    supported_models['network_models'].append(value_elem.text)
 
     except ET.ParseError as e:
         logging.error(f"Error parsing domain capabilities XML: {e}")
