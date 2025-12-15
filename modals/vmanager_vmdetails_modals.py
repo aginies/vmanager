@@ -21,15 +21,14 @@ from vmcard_dialog import ChangeNetworkDialog
 from vm_queries import (
     get_vm_networks_info,
     get_vm_disks_info, get_vm_devices_info,
-    get_supported_machine_types,
-    get_vm_graphics_info,
-    get_all_vm_nvram_usage, get_all_vm_disk_usage,
-)
+    get_supported_machine_types, get_vm_graphics_info,
+    get_all_vm_nvram_usage, get_all_vm_disk_usage, get_vm_sound_model,
+    )
 from vm_actions import (
-    add_disk, remove_disk, set_vcpu, set_memory, set_machine_type, enable_disk,
-    disable_disk, change_vm_network, set_shared_memory, remove_virtiofs,
-    add_virtiofs, set_vm_video_model, set_cpu_model, set_uefi_file,
-    set_vm_graphics, set_disk_properties
+        add_disk, remove_disk, set_vcpu, set_memory, set_machine_type, enable_disk,
+        disable_disk, change_vm_network, set_shared_memory, remove_virtiofs,
+        add_virtiofs, set_vm_video_model, set_cpu_model, set_uefi_file,
+        set_vm_graphics, set_disk_properties, set_vm_sound_model
 )
 from network_manager import (
     list_networks,
@@ -81,6 +80,7 @@ class VMDetailModal(ModalScreen):
         self.sev_caps = {'sev': False, 'sev-es': False}
         self.uefi_path_map = {}
         self.graphics_info = get_vm_graphics_info(self.domain.XMLDesc(0)) # Initialize here
+        self.vm_info['sound_model'] = get_vm_sound_model(self.domain.XMLDesc(0))
 
     def on_mount(self) -> None:
         try:
@@ -407,6 +407,24 @@ class VMDetailModal(ModalScreen):
             # Revert selection
             event.control.value = current_model
 
+    @on(Select.Changed, "#sound-model-select")
+    def on_sound_model_changed(self, event: Select.Changed) -> None:
+        new_model = event.value
+        current_model = self.vm_info.get('sound_model') or "none"
+
+        if new_model == current_model:
+            return
+
+        try:
+            set_vm_sound_model(self.domain, new_model if new_model != "none" else None)
+            self.app.show_success_message(f"Sound model set to {new_model}")
+            self.query_one("#sound-model-label").update(f"Sound Model: {new_model}")
+            self.vm_info['sound_model'] = new_model if new_model != "none" else None
+        except (libvirt.libvirtError, Exception) as e:
+            self.app.show_error_message(f"Error setting sound model: {e}")
+            # Revert selection
+            event.control.value = current_model
+
     @on(Checkbox.Changed, "#secure-boot-checkbox")
     def on_secure_boot_checkbox_changed(self, event: Checkbox.Changed) -> None:
         self._update_uefi_options()
@@ -725,6 +743,22 @@ class VMDetailModal(ModalScreen):
                             allow_blank=False,
                         )
 
+                with TabPane("Sound", id="detail-sound-tab"):
+                    with Vertical(classes="info-details"):
+                        current_sound_model = self.vm_info.get('sound_model') or "none"
+                        is_stopped = self.vm_info.get("status") == "Stopped"
+                        sound_models = ["none", "ich6", "ich9", "ac97", "sb16", "usb"]
+                        sound_model_options = [(model, model) for model in sound_models]
+
+                        yield Label(f"Sound Model: {current_sound_model}", id="sound-model-label")
+                        yield Select(
+                            sound_model_options,
+                            value=current_sound_model if current_sound_model in sound_models else "none",
+                            id="sound-model-select",
+                            disabled=not is_stopped,
+                            allow_blank=False,
+                        )
+
                 with TabPane("Graphics", id="detail-graphics-tab"):
                     is_stopped = self.vm_info.get("status") == "Stopped"
                     with ScrollableContainer(): #classes="info-details"):
@@ -782,8 +816,6 @@ class VMDetailModal(ModalScreen):
         # TOFIX !
                 with TabPane("Serial", id="detail-serial-tab"):
                     yield Label("Serial")
-                with TabPane("Sound", id="detail-sound-tab"):
-                    yield Label("Sound")
                 with TabPane("Watchdog", id="detail-watchdog-tab"):
                     yield Label("Watchdog")
                 with TabPane("RNG", id="detail-rng-tab"):
