@@ -42,11 +42,57 @@ def get_vm_info(conn):
     return vm_info_list
 
 @log_function_call
-def get_vm_network_dns_gateway_info(domain: str):
+def get_vm_network_dns_gateway_info(domain: libvirt.virDomain):
     """
     Extracts DNS and gateway information for networks connected to the VM.
     """
-    pass
+    if not domain:
+        return []
+
+    conn = domain.connect()
+    xml_content = domain.XMLDesc(0)
+    root = ET.fromstring(xml_content)
+
+    network_details = []
+
+    # Find all network names from the VM's interfaces
+    vm_networks = []
+    for interface in root.findall(".//devices/interface"):
+        source = interface.find("source")
+        if source is not None:
+            network_name = source.get("network")
+            if network_name and network_name not in vm_networks:
+                vm_networks.append(network_name)
+
+    for net_name in vm_networks:
+        try:
+            network = conn.networkLookupByName(net_name)
+            net_xml = network.XMLDesc(0)
+            net_root = ET.fromstring(net_xml)
+
+            gateway = None
+            ip_elem = net_root.find("ip")
+            if ip_elem is not None:
+                gateway = ip_elem.get("address")
+
+            dns_servers = []
+            dns_elem = net_root.find("dns")
+            if dns_elem is not None:
+                for server in dns_elem.findall("server"):
+                    dns_servers.append(server.get("address"))
+
+            if gateway or dns_servers:
+                network_details.append({
+                    "network_name": net_name,
+                    "gateway": gateway,
+                    "dns_servers": dns_servers
+                })
+
+        except libvirt.libvirtError:
+            # Network might not be found or other libvirt error
+            continue
+
+    return network_details
 
 def get_status(domain):
     """
@@ -130,14 +176,18 @@ def get_vm_networks_info(xml_content: str) -> list[dict]:
         if mac_address_node is None:
             continue
         mac_address = mac_address_node.get("address")
+        
         source = interface.find("source")
         network_name = None
         if source is not None:
             network_name = source.get("network")
 
+        model_node = interface.find("model")
+        model = model_node.get("type") if model_node is not None else "default"
+
         # We are interested in interfaces that are part of a network
         if network_name:
-            networks.append({"mac": mac_address, "network": network_name})
+            networks.append({"mac": mac_address, "network": network_name, "model": model})
     return networks
 
 
