@@ -89,17 +89,18 @@ class ServerManagementModal(ModalScreen):
         self.selected_row = None
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="server-management-dialog"):
-            yield Label("Server List Management", classes="server-list")
-            with ScrollableContainer():
-                yield DataTable(id="server-table")
-            with Horizontal():
-                yield Button("Add", id="add-server-btn", classes="add-button", variant="success")
-                yield Button("Edit", id="edit-server-btn", disabled=True, classes="edit-button")
-                yield Button("Delete", id="delete-server-btn", disabled=True, classes="delete-button")
-            with Horizontal():
-                yield Button("Connect", id="select-btn", variant="primary", disabled=True, classes="Buttonpage")
-                yield Button("Custom URL", id="custom-conn-btn", classes="Buttonpage")
+        with Vertical(id="server-management-dialog", classes="info-details"):
+            yield Label("Server List Management")
+            with ScrollableContainer(classes="info-details"):
+                yield DataTable(id="server-table", classes="server-list")
+            with Vertical(classes="info-details"):
+                with Horizontal():
+                    yield Button("Add", id="add-server-btn", classes="add-button", variant="success")
+                    yield Button("Edit", id="edit-server-btn", disabled=True, classes="edit-button")
+                    yield Button("Delete", id="delete-server-btn", disabled=True, classes="delete-button")
+                with Horizontal():
+                    yield Button("Connect", id="select-btn", variant="primary", disabled=True, classes="Buttonpage")
+                    yield Button("Custom URL", id="custom-conn-btn", classes="Buttonpage")
             #yield Button("Close", id="close-btn", classes="close-button")
 
     def on_mount(self) -> None:

@@ -30,25 +30,24 @@ class SelectServerModal(BaseModal[None]):
         return sanitized
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="select-server-container", classes="modal-container"):
+        with Vertical(id="select-server-container", classes="info-details"):
             yield Label("Select Servers to Display")
-
             server_iter = iter(self.servers)
-            for server1 in server_iter:
-                with Horizontal():
-                    is_active1 = server1['uri'] in self.active_uris
-                    sanitized_id1 = self.sanitize_for_id(server1['uri'])
-                    self.id_to_uri_map[sanitized_id1] = server1['uri']
-                    yield Checkbox(server1['name'], value=is_active1, id=sanitized_id1)
-
-                    try:
-                        server2 = next(server_iter)
-                        is_active2 = server2['uri'] in self.active_uris
-                        sanitized_id2 = self.sanitize_for_id(server2['uri'])
-                        self.id_to_uri_map[sanitized_id2] = server2['uri']
-                        yield Checkbox(server2['name'], value=is_active2, id=sanitized_id2)
-                    except StopIteration:
-                        pass # Handle odd number of servers
+            with Vertical(classes="info-details"):
+                for server1 in server_iter:
+                    with Horizontal():
+                        is_active1 = server1['uri'] in self.active_uris
+                        sanitized_id1 = self.sanitize_for_id(server1['uri'])
+                        self.id_to_uri_map[sanitized_id1] = server1['uri']
+                        yield Checkbox(server1['name'], value=is_active1, id=sanitized_id1)
+                        try:
+                            server2 = next(server_iter)
+                            is_active2 = server2['uri'] in self.active_uris
+                            sanitized_id2 = self.sanitize_for_id(server2['uri'])
+                            self.id_to_uri_map[sanitized_id2] = server2['uri']
+                            yield Checkbox(server2['name'], value=is_active2, id=sanitized_id2)
+                        except StopIteration:
+                            pass # Handle odd number of servers
 
             with Horizontal(classes="modal-buttons"):
                 yield Button("Done", id="done-servers", variant="primary")
