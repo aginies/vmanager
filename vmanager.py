@@ -606,7 +606,7 @@ class VMManagerTUI(App):
 
         for conn in self._get_active_connections():
             try:
-                total_vms += conn.numOfDomains()
+                total_vms += len(conn.listAllDomains(0) or [])
             except libvirt.libvirtError:
                 self.show_error_message(f"Connection lost to {conn.getURI()}")
         
