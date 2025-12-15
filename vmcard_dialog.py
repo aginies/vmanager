@@ -50,8 +50,8 @@ class ChangeNetworkDialog(BaseDialog[dict | None]):
         interface_options = [(f"{iface['mac']} ({iface['network']})", iface['mac']) for iface in self.interfaces]
         network_options = [(str(net), str(net)) for net in self.networks]
 
-        with Vertical(id="dialog", classes="info-container"):
-            yield Label("Select interface and new network:")
+        with Vertical(id="dialog"):
+            yield Label("Select interface and new network")
             yield Select(interface_options, id="interface-select")
             yield Select(network_options, id="network-select")
             with Horizontal(id="dialog-buttons"):
