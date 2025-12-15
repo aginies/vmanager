@@ -431,7 +431,7 @@ def change_vm_network(domain: libvirt.virDomain, mac_address: str, new_network: 
     root = ET.fromstring(xml_desc)
 
     interface_to_update = None
-    for iface in root.findall(f".//devices/interface"):
+    for iface in root.findall(".//devices/interface"):
         mac_node = iface.find("mac")
         if mac_node is not None and mac_node.get("address") == mac_address:
             interface_to_update = iface
@@ -619,40 +619,10 @@ def set_memory(domain, memory_mb: int):
             )
 
 @log_function_call
-def set_disk_cache_mode(domain: libvirt.virDomain, disk_path: str, cache_mode: str):
-    """Sets the cache mode for a specific disk."""
+def set_disk_properties(domain: libvirt.virDomain, disk_path: str, properties: dict):
+    """Sets multiple driver properties for a specific disk."""
     if domain.isActive():
-        raise libvirt.libvirtError("VM must be stopped to change disk cache mode.")
-
-    xml_desc = domain.XMLDesc(0)
-    root = ET.fromstring(xml_desc)
-
-    disk_found = False
-    for disk in root.findall(".//disk[@device='disk']"):
-        source = disk.find("source")
-        if source is not None and source.get("file") == disk_path:
-            driver = disk.find("driver")
-            if driver is None:
-                # If no driver tag, let's create one.
-                # We need to guess the type, qcow2 is a safe bet for images.
-                driver = ET.SubElement(disk, "driver", name="qemu", type="qcow2")
-
-            driver.set('cache', cache_mode)
-            disk_found = True
-            break
-
-    if not disk_found:
-        raise ValueError(f"Disk with path '{disk_path}' not found.")
-
-    new_xml = ET.tostring(root, encoding='unicode')
-    domain.connect().defineXML(new_xml)
-
-
-@log_function_call
-def set_disk_discard_mode(domain: libvirt.virDomain, disk_path: str, discard_mode: str):
-    """Sets the discard mode for a specific disk."""
-    if domain.isActive():
-        raise libvirt.libvirtError("VM must be stopped to change disk discard mode.")
+        raise libvirt.libvirtError("VM must be stopped to change disk settings.")
 
     xml_desc = domain.XMLDesc(0)
     root = ET.fromstring(xml_desc)
@@ -665,7 +635,9 @@ def set_disk_discard_mode(domain: libvirt.virDomain, disk_path: str, discard_mod
             if driver is None:
                 driver = ET.SubElement(disk, "driver", name="qemu", type="qcow2")
 
-            driver.set('discard', discard_mode)
+            for key, value in properties.items():
+                driver.set(key, value)
+
             disk_found = True
             break
 
@@ -673,7 +645,8 @@ def set_disk_discard_mode(domain: libvirt.virDomain, disk_path: str, discard_mod
         raise ValueError(f"Disk with path '{disk_path}' not found.")
 
     new_xml = ET.tostring(root, encoding='unicode')
-    domain.connect().defineXML(new_xml)
+    conn = domain.connect()
+    conn.defineXML(new_xml)
 
 @log_function_call
 def set_machine_type(domain, new_machine_type):
