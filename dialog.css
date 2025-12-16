@@ -1,6 +1,31 @@
-SnapshotNameDialog {
+SnapshotNameDialog,
+SelectSnapshotDialog,
+ConfirmationDialog,
+ChangeNetworkDialog,
+XMLDisplayModal,
+WebConsoleDialog,
+SelectDiskModal,
+SelectPoolModal,
+DeleteVMConfirmationDialog,
+CloneNameDialog,
+SelectServerModal {
     align: center middle;
     background: rgba(0, 0, 0, 0.5);
+}
+
+ConfirmationDialog #dialog Label,
+RenameVMDialog,
+XMLDisplayModal,
+WebConsoleDialog,
+SelectDiskModal,
+SelectPoolModal,
+DeleteVMConfirmationDialog,
+CloneNameDialog,
+SelectServerModal {
+    content-align: center middle;
+}
+
+SnapshotNameDialog {
 }
 
 SnapshotNameDialog #dialog {
@@ -29,8 +54,6 @@ SnapshotNameDialog #dialog-buttons Button {
 }
 
 SelectSnapshotDialog {
-    align: center middle;
-    background: rgba(0, 0, 0, 0.5);
 }
 
 SelectSnapshotDialog #dialog {
@@ -48,8 +71,6 @@ SelectSnapshotDialog #snapshot-list {
 }
 
 ConfirmationDialog {
-    align: center middle;
-    background: rgba(0, 0, 0, 0.5);
 }
 
 ConfirmationDialog #dialog {
@@ -60,7 +81,6 @@ ConfirmationDialog #dialog {
     background: $surface;
 }
 ConfirmationDialog #dialog Label {
-   content-align: center middle;
 }
 
 ConfirmationDialog #question {
@@ -84,10 +104,7 @@ SelectPoolModal,
 DeleteVMConfirmationDialog,
 CloneNameDialog
 SelectServerModal {
-    align: center middle;
-    content-align: center middle;
     height: auto;
-    background: rgba(0, 0, 0, 0.5);
 }
 
 WebConsoleDialog #dialog,
@@ -140,7 +157,6 @@ SelectServerModal #dialog-buttons Button {
 
 RenameVMDialog {
     align: center middle;
-    content-align: center middle;
 }
 
 RenameVMDialog #dialog {
@@ -170,8 +186,6 @@ RenameVMDialog #dialog-buttons Button {
 }
 
 ChangeNetworkDialog {
-    align: center middle;
-    background: rgba(0, 0, 0, 0.5);
 }
 
 ChangeNetworkDialog #dialog {
@@ -238,9 +252,6 @@ ChangeNetworkDialog #dialog-buttons Button {
     width: 1fr;
 }
 XMLDisplayModal {
-    align: center middle;
-    content-align: center middle;
-    background: rgba(0, 0, 0, 0.5);
 }
 
 XMLDisplayModal #xml-display-dialog {
@@ -266,4 +277,3 @@ XMLDisplayModal #dialog-buttons Button {
     width: 50%;
     margin: 0 1;
 }
-

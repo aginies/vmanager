@@ -1,3 +1,20 @@
+
+.server-list,
+VMDetailModal,
+.close-button,
+#add-disk-dialog,
+#remove-disk-dialog,
+#select-machine-type-dialog,
+#select-pool-dialog,
+#select-disk-dialog,
+.centered-status-label,
+.network-interface-row,
+VirshShellScreen,
+#virsh-shell-container,
+#virsh-input-container {
+    align: center middle;
+}
+
 /* Styles for VMManagerTUI */
 #vms-container {
     height: 80;
@@ -15,12 +32,37 @@ Header, Footer {
     background: $primary;
     color: $text;
 }
-#connection-dialog {
-    width: 60;
+
+#connection-dialog,
+#add-edit-network-dialog,
+#edit-server-dialog,
+#select-server-container,
+#add-pool-dialog,
+#add-server-dialog,
+#add-disk-dialog,
+#server-selection-dialog,
+#network-detail-dialog,
+#add-edit-virtiofs-dialog,
+#create-vm-dialog,
+#create-network-dialog,
+#edit-cpu-dialog,
+#create-volume-dialog,
+#edit-memory-dialog,
+#directory-selection-dialog,
+#filter-dialog,
+#server-management-dialog,
+#remove-disk-dialog,
+#select-machine-type-dialog,
+#select-pool-dialog,
+#select-disk-dialog {
     height: auto;
     border: round $primary;
     background: $surface;
     padding: 1 2;
+}
+
+#connection-dialog {
+    width: 60;
 }
 
 .small {
@@ -28,7 +70,6 @@ Header, Footer {
 }
 .server-list {
     padding: 1 1;
-    align: center middle;
 }
 #add-edit-network-dialog,
 #edit-server-dialog,
@@ -47,12 +88,8 @@ Header, Footer {
 #server-selection-dialog,
 #directory-selection-dialog,
 #filter-dialog,
-#server-management-dialog, {
+#server-management-dialog {
     width: 64;
-    height: auto;
-    border: round $primary;
-    background: $surface;
-    padding: 1 2;
 }
 #add-edit-network-dialog Label,
 #server-pref-title Label,
@@ -110,7 +147,6 @@ Header, Footer {
 #server-management-dialog Horizontal,
 #create-volume-dialog Horizontal,
 #network-detail-dialog Horizontal,
-#edit-cpu-dialog Horizontal,
 #create-vm-dialog Horizontal,
 #create-network-dialog Horizontal,
 #add-edit-virtiofs-dialog Horizontal,
@@ -164,12 +200,7 @@ Header, Footer {
 #cpu-model-select Select,
 #remove-disk-dialog Select,
 #uefi-file-select Select,
-#select-pool-dialog Select {
-    width: 50;
-    height: 5;
-    border: none;
-    margin: 0 0;
-}
+#select-pool-dialog Select,
 Select {
     width: 50;
     height: 5;
@@ -195,9 +226,7 @@ Select {
     background: red 40%;
 }
 /* Styles for VMDetailModal */
-VMDetailModal {
-    align: center middle;
-} 
+
 #vm-detail-container {
     width: 90;
     height: 90%;
@@ -240,13 +269,19 @@ VMDetailModal {
     margin-top: 1;
 }
 
+
+.info-section,
+.info-details,
+.storage-pool-details {
+    background: $panel;
+    margin-bottom: 1;
+}
+
 .info-section {
     height: 10;
     max-height: 10;
-    background: $panel;
     padding: 0 1;
     border: round $primary;
-    margin-bottom: 1;
 }
 .server-list {
     height: auto;
@@ -255,23 +290,19 @@ VMDetailModal {
 }
 .info-details {
     height: auto;
-    background: $panel;
     padding: 0 0;
     border: round $primary;
-    margin-bottom: 1;
 }
-.info-details ListView > ListItem {
-    height: 1;
-}
-.select-pool-dialog ListView > ListItem {
-    height: 1;
-}
-.select-disk-dialog ListView > ListItem {
-    height: 1;
-}
+
+.info-details ListView > ListItem,
+.select-pool-dialog ListView > ListItem,
+.select-disk-dialog ListView > ListItem,
 .select-machine-type-dialog ListView > ListItem {
     height: 1;
 }
+
+
+
 #status-running {
     color: green;
     border: round green;
@@ -326,7 +357,6 @@ Button {
     color: white;
     background: red;
     border: hidden;
-    align: center middle;
     margin: 1 1;
 }
 .delete-button,
@@ -374,9 +404,7 @@ Button {
 }
 .storage-pool-details {
     height: 22;
-    background: $panel;
     padding: 0 0;
-    margin-bottom: 1;
 }
 .edit-detail-btn {
     width: auto;
@@ -385,13 +413,10 @@ Button {
     min-height: 1;
     margin: 0 0 0 1;
 }
-.centered-status-label {
-    align: center middle;
-}
+
 
 .network-interface-row {
     height: auto;
-    align: center middle;
     padding: 0 1;
 }
 
@@ -404,13 +429,8 @@ Button {
 #select-machine-type-dialog,
 #select-pool-dialog,
 #select-disk-dialog {
-    height: auto;
     width: 50;
     max-width: 90; /* Increased from 60 */
-    border: round $primary;
-    background: $surface;
-    padding: 1 2;
-    align: center middle;
 }
 
 #machine-type-list, #disk-selection-list {
@@ -421,9 +441,7 @@ Button {
 }
 
 /* Styles for VirshShellScreen */
-VirshShellScreen {
-    align: center middle;
-}
+
 
 #virsh-shell-container {
     width: 90%;
@@ -433,7 +451,6 @@ VirshShellScreen {
     background: $surface;
     border: round $primary;
     padding: 0;
-    align: center middle;
 }
 
 #virsh-shell-title {
@@ -458,7 +475,6 @@ VirshShellScreen {
 #virsh-input-container {
     width: 1fr;
     height: auto;
-    align: center middle;
     background: $panel;
     padding: 0 0;
 }
@@ -482,7 +498,7 @@ VirshShellScreen {
     border: round $primary;
 }
 .net-forward-input,
-.disk-format-select, {
+.disk-format-select {
     border: hidden;
     height: 4;
     width: 50%;
@@ -495,7 +511,7 @@ VirshShellScreen {
 .hidden {
     display: none;
 }
-.dhcp-input, .dhcp-input {
+.dhcp-input {
     width: 50%;
 }
 .dns-domain-radioset {

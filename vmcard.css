@@ -1,6 +1,11 @@
+#name,
+#info-container,
+#status {
+    content-align: center middle;
+}
+
 VMCard {
     text-align: center;
-    border: hidden;
     margin: 0 0;
     width: 43;
     height: 14;
@@ -8,15 +13,11 @@ VMCard {
 #name {
     background: green;
     color: white;
-    padding: 0 0;
     text-style: bold;
-    content-align: center middle;
 }
 #info-container {
     background: $background;
     color: white;
-    padding: 0 0;
-    content-align: center middle;
     /* Border properties change based on server which belong VM */
     width: 41;
     height: 14;
@@ -43,16 +44,49 @@ VMCard {
     padding-left: 1;
 }
 
-#cpu-sparkline {
+
+#cpu-sparkline,
+#mem-sparkline {
     background: $panel;
-    color: $success;
     margin-right: 1;
 }
 
+#cpu-sparkline {
+    color: $success;
+}
+
 #mem-sparkline {
-    background: $panel;
     color: $warning;
-    margin-right: 1;
+}
+
+#status,
+Button,
+.Buttonpage,
+#xml,
+#snapshot_take,
+#snapshot_restore,
+#snapshot_delete,
+.button-separator,
+#connect {
+    height: 1;
+}
+
+#name,
+#info-container,
+Button,
+.Buttonpage,
+#snapshot_take,
+#snapshot_restore,
+#snapshot_delete {
+    padding: 0 0;
+}
+
+VMCard,
+Button,
+.Buttonpage,
+#snapshot-tab,
+#manage-tab {
+    border: hidden;
 }
 
 .hidden {
@@ -63,8 +97,6 @@ VMCard {
     margin: 0 2;
     padding: 0 1;
     text-style: bold;
-    height: 1;
-    content-align: center middle;
     margin-bottom: 1;
 }
 #status.running,
@@ -83,20 +115,14 @@ VMCard {
 }
 
 Button {
-    height: 1;
     width: 100%;
     margin: 0 1;
-    padding: 0 0;
-    border: hidden;
 }
 
 .Buttonpage {
-    height: 1;
     width: 15%;
     margin: 0 1;
-    padding: 0 0;
     overflow-y: auto;
-    border: hidden;
 }
 
 #button-container {
@@ -118,15 +144,12 @@ Button {
 #snapshot_restore,
 #snapshot_delete {
     color: white;
-    height: 1;
 }
 #xml {
     padding: 0 1;
     background: grey;
 }
-#snapshot_take, #snapshot_restore, #snapshot_delete {
-    padding: 0 0;
-}
+
 #snapshot_take {
     background: #00008B; /* Dark blue */
 }
@@ -136,19 +159,10 @@ Button {
 #snapshot_delete {
     background: red;
 }
-#snapshot-tab,
-#manage-tab {
-    border: hidden;
-}
-.button-separator {
-    height: 1;
-}
-
 #pause {
     background: #FFA500; /* Orange */
 }
 
 #connect {
-    height: 1;
     background: red;
 }
