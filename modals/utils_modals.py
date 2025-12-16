@@ -4,7 +4,8 @@ Usefull Modal screen
 import os
 from textual.containers import Horizontal, Vertical
 from textual.widgets import (
-        Label, Button, DirectoryTree, LoadingIndicator
+        Label, Button, DirectoryTree, LoadingIndicator,
+        Markdown
         )
 from textual.app import ComposeResult
 from modals.base_modals import BaseModal, BaseDialog
@@ -62,7 +63,7 @@ class ConfirmationDialog(BaseDialog[bool]):
 
     def compose(self):
         yield Vertical(
-            Label(self.prompt, id="question"),
+            Markdown(self.prompt, id="question"),
             Horizontal(
                 Button("Yes", variant="error", id="yes", classes="dialog-buttons"),
                 Button("No", variant="primary", id="no", classes="dialog-buttons"),
