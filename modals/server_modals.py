@@ -93,7 +93,7 @@ class ServerManagementModal(ModalScreen):
             yield Label("Server List Management")
             with ScrollableContainer(classes="info-details"):
                 yield DataTable(id="server-table", classes="server-list")
-            with Vertical(classes="info-details"):
+            with Vertical(classes="server-list"):
                 with Horizontal():
                     yield Button("Add", id="add-server-btn", classes="add-button", variant="success")
                     yield Button("Edit", id="edit-server-btn", disabled=True, classes="edit-button")

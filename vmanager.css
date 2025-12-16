@@ -11,10 +11,14 @@
     overflow: auto;
     padding: 0 1;
 }
+Header, Footer {
+    background: $primary;
+    color: $text;
+}
 #connection-dialog {
     width: 60;
     height: auto;
-    border: round green;
+    border: round $primary;
     background: $surface;
     padding: 1 2;
 }
@@ -76,11 +80,6 @@
     height: auto;
     content-align: center middle;
     margin-bottom: 1;
-}
-
-#shared-memory {
-    height: 4;
-    border: none;
 }
 
 #add-edit-network-dialog Input,
@@ -148,6 +147,11 @@
     margin: 0 1;
 }
 
+#shared-memory {
+    height: 4;
+    border: none;
+}
+
 .dir-target-path-input {
     width: 50%;
 }
@@ -155,21 +159,6 @@
     width: 50%;
     height: auto;
     margin-bottom: 1;
-}
-
-.close-button {
-    height: 3vh;
-    width: auto;
-    color: white;
-    background: red;
-    border: hidden;
-    align: center middle;
-    margin: 1 1;
-}
-
-Header, Footer {
-    background: $primary;
-    color: $text;
 }
 
 #cpu-model-select Select,
@@ -259,7 +248,11 @@ VMDetailModal {
     border: round $primary;
     margin-bottom: 1;
 }
-
+.server-list {
+    height: auto;
+    padding: 0 0;
+    margin-bottom: 1;
+}
 .info-details {
     height: auto;
     background: $panel;
@@ -269,11 +262,6 @@ VMDetailModal {
 }
 .info-details ListView > ListItem {
     height: 1;
-}
-.button-details {
-    height: 3vh;
-    padding: 0 0;
-    padding: 0 0;
 }
 .select-pool-dialog ListView > ListItem {
     height: 1;
@@ -318,6 +306,11 @@ Button {
     background: black;
     border: round;
 }
+.button-details {
+    height: 1;
+    padding: 0 0;
+    padding: 0 0;
+}
 .ctrlpage {
     height: 3vh;
     width: auto;
@@ -327,11 +320,21 @@ Button {
     text-style: underline;
     background: $background;
 }
-
+.close-button {
+    height: 1;
+    width: auto;
+    color: white;
+    background: red;
+    border: hidden;
+    align: center middle;
+    margin: 1 1;
+}
 .delete-button,
+.done-button,
+.cancel-button,
 .edit-button,
 .add-button {
-    height: 4vh;
+    height: 1;
     width: 25%; /*5vh; */
     color: white;
 }
@@ -341,11 +344,12 @@ Button {
     align: center top;
 }
 
+.cancel-button,
 .delete-button {
     background: red;
 }
 .clone-button {
-    height: 4vh;
+    height: 1;
     color: black;
     background: pink;
 }
@@ -381,9 +385,6 @@ Button {
     min-height: 1;
     margin: 0 0 0 1;
 }
-.s-buttons {
-    height: 10;
-}
 .centered-status-label {
     align: center middle;
 }
@@ -398,8 +399,6 @@ Button {
     height: auto;
     width: 40%;
 }
-
-
 #add-disk-dialog,
 #remove-disk-dialog,
 #select-machine-type-dialog,

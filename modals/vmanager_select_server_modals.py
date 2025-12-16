@@ -49,9 +49,9 @@ class SelectServerModal(BaseModal[None]):
                         except StopIteration:
                             pass # Handle odd number of servers
 
-            with Horizontal(classes="modal-buttons"):
-                yield Button("Done", id="done-servers", variant="primary")
-                yield Button("Cancel", id="cancel-servers")
+            with Horizontal(classes="button-details"):
+                yield Button("Done", id="done-servers", variant="primary", classes="done-button")
+                yield Button("Cancel", id="cancel-servers", classes="cancel-button")
 
     @on(Checkbox.Changed)
     def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
