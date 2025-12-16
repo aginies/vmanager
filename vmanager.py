@@ -432,7 +432,7 @@ class VMManagerTUI(App):
                 'network_dns_gateway': get_vm_network_dns_gateway_info(domain),
                 'disks': get_vm_disks_info(conn_for_domain, xml_content),
                 'devices': get_vm_devices_info(xml_content),
-                'boot': get_boot_info(xml_content),
+                'boot': get_boot_info(xml_content, conn_for_domain),
                 'video_model': get_vm_video_model(xml_content),
                 'xml': xml_content,
             }

@@ -32,6 +32,7 @@ def get_vm_info(conn):
                 'firmware': get_vm_firmware_info(xml_content),
                 'networks': get_vm_networks_info(xml_content),
                 'graphics': get_vm_graphics_info(xml_content),
+                'boot': get_boot_info(xml_content, conn),
                 'detail_network': get_vm_network_ip(domain),
                 'network_dns_gateway': get_vm_network_dns_gateway_info(domain),
                 'disks': get_vm_disks_info(conn, xml_content),
@@ -538,7 +539,7 @@ def get_vm_shared_memory_info(xml_content: str) -> bool:
     return False
 
 @log_function_call
-def get_boot_info(xml_content: str) -> dict:
+def get_boot_info(xml_content: str, conn: libvirt.virConnect) -> dict:
     """Extracts boot information from the VM's XML."""
     root = ET.fromstring(xml_content)
     os_elem = root.find('.//os')
@@ -560,10 +561,23 @@ def get_boot_info(xml_content: str) -> dict:
                 if dev_node.tag == 'disk':
                     source_elem = dev_node.find('source')
                     if source_elem is not None:
-                        if 'file' in source_elem.attrib:
-                            devices.append((order, source_elem.get('file')))
-                        elif 'dev' in source_elem.attrib:
-                             devices.append((order, source_elem.get('dev')))
+                        path = None
+                        if "file" in source_elem.attrib:
+                            path = source_elem.attrib["file"]
+                        elif "dev" in source_elem.attrib:
+                            path = source_elem.attrib["dev"]
+                        elif "pool" in source_elem.attrib and "volume" in source_elem.attrib:
+                            pool_name = source_elem.attrib["pool"]
+                            vol_name = source_elem.attrib["volume"]
+                            try:
+                                pool = conn.storagePoolLookupByName(pool_name)
+                                vol = pool.storageVolLookupByName(vol_name)
+                                path = vol.path()
+                            except libvirt.libvirtError:
+                                pass # Could not resolve path
+                        if path:
+                            devices.append((order, path))
+
                 elif dev_node.tag == 'interface':
                     mac_elem = dev_node.find('mac')
                     if mac_elem is not None:
