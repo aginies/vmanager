@@ -63,9 +63,11 @@ class ProgressModal(BaseModal[None]):
         self._title_text = title
 
     def compose(self) -> ComposeResult:
-        with Vertical(classes="progress-modal-container"):
-            yield Label(self._title_text, id="progress-title")
-            yield ProgressBar(total=100, show_eta=True, id="progress-bar")
+        yield Vertical(
+            Label(self._title_text, id="progress-title"),
+            ProgressBar(total=100, show_eta=True, id="progress-bar"),
+            id="progress-modal-container",
+        )
 
 
 class ConfirmationDialog(BaseDialog[bool]):
