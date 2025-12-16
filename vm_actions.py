@@ -1113,13 +1113,20 @@ def delete_vm(domain: libvirt.virDomain, delete_storage: bool):
     if delete_storage:
         for disk_info in disks_to_delete:
             try:
-                if disk_info['type'] == 'file' and disk_info['path']:
+                # Infer disk_type since get_vm_disks_info might not provide it directly
+                disk_type = None
+                if 'pool_name' in disk_info and 'volume_name' in disk_info:
+                    disk_type = 'volume'
+                elif 'path' in disk_info:
+                    disk_type = 'file'
+
+                if disk_type == 'file' and disk_info['path']:
                     if os.path.exists(disk_info['path']):
                         os.remove(disk_info['path'])
                         logging.info(f"Successfully deleted storage file: {disk_info['path']}")
                     else:
                         logging.warning(f"Storage file not found, skipping: {disk_info['path']}")
-                elif disk_info['type'] == 'volume' and disk_info['pool_name'] and disk_info['volume_name']:
+                elif disk_type == 'volume' and disk_info['pool_name'] and disk_info['volume_name']:
                     try:
                         pool = conn.storagePoolLookupByName(disk_info['pool_name'])
                         vol = pool.storageVolLookupByName(disk_info['volume_name'])
@@ -1131,6 +1138,8 @@ def delete_vm(domain: libvirt.virDomain, delete_storage: bool):
                         else:
                             logging.error(f"Error deleting storage volume {disk_info['volume_name']} from pool {disk_info['pool_name']}: {e}")
                             raise
+                else:
+                    logging.warning(f"Could not determine disk type for deletion for disk_info: {disk_info}")
             except OSError as e:
                 logging.error(f"Error deleting storage file {disk_info.get('path', 'N/A')}: {e}")
                 raise
