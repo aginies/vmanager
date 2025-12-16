@@ -84,7 +84,8 @@ class VMDetailModal(ModalScreen):
         self.all_bootable_devices = [] # Initialize the new reactive list
         self.sev_caps = {'sev': False, 'sev-es': False}
         self.uefi_path_map = {}
-        self.graphics_info = vm_info.get('graphics', {})
+        #self.graphics_info = vm_info.get('graphics', {})
+        self.graphics_info = get_vm_graphics_info(self.domain.XMLDesc(0))
         self.vm_info['sound_model'] = vm_info.get('sound_model')
 
     def on_mount(self) -> None:
