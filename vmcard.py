@@ -24,10 +24,10 @@ from vm_queries import get_vm_disks_info, get_status
 from vm_actions import clone_vm, rename_vm, start_vm
 
 from modals.vmanager_xml_modals import XMLDisplayModal
-from modals.utils_modals import ConfirmationDialog, LoadingModal
+from modals.utils_modals import ConfirmationDialog, LoadingModal, ProgressModal
 from vmcard_dialog import (
         DeleteVMConfirmationDialog, WebConsoleConfigDialog,
-        CloneNameDialog, RenameVMDialog, SelectSnapshotDialog, SnapshotNameDialog
+        AdvancedCloneDialog, RenameVMDialog, SelectSnapshotDialog, SnapshotNameDialog
         )
 from utils import extract_server_name_from_uri
 from config import load_config, save_config
@@ -624,31 +624,96 @@ class VMCard(Static):
         """Handles the clone button press."""
         logging.info(f"Attempting to clone VM: {self.name}")
 
-        def handle_clone_name(new_name: str | None) -> None:
-            if new_name:
-                loading_modal = LoadingModal()
-                self.app.push_screen(loading_modal)
+        def handle_clone_results(result: dict | None) -> None:
+            if not result:
+                return
 
-                def do_clone() -> None:
+            base_name = result["base_name"]
+            count = result["count"]
+            suffix = result["suffix"] # Retrieve the suffix
+
+            progress_modal = ProgressModal(title=f"Cloning {self.name}...")
+            self.app.push_screen(progress_modal)
+
+            def do_clone() -> None:
+                # Validate that new VM names do not already exist
+                existing_vm_names = set()
+                try:
+                    all_domains = self.conn.listAllDomains(0)
+                    for domain in all_domains:
+                        existing_vm_names.add(domain.name())
+                except libvirt.libvirtError as e:
+                    self.app.call_from_thread(self.app.show_error_message, f"Error getting existing VM names: {e}")
+                    self.app.call_from_thread(progress_modal.dismiss)
+                    return
+
+                proposed_names = []
+                for i in range(1, count + 1):
+                    if count > 1:
+                        new_name = f"{base_name}{suffix}{i}" # Use the provided suffix
+                    else:
+                        new_name = base_name
+                    proposed_names.append(new_name)
+
+                conflicting_names = [name for name in proposed_names if name in existing_vm_names]
+
+                if conflicting_names:
+                    self.app.call_from_thread(
+                        self.app.show_error_message,
+                        f"The following VM names already exist: {', '.join(conflicting_names)}. Aborting cloning."
+                    )
+                    self.app.call_from_thread(progress_modal.dismiss)
+                    return
+
+                success_clones = []
+                failed_clones = []
+
+                # Set the total of the progress bar
+                def set_progress_total():
+                    pb = progress_modal.query_one("#progress-bar")
+                    pb.total = count
+                self.app.call_from_thread(set_progress_total)
+
+                for i in range(1, count + 1):
+                    if count > 1:
+                        new_name = f"{base_name}_C{i}"
+                    else:
+                        new_name = base_name
+
                     try:
                         clone_vm(self.vm, new_name)
-                        self.app.call_from_thread(
-                            self.app.show_success_message,
-                            f"VM '{self.name}' cloned as '{new_name}' successfully."
-                        )
-                        self.app.call_from_thread(self.app.refresh_vm_list)
+                        success_clones.append(new_name)
                         logging.info(f"Successfully cloned VM '{self.name}' to '{new_name}'")
                     except Exception as e:
-                        self.app.call_from_thread(
-                            self.app.show_error_message,
-                            f"Error cloning VM {self.name}: {e}"
-                        )
+                        failed_clones.append(new_name)
+                        logging.error(f"Error cloning VM {self.name} to {new_name}: {e}")
                     finally:
-                        self.app.call_from_thread(loading_modal.dismiss)
+                        # Advance the progress bar
+                        def advance_progress_bar():
+                            pb = progress_modal.query_one("#progress-bar")
+                            pb.advance(1)
+                        self.app.call_from_thread(advance_progress_bar)
 
-                self.app.run_worker(do_clone, thread=True)
+                # Show summary messages
+                if success_clones:
+                    self.app.call_from_thread(
+                        self.app.show_success_message,
+                        f"Successfully cloned to: {', '.join(success_clones)}"
+                    )
+                if failed_clones:
+                    self.app.call_from_thread(
+                        self.app.show_error_message,
+                        f"Failed to clone to: {', '.join(failed_clones)}"
+                    )
 
-        self.app.push_screen(CloneNameDialog(), handle_clone_name)
+                if success_clones:
+                    self.app.call_from_thread(self.app.refresh_vm_list)
+
+                self.app.call_from_thread(progress_modal.dismiss)
+
+            self.app.run_worker(do_clone, thread=True)
+
+        self.app.push_screen(AdvancedCloneDialog(), handle_clone_results)
 
     def _handle_rename_button(self, event: Button.Pressed) -> None:
         """Handles the rename button press."""
