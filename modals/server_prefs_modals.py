@@ -39,14 +39,14 @@ class ServerPrefModal(BaseModal[None]):
         self.uri = uri
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="server-pref-dialog", classes="ServerPrefModal"):
+        with Vertical(id="server-pref-dialog",):
             yield Label("Server Preferences", id="server-pref-title")
             yield Static(classes="button-separator")
             with TabbedContent(id="server-pref-tabs"):
                 with TabPane("Network", id="tab-network"):
                     with ScrollableContainer():
                         yield DataTable(id="networks-table", classes="networks-table", cursor_type="row")
-                    with Vertical(classes="small"):
+                    with Vertical(classes="server-pref-button"):
                         with Horizontal():
                             yield Button("Toggle Active", id="toggle-net-active-btn", classes="toggle-detail-button", variant="primary", disabled=True)
                             yield Button("Toggle Autostart", id="toggle-net-autostart-btn", classes="toggle-detail-button", variant="primary", disabled=True)
@@ -54,11 +54,10 @@ class ServerPrefModal(BaseModal[None]):
                             yield Button("Add", id="add-net-btn", variant="success", classes="toggle-detail-button")
                             yield Button("View", id="view-net-btn", variant="success", classes="toggle-detail-button", disabled=True)
                             yield Button("Delete", id="delete-net-btn", variant="error", classes="toggle-detail-button", disabled=True)
-                        yield Button("Close", id="close-btn", classes="close-button")
                 with TabPane("Storage", id="tab-storage"):
-                    with ScrollableContainer(classes="storage-pool-details"):
+                    with ScrollableContainer():
                         yield Tree("Storage Pools", id="storage-tree")
-                    with Vertical(id="storage-actions", classes="button-details"):
+                    with Vertical(classes="server-pref-button"):
                         with Horizontal():
                             yield Button(id="toggle-active-pool-btn", variant="primary", classes="toggle-detail-button")
                             yield Button(id="toggle-autostart-pool-btn", variant="primary", classes="toggle-detail-button")
@@ -66,6 +65,7 @@ class ServerPrefModal(BaseModal[None]):
                             yield Button("Delete Pool", id="del-pool-btn", variant="error", classes="toggle-detail-button")
                             yield Button("New Volume", id="add-vol-btn", variant="success", classes="toggle-detail-button")
                             yield Button("Delete Volume", id="del-vol-btn", variant="error", classes="toggle-detail-button")
+            #yield Button("Close", id="close-btn", classes="close-button")
 
     def on_mount(self) -> None:
         uri_to_connect = self.uri
