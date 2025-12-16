@@ -1,8 +1,9 @@
 """
 Module for managing libvirt storage pools and volumes.
 """
-import libvirt
 from typing import List, Dict, Any
+import libvirt
+from vm_queries import get_vm_disks_info
 
 def list_storage_pools(conn: libvirt.virConnect) -> List[Dict[str, Any]]:
     """
@@ -10,7 +11,7 @@ def list_storage_pools(conn: libvirt.virConnect) -> List[Dict[str, Any]]:
     """
     if not conn:
         return []
-        
+
     pools_info = []
     try:
         # Active pools
@@ -135,7 +136,7 @@ def create_volume(pool: libvirt.virStoragePool, name: str, size_gb: int, vol_for
         raise Exception(f"Pool '{pool.name()}' is not active.")
 
     size_bytes = size_gb * 1024 * 1024 * 1024
-    
+
     vol_xml = f"""
     <volume>
         <name>{name}</name>
@@ -193,7 +194,6 @@ def get_all_storage_volumes(conn: libvirt.virConnect) -> List[libvirt.virStorage
                 continue
     return all_volumes
 
-from vm_queries import get_vm_disks_info
 
 def list_unused_volumes(conn: libvirt.virConnect, pool_name: str = None) -> List[libvirt.virStorageVol]:
     """
@@ -214,7 +214,7 @@ def list_unused_volumes(conn: libvirt.virConnect, pool_name: str = None) -> List
             return []
     else:
         all_volumes = get_all_storage_volumes(conn)
-    
+
     used_disk_paths = set()
 
     try:
@@ -233,5 +233,5 @@ def list_unused_volumes(conn: libvirt.virConnect, pool_name: str = None) -> List
     for vol in all_volumes:
         if vol.path() not in used_disk_paths:
             unused_volumes.append(vol)
-            
+
     return unused_volumes
