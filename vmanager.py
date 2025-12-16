@@ -185,7 +185,7 @@ class VMManagerTUI(App):
 
         for uri in self.active_uris:
             self.connect_libvirt(uri)
-        self.refresh_vm_list()
+        #self.refresh_vm_list()
 
     def _update_layout_for_size(self):
         """Update the layout based on the terminal size."""
