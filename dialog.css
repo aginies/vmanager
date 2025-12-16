@@ -8,8 +8,7 @@ WebConsoleDialog,
 SelectDiskModal,
 SelectPoolModal,
 DeleteVMConfirmationDialog,
-CloneNameDialog,
-SelectServerModal {
+AdvancedCloneDialog {
     align: center middle;
     background: rgba(0, 0, 0, 0.5);
 }
@@ -22,7 +21,6 @@ WebConsoleDialog,
 SelectDiskModal,
 SelectPoolModal,
 DeleteVMConfirmationDialog,
-CloneNameDialog,
 SelectServerModal {
     content-align: center middle;
 }
@@ -93,7 +91,6 @@ WebConsoleDialog,
 SelectDiskModal,
 SelectPoolModal,
 DeleteVMConfirmationDialog,
-CloneNameDialog
 SelectServerModal {
     height: auto;
 }
@@ -102,7 +99,6 @@ WebConsoleDialog #dialog,
 SelectDiskModal #dialog,
 SelectPoolModal #dialog,
 DeleteVMConfirmationDialog #dialog,
-CloneNameDialog #dialog,
 SelectServerModal #select-server-container {
     width: 60;
     padding: 1;
@@ -114,13 +110,11 @@ SelectServerModal #select-server-container {
 SelectDiskModal #question,
 SelectPoolModal #question,
 DeleteVMConfirmationDialog #question,
-CloneNameDialog #question,
 SelectServerModal #select-server-container Label {
     content-align: center middle;
     margin-bottom: 1;
 }
 
-CloneNameDialog Input,
 SelectServerModal Checkbox {
     padding: 0 1;
     margin-bottom: 1;
@@ -130,7 +124,6 @@ WebConsoleDialog #dialog-buttons,
 SelectDiskModal #dialog-buttons,
 SelectPoolModal #dialog-buttons,
 DeleteVMConfirmationDialog #dialog-buttons,
-CloneNameDialog #dialog-buttons,
 SelectServerModal #dialog-buttons {
     width: 100%;
 }
@@ -139,7 +132,6 @@ WebConsoleDialog #dialog-buttons Button,
 SelectDiskModal #dialog-buttons Button,
 SelectPoolModal #dialog-buttons Button,
 DeleteVMConfirmationDialog #dialog-buttons Button,
-CloneNameDialog #dialog-buttons Button,
 SelectServerModal #dialog-buttons Button {
     width: 48%;
     margin: 0 0;
@@ -287,4 +279,12 @@ XMLDisplayModal #dialog-buttons Button {
 }
 .webconsole-config-label {
     content-align: right middle;
+}
+#clone-dialog {
+    grid-rows: 4;
+    grid-size-columns: 2;
+    grid-gutter: 0 1;
+    border: round $primary;
+    width: 55;
+    height: 15;
 }
