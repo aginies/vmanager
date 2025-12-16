@@ -6,8 +6,9 @@ import re
 import libvirt
 from config import load_config
 from libvirt_utils import find_all_vm
-from vm_actions import start_vm
+from vm_actions import start_vm, delete_vm
 from connection_manager import ConnectionManager
+from storage_manager import list_unused_volumes
 
 class VManagerCMD(cmd.Cmd):
     """VManager command-line interface."""
@@ -349,6 +350,7 @@ If no VM names are provided, it will pause the selected VMs."""
     def complete_pause(self, text, line, begidx, endidx):
         return self.complete_select_vm(text, line, begidx, endidx)
 
+
     def do_resume(self, args):
         """Resumes one or more paused VMs.
 Usage: resume [vm_name_1] [vm_name_2] ...
@@ -374,6 +376,94 @@ If no VM names are provided, it will resume the selected VMs."""
 
     def complete_resume(self, text, line, begidx, endidx):
         return self.complete_select_vm(text, line, begidx, endidx)
+
+    def do_delete(self, args):
+        """Deletes one or more VMs, optionally removing associated storage.
+Usage: delete [--force-storage-delete] [vm_name_1] [vm_name_2] ...
+Use --force-storage-delete to automatically confirm deletion of associated storage.
+If no VM names are provided, it will delete the selected VMs."""
+        if not self.conn:
+            print("Not connected to any server. Use 'connect <server_name>'.")
+            return
+
+        # Parse arguments for --force-storage-delete
+        args_list = args.split()
+        force_storage_delete = False
+        if "--force-storage-delete" in args_list:
+            force_storage_delete = True
+            args_list.remove("--force-storage-delete")
+        
+        vms_to_delete = self._get_vms_to_operate(" ".join(args_list))
+        if not vms_to_delete:
+            return
+
+        # Single confirmation for VM deletion
+        if len(vms_to_delete) > 1:
+            vm_list_str = ', '.join(vms_to_delete)
+            confirm_vm_delete = input(f"Are you sure you want to delete the following VMs: {vm_list_str}? (yes/no): ").lower()
+        else:
+            confirm_vm_delete = input(f"Are you sure you want to delete VM '{vms_to_delete[0]}'? (yes/no): ").lower()
+        
+        if confirm_vm_delete != 'yes':
+            print("VM deletion cancelled.")
+            return
+
+        delete_storage_confirmed = False
+        if force_storage_delete:
+            delete_storage_confirmed = True
+        else:
+            if len(vms_to_delete) > 1:
+                confirm_storage = input(f"Do you want to delete associated storage for all selected VMs ({len(vms_to_delete)} VMs)? (yes/no): ").lower()
+            else:
+                confirm_storage = input(f"Do you want to delete associated storage for '{vms_to_delete[0]}'? (yes/no): ").lower()
+            
+            if confirm_storage == 'yes':
+                delete_storage_confirmed = True
+        
+        for vm_name in vms_to_delete:
+            try:
+                domain = self.conn.lookupByName(vm_name)
+                
+                delete_vm(domain, delete_storage_confirmed)
+                print(f"VM '{vm_name}' deleted successfully.")
+                if delete_storage_confirmed:
+                    print(f"Associated storage for '{vm_name}' also deleted.")
+
+            except libvirt.libvirtError as e:
+                print(f"Error deleting VM '{vm_name}': {e}")
+            except Exception as e:
+                print(f"An unexpected error occurred with VM '{vm_name}': {e}")
+    
+    def complete_delete(self, text, line, begidx, endidx):
+        return self.complete_select_vm(text, line, begidx, endidx)
+
+    def do_list_unused_volumes(self, args):
+        """Lists all storage volumes that are not attached to any VM.
+If pool_name is provided, only checks volumes in that specific pool.
+Usage: list_unused_volumes [pool_name]"
+Usage: list_unused_volumes"""
+        if not self.conn:
+            print("Not connected to any server. Use 'connect <server_name>'.")
+            return
+
+        try:
+            unused_volumes = list_unused_volumes(self.conn, None)
+
+            if unused_volumes:
+                print(f"{'Pool':<20} {'Volume Name':<30} {'Path':<50} {'Capacity':<15}")
+                print(f"{'-'*20} {'-'*30} {'-'*50} {'-'*15}")
+                for vol in unused_volumes:
+                    pool_name = vol.storagePoolLookupByVolume().name()
+                    info = vol.info()
+                    capacity_mib = info[1] // (1024 * 1024)
+                    print(f"{pool_name:<20} {vol.name():<30} {vol.path():<50} {capacity_mib:<15} MiB")
+            else:
+                print("No unused volumes found.")
+
+        except libvirt.libvirtError as e:
+            print(f"Error listing unused volumes: {e}")
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
 
     def do_quit(self, arg):
         """Exit the vmanager shell."""

@@ -174,3 +174,64 @@ def delete_storage_pool(pool: libvirt.virStoragePool):
         pool.undefine()
     except libvirt.libvirtError as e:
         raise Exception(f"Error deleting storage pool '{pool.name()}': {e}") from e
+
+def get_all_storage_volumes(conn: libvirt.virConnect) -> List[libvirt.virStorageVol]:
+    """
+    Retrieves all storage volumes across all active storage pools.
+    """
+    all_volumes = []
+    if not conn:
+        return all_volumes
+
+    pools_info = list_storage_pools(conn)
+    for pool_info in pools_info:
+        pool = pool_info['pool']
+        if pool.isActive():
+            try:
+                all_volumes.extend(pool.listAllVolumes())
+            except libvirt.libvirtError:
+                continue
+    return all_volumes
+
+from vm_queries import get_vm_disks_info
+
+def list_unused_volumes(conn: libvirt.virConnect, pool_name: str = None) -> List[libvirt.virStorageVol]:
+    """
+    Lists all storage volumes that are not attached to any VM.
+    If pool_name is provided, only checks volumes in that specific pool.
+    """
+    if not conn:
+        return []
+
+    # If pool_name is specified, get volumes from that specific pool
+    if pool_name:
+        try:
+            pool = conn.storagePoolLookupByName(pool_name)
+            if not pool.isActive():
+                return []
+            all_volumes = pool.listAllVolumes()
+        except libvirt.libvirtError:
+            return []
+    else:
+        all_volumes = get_all_storage_volumes(conn)
+    
+    used_disk_paths = set()
+
+    try:
+        domains = conn.listAllDomains(0)
+        for domain in domains:
+            xml_content = domain.XMLDesc(0)
+            disks_info = get_vm_disks_info(conn, xml_content)
+            for disk in disks_info:
+                if disk.get('path'):
+                    used_disk_paths.add(disk['path'])
+    except libvirt.libvirtError as e:
+        print(f"Error retrieving VM disk information: {e}")
+        return []
+
+    unused_volumes = []
+    for vol in all_volumes:
+        if vol.path() not in used_disk_paths:
+            unused_volumes.append(vol)
+            
+    return unused_volumes
