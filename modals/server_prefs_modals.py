@@ -95,6 +95,12 @@ class ServerPrefModal(BaseModal[None]):
         disk_map = get_all_vm_disk_usage(self.conn)
         nvram_map = get_all_vm_nvram_usage(self.conn)
         self.file_to_vm_map = {**disk_map, **nvram_map}
+        # Create reverse mapping: from file paths to list of VM names
+        self.path_to_vm_list = {}
+        for path, vm_name in self.file_to_vm_map.items():
+            if path not in self.path_to_vm_list:
+                self.path_to_vm_list[path] = []
+            self.path_to_vm_list[path].append(vm_name)
         self._load_storage_pools()
 
         self.query_one("#toggle-active-pool-btn").display = False
@@ -169,8 +175,8 @@ class ServerPrefModal(BaseModal[None]):
                     vol_path = vol_data['volume'].path()
                     capacity_gb = round(vol_data['capacity'] / (1024**3), 2)
 
-                    vm_name = self.file_to_vm_map.get(vol_path)
-                    usage_info = f" (in use by {vm_name})" if vm_name else ""
+                    vm_names = self.path_to_vm_list.get(vol_path, [])
+                    usage_info = f" (in use by {', '.join(vm_names)})" if vm_names else ""
 
                     label = f"{vol_name} ({capacity_gb} GB){usage_info}"
                     child_node = node.add(label, data=vol_data)
