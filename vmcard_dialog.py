@@ -20,14 +20,15 @@ class DeleteVMConfirmationDialog(BaseDialog[tuple[bool, bool]]):
 
     def compose(self):
         yield Vertical(
-            Label(f"Are you sure you want to delete VM '{self.vm_name}'?", id="question"),
+            Markdown(f"Are you sure you want to delete VM '{self.vm_name}'?", id="question"),
             Checkbox("Delete storage volumes", id="delete-storage-checkbox"),
+            Label(""),
             Horizontal(
                 Button("Yes", variant="error", id="yes", classes="dialog-buttons"),
                 Button("No", variant="primary", id="no", classes="dialog-buttons"),
                 id="dialog-buttons",
             ),
-            id="dialog",
+            id="delete-vm-dialog",
         )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
