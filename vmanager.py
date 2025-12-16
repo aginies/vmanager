@@ -185,8 +185,7 @@ class VMManagerTUI(App):
 
         for uri in self.active_uris:
             self.connect_libvirt(uri)
-        #self.update_header()
-        #self.list_vms()
+        self.refresh_vm_list()
 
     def _update_layout_for_size(self):
         """Update the layout based on the terminal size."""
@@ -246,15 +245,18 @@ class VMManagerTUI(App):
                 self.show_error_message(f"Failed to open connection to {uri}")
 
     def connect_libvirt(self, uri: str) -> None:
-        """Connects to libvirt using the connection manager."""
+        """Connects to libvirt and runs slow checks in a worker."""
         conn = self.connection_manager.connect(uri)
         if conn is None:
             self.show_error_message(f"Failed to connect to {uri}")
         else:
             if self.websockify_available and self.novnc_available:
-                spice_message = check_for_spice_vms(conn)
-                if spice_message:
-                    self.show_success_message(spice_message)
+                def check_spice():
+                    """Worker to check for spice VMs without blocking."""
+                    spice_message = check_for_spice_vms(conn)
+                    if spice_message:
+                        self.call_from_thread(self.show_success_message, spice_message)
+                self.run_worker(check_spice, name=f"check_spice_{uri}", thread=True)
 
     def show_error_message(self, message: str):
         logging.error(message)
@@ -395,6 +397,7 @@ class VMManagerTUI(App):
 
     @on(VMNameClicked)
     async def on_vm_name_clicked(self, message: VMNameClicked) -> None:
+        """Callback when a VM's name is clicked. Fetches details in a worker."""
         domain = None
         conn_for_domain = None
 
@@ -413,35 +416,47 @@ class VMManagerTUI(App):
             self.show_error_message(f"VM {message.vm_name} with UUID {message.vm_uuid} not found on any active server.")
             return
 
-        try:
-            info = domain.info()
-            xml_content = domain.XMLDesc(0)
-            vm_info = {
-                'name': domain.name(),
-                'uuid': domain.UUIDString(),
-                'status': get_status(domain),
-                'description': get_vm_description(domain),
-                'cpu': info[3],
-                'cpu_model': get_vm_cpu_model(xml_content),
-                'memory': info[2] // 1024,
-                'machine_type': get_vm_machine_info(xml_content),
-                'firmware': get_vm_firmware_info(xml_content),
-                'shared_memory': get_vm_shared_memory_info(xml_content),
-                'networks': get_vm_networks_info(xml_content),
-                'detail_network': get_vm_network_ip(domain),
-                'network_dns_gateway': get_vm_network_dns_gateway_info(domain),
-                'disks': get_vm_disks_info(conn_for_domain, xml_content),
-                'devices': get_vm_devices_info(xml_content),
-                'boot': get_boot_info(xml_content, conn_for_domain),
-                'video_model': get_vm_video_model(xml_content),
-                'xml': xml_content,
-            }
-            def on_detail_modal_dismissed(result: None):
-                self.refresh_vm_list()
+        def get_details_and_show_modal():
+            """Worker function to fetch VM details and then push the modal screen."""
+            try:
+                info = domain.info()
+                xml_content = domain.XMLDesc(0)
+                vm_info = {
+                    'name': domain.name(),
+                    'uuid': domain.UUIDString(),
+                    'status': get_status(domain),
+                    'description': get_vm_description(domain),
+                    'cpu': info[3],
+                    'cpu_model': get_vm_cpu_model(xml_content),
+                    'memory': info[2] // 1024,
+                    'machine_type': get_vm_machine_info(xml_content),
+                    'firmware': get_vm_firmware_info(xml_content),
+                    'shared_memory': get_vm_shared_memory_info(xml_content),
+                    'networks': get_vm_networks_info(xml_content),
+                    'detail_network': get_vm_network_ip(domain),
+                    'network_dns_gateway': get_vm_network_dns_gateway_info(domain),
+                    'disks': get_vm_disks_info(conn_for_domain, xml_content),
+                    'devices': get_vm_devices_info(xml_content),
+                    'boot': get_boot_info(xml_content, conn_for_domain),
+                    'video_model': get_vm_video_model(xml_content),
+                    'xml': xml_content,
+                }
 
-            self.push_screen(VMDetailModal(message.vm_name, vm_info, domain, conn_for_domain), on_detail_modal_dismissed)
-        except libvirt.libvirtError as e:
-            self.show_error_message(f"Error getting details for {message.vm_name}: {e}")
+                def on_detail_modal_dismissed(result: None):
+                    self.refresh_vm_list()
+
+                self.call_from_thread(
+                    self.push_screen,
+                    VMDetailModal(message.vm_name, vm_info, domain, conn_for_domain),
+                    on_detail_modal_dismissed
+                )
+            except libvirt.libvirtError as e:
+                self.call_from_thread(
+                    self.show_error_message,
+                    f"Error getting details for {message.vm_name}: {e}"
+                )
+
+        self.run_worker(get_details_and_show_modal, name=f"get_details_{message.vm_name}", thread=True)
 
     def handle_create_vm_result(self, result: dict | None) -> None:
         """Handle the result from the CreateVMModal and create the VM."""
@@ -486,26 +501,28 @@ class VMManagerTUI(App):
         self.handle_select_server_result([uri])
 
     def refresh_vm_list(self) -> None:
-        """Refreshes the list of VMs."""
+        """Refreshes the list of VMs by running the fetch-and-display logic in a worker."""
         vms_container = self.query_one("#vms-container")
         vms_container.remove_children()
-        self.list_vms()
-        self.update_header()
+        # TODO: Add a LoadingIndicator here
+        self.run_worker(self.list_vms_worker, name="list_vms", thread=True)
 
-    def update_header(self):
+    def list_vms_worker(self):
+        """Worker to fetch, filter, and display VMs."""
+        domains_with_conn = []
         total_vms = 0
         server_names = []
 
-        for conn in self._get_active_connections():
+        active_connections = list(self._get_active_connections())
+
+        for conn in active_connections:
             try:
-                total_vms += len(conn.listAllDomains(0) or [])
-            except libvirt.libvirtError:
-                self.show_error_message(f"Connection lost to {conn.getURI()}")
-        
-        if not self.servers and self.active_uris:
-             server_names = [f"Default: {u}" for u in self.active_uris]
-        else:
-            for uri in self.active_uris:
+                domains = conn.listAllDomains(0) or []
+                total_vms += len(domains)
+                for domain in domains:
+                    domains_with_conn.append((domain, conn))
+
+                uri = conn.getURI()
                 found = False
                 for server in self.servers:
                     if server['uri'] == uri:
@@ -514,19 +531,8 @@ class VMManagerTUI(App):
                         break
                 if not found:
                     server_names.append(uri)
-
-        self.sub_title = f"Servers: {', '.join(server_names)} | Total VMs: {total_vms}"
-
-    def list_vms(self):
-        vms_container = self.query_one("#vms-container")
-        
-        domains_with_conn = []
-        for conn in self._get_active_connections():
-            try:
-                for domain in conn.listAllDomains(0) or []:
-                    domains_with_conn.append((domain, conn))
             except libvirt.libvirtError:
-                self.show_error_message(f"Connection lost to {conn.getURI()}")
+                self.call_from_thread(self.show_error_message, f"Connection lost to {conn.getURI()}")
 
         total_vms_unfiltered = len(domains_with_conn)
         domains_to_display = domains_with_conn
@@ -543,12 +549,12 @@ class VMManagerTUI(App):
             domains_to_display = [(d, c) for d, c in domains_to_display if self.search_text.lower() in d.name().lower()]
 
         total_filtered_vms = len(domains_to_display)
-        self.update_pagination_controls(total_filtered_vms, total_vms_unfiltered)
 
         start_index = self.current_page * self.VMS_PER_PAGE
         end_index = start_index + self.VMS_PER_PAGE
         paginated_domains = domains_to_display[start_index:end_index]
 
+        new_cards = []
         for domain, conn in paginated_domains:
             info = domain.info()
             uuid = domain.UUIDString()
@@ -568,8 +574,20 @@ class VMManagerTUI(App):
             xml_content = domain.XMLDesc(0)
             graphics_info = get_vm_graphics_info(xml_content)
             vm_card.graphics_type = graphics_info.get("type", "vnc")
-            vm_card.server_border_color = self.get_server_color(conn.getURI()) # New line
-            vms_container.mount(vm_card)
+            vm_card.server_border_color = self.get_server_color(conn.getURI())
+            new_cards.append(vm_card)
+
+        def update_ui():
+            vms_container = self.query_one("#vms-container")
+            vms_container.remove_children()
+            for card in new_cards:
+                vms_container.mount(card)
+
+            self.sub_title = f"Servers: {', '.join(server_names)} | Total VMs: {total_vms}"
+            self.update_pagination_controls(total_filtered_vms, total_vms_unfiltered)
+
+        self.call_from_thread(update_ui)
+
 
     def update_pagination_controls(self, total_filtered_vms: int, total_vms_unfiltered: int):
         pagination_controls = self.query_one("#pagination-controls")
