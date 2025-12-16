@@ -5,7 +5,7 @@ import os
 from textual.containers import Horizontal, Vertical
 from textual.widgets import (
         Label, Button, DirectoryTree, LoadingIndicator,
-        Markdown
+        Markdown, ProgressBar
         )
 from textual.app import ComposeResult
 from modals.base_modals import BaseModal, BaseDialog
@@ -53,6 +53,20 @@ class LoadingModal(BaseModal[None]):
 
     def compose(self) -> ComposeResult:
         yield LoadingIndicator()
+
+class ProgressModal(BaseModal[None]):
+    """A modal that shows a progress bar for a long-running task."""
+    BINDINGS = []
+
+    def __init__(self, title: str = "Working...") -> None:
+        super().__init__()
+        self._title_text = title
+
+    def compose(self) -> ComposeResult:
+        with Vertical(classes="progress-modal-container"):
+            yield Label(self._title_text, id="progress-title")
+            yield ProgressBar(total=100, show_eta=True, id="progress-bar")
+
 
 class ConfirmationDialog(BaseDialog[bool]):
     """A dialog to confirm an action."""
