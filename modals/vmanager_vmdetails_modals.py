@@ -10,7 +10,8 @@ from textual.app import ComposeResult
 from textual.widgets import (
         Select, Button, Input, Label, Static,
         DataTable, Checkbox, RadioButton,
-        RadioSet, TabbedContent, TabPane
+        RadioSet, TabbedContent, TabPane,
+        ListView, ListItem
         )
 from textual.containers import ScrollableContainer, Horizontal, Vertical
 from textual.reactive import reactive
@@ -30,7 +31,7 @@ from vm_actions import (
         disable_disk, change_vm_network, set_shared_memory, remove_virtiofs,
         add_virtiofs, set_vm_video_model, set_cpu_model, set_uefi_file,
         set_vm_graphics, set_disk_properties, set_vm_sound_model,
-        add_network_interface, remove_network_interface
+        add_network_interface, remove_network_interface, set_boot_info
 )
 from network_manager import (
     list_networks,
@@ -98,6 +99,11 @@ class VMDetailModal(ModalScreen):
         # Populate Boot tab
         boot_menu_enabled = self.vm_info.get('boot', {}).get('menu_enabled', False)
         self.query_one("#boot-menu-enable", Checkbox).value = boot_menu_enabled
+        self._populate_boot_lists()
+        self.query_one("#boot-up", Button).disabled = True
+        self.query_one("#boot-down", Button).disabled = True
+        self.query_one("#boot-add", Button).disabled = True
+        self.query_one("#boot-remove", Button).disabled = True
 
         # SEV capabilities
         firmware_type = self.vm_info['firmware'].get('type', 'BIOS')
@@ -208,6 +214,148 @@ class VMDetailModal(ModalScreen):
                 )
         else:
             networks_table.add_row("No network interfaces found.", "", "", "", "", "", key="none")
+
+    def _populate_boot_lists(self):
+        """Populates the boot order and available devices lists."""
+        boot_order_list = self.query_one("#boot-order-list", ListView)
+        available_devices_list = self.query_one("#available-devices-list", ListView)
+
+        boot_order_list.clear()
+        available_devices_list.clear()
+
+        self.all_bootable_devices = self._get_bootable_devices()
+        boot_order_ids = self.boot_order
+
+        # Create a dictionary for quick lookups
+        device_map = {dev.id: dev for dev in self.all_bootable_devices}
+
+        # Populate boot order list, preserving the order
+        for device_id in boot_order_ids:
+            if device_id in device_map:
+                device = device_map[device_id]
+                item = ListItem(Label(device.description))
+                item.data = device
+                boot_order_list.append(item)
+
+        # Populate available devices list
+        for device in self.all_bootable_devices:
+            if device.id not in boot_order_ids:
+                item = ListItem(Label(device.description))
+                item.data = device
+                available_devices_list.append(item)
+
+    @on(Button.Pressed, "#boot-add")
+    def on_boot_add(self, event: Button.Pressed) -> None:
+        available_list = self.query_one("#available-devices-list", ListView)
+        boot_list = self.query_one("#boot-order-list", ListView)
+
+        if available_list.highlighted_child:
+            # Get the highlighted item's data
+            item_to_move = available_list.highlighted_child
+
+            # Create a new ListItem with the same data
+            new_item = ListItem(Label(item_to_move.children[0].renderable))
+            new_item.data = item_to_move.data
+
+            # Remove the original item
+            item_to_move.remove()
+
+            # Add the new item to the boot list
+            boot_list.append(new_item)
+
+
+    @on(Button.Pressed, "#boot-remove")
+    def on_boot_remove(self, event: Button.Pressed) -> None:
+        available_list = self.query_one("#available-devices-list", ListView)
+        boot_list = self.query_one("#boot-order-list", ListView)
+
+        if boot_list.highlighted_child:
+            item_to_move = boot_list.highlighted_child
+
+            # Create a new ListItem with the same data
+            new_item = ListItem(Label(item_to_move.children[0].renderable))
+            new_item.data = item_to_move.data
+
+            # Remove the original item
+            item_to_move.remove()
+
+            # Add the new item to the available list
+            available_list.append(new_item)
+
+    @on(Button.Pressed, "#boot-up")
+    def on_boot_up(self, event: Button.Pressed) -> None:
+        boot_list = self.query_one("#boot-order-list", ListView)
+        if boot_list.highlighted_child:
+            idx = boot_list.index
+            if idx > 0:
+                # Get the list of data from the items
+                items_data = [item.data for item in boot_list.children]
+
+                # Move the item
+                items_data.insert(idx - 1, items_data.pop(idx))
+
+                # Get the highlighted item's data to restore highlight
+                highlighted_id = boot_list.highlighted_child.data.id
+
+                # Clear the list
+                boot_list.clear()
+
+                # Repopulate the list
+                new_idx = -1
+                for i, data in enumerate(items_data):
+                    new_item = ListItem(Label(data.description))
+                    new_item.data = data
+                    boot_list.append(new_item)
+                    if data.id == highlighted_id:
+                        new_idx = i
+
+                if new_idx != -1:
+                    boot_list.index = new_idx
+
+    @on(Button.Pressed, "#boot-down")
+    def on_boot_down(self, event: Button.Pressed) -> None:
+        boot_list = self.query_one("#boot-order-list", ListView)
+        if boot_list.highlighted_child:
+            idx = boot_list.index
+            if idx < len(boot_list.children) - 1:
+                # Get the list of data from the items
+                items_data = [item.data for item in boot_list.children]
+
+                # Move the item
+                items_data.insert(idx + 1, items_data.pop(idx))
+
+                # Get the highlighted item's data to restore highlight
+                highlighted_id = boot_list.highlighted_child.data.id
+
+                # Clear the list
+                boot_list.clear()
+
+                # Repopulate the list
+                new_idx = -1
+                for i, data in enumerate(items_data):
+                    new_item = ListItem(Label(data.description))
+                    new_item.data = data
+                    boot_list.append(new_item)
+                    if data.id == highlighted_id:
+                        new_idx = i
+
+                if new_idx != -1:
+                    boot_list.index = new_idx
+
+    @on(Button.Pressed, "#save-boot-order")
+    def on_save_boot_order(self, event: Button.Pressed) -> None:
+        boot_list = self.query_one("#boot-order-list", ListView)
+        new_boot_order = [item.data.id for item in boot_list.children]
+
+        menu_enabled = self.query_one("#boot-menu-enable", Checkbox).value
+
+        try:
+            set_boot_info(self.domain, menu_enabled, new_boot_order)
+            self.app.show_success_message("Boot order saved successfully.")
+            self.boot_order = new_boot_order
+        except libvirt.libvirtError as e:
+            self.app.show_error_message(f"Error saving boot order: {e}")
+
 
     def _get_bootable_devices(self) -> list[BootDevice]:
         """Gathers all disks and network interfaces as bootable devices."""
@@ -603,6 +751,42 @@ class VMDetailModal(ModalScreen):
         except Exception as e:
             self.app.show_error_message(f"An unexpected error occurred: {e}")
 
+    @on(ListView.Highlighted, "#available-devices-list")
+    def on_available_devices_list_highlighted(self, event: ListView.Highlighted) -> None:
+        is_stopped = self.vm_info.get("status") == "Stopped"
+        if not is_stopped:
+            return
+
+        if event.item:
+            self.query_one("#boot-add", Button).disabled = False
+        else:
+            self.query_one("#boot-add", Button).disabled = True
+
+    @on(ListView.Highlighted, "#boot-order-list")
+    def on_boot_order_list_highlighted(self, event: ListView.Highlighted) -> None:
+        is_stopped = self.vm_info.get("status") == "Stopped"
+        if not is_stopped: # Buttons should remain disabled if VM is not stopped
+            return
+
+        boot_list = self.query_one("#boot-order-list", ListView)
+
+        if event.item:
+            self.query_one("#boot-remove", Button).disabled = False
+        else:
+            self.query_one("#boot-remove", Button).disabled = True
+
+        # Enable/disable Up button
+        if event.item and boot_list.index is not None and boot_list.index > 0:
+            self.query_one("#boot-up", Button).disabled = False
+        else:
+            self.query_one("#boot-up", Button).disabled = True
+
+        # Enable/disable Down button
+        if event.item and boot_list.index is not None and boot_list.index < len(boot_list.children) - 1:
+            self.query_one("#boot-down", Button).disabled = False
+        else:
+            self.query_one("#boot-down", Button).disabled = True
+
     def compose(self) -> ComposeResult:
         with Vertical(id="vm-detail-container"):
             yield Label(f"VM Details: {self.vm_name}", id="title")
@@ -685,8 +869,19 @@ class VMDetailModal(ModalScreen):
                     is_stopped = self.vm_info.get("status") == "Stopped"
                     with Vertical(classes="info-details"):
                         yield Checkbox("Enable boot menu", id="boot-menu-enable", disabled=not is_stopped)
-                        #yield Label("Boot Devices:", classes="boot_order_label")
-                        #yield DataTable(id="boot-devices-table")
+                        with Horizontal(classes="boot-manager"):
+                            with Vertical(classes="boot-list-container"):
+                                yield Label("Boot Order")
+                                yield ListView(id="boot-order-list")
+                            with Vertical(classes="boot-buttons"):
+                                yield Button("<", id="boot-add", disabled=not is_stopped)
+                                yield Button(">", id="boot-remove", disabled=not is_stopped)
+                                yield Button("Up", id="boot-up", disabled=not is_stopped)
+                                yield Button("Down", id="boot-down", disabled=not is_stopped)
+                            with Vertical(classes="boot-list-container"):
+                                yield Label("Available Devices")
+                                yield ListView(id="available-devices-list")
+                    yield Button("Save Boot Order", id="save-boot-order", disabled=not is_stopped, variant="primary")
 
                 with TabPane("Disks", id="detail-disk-tab"):
                     with ScrollableContainer(classes="info-details"):
