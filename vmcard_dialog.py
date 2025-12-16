@@ -210,9 +210,9 @@ class WebConsoleDialog(BaseDialog[str | None]):
 
     def compose(self):
         yield Vertical(
-            Label("Web Console is running at"),
-            Input(value=self.url, disabled=True),
-            Link("Open Link To a Browser", url=self.url),
+            Markdown("**Web Console** is running at: (ctrl+click to open)"),
+            Markdown(self.url),
+            #Link("Open Link To a Browser", url=self.url),
             Label(""),
             Horizontal(
                 Button("Stop Web Console service", variant="error", id="stop"),
@@ -246,6 +246,18 @@ class WebConsoleConfigDialog(BaseDialog[bool]):
                 label_text = self.text_remote if remote_console_enabled else "Run Web console on local machine"
                 yield Markdown(label_text, id="console-location-label")
                 yield Switch(value=remote_console_enabled, id="remote-console-switch")
+
+                with Vertical(id="remote-options") as remote_opts:
+                    remote_opts.display = remote_console_enabled
+
+                    quality_options = [(str(i), i) for i in range(10)]
+                    compression_options = [(str(i), i) for i in range(10)]
+
+                    yield Label("VNC Quality (0=low, 9=high)")
+                    yield Select(quality_options, value=self.config.get('VNC_QUALITY', 0), id="quality-select")
+
+                    yield Label("VNC Compression (0=none, 9=max)")
+                    yield Select(compression_options, value=self.config.get('VNC_COMPRESSION', 9), id="compression-select")
             else:
                 yield Markdown("Web console will run locally.")
 
@@ -255,24 +267,44 @@ class WebConsoleConfigDialog(BaseDialog[bool]):
     def on_switch_changed(self, event: Switch.Changed) -> None:
         if event.control.id == "remote-console-switch":
             markdown = self.query_one("#console-location-label", Markdown)
+            remote_opts = self.query_one("#remote-options")
             if event.value:
                 markdown.update(self.text_remote)
+                remote_opts.display = True
             else:
                 markdown.update("Run Web console on local machine")
+                remote_opts.display = False
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "start":
+            config_changed = False
             if self.is_remote:
                 remote_switch = self.query_one("#remote-console-switch", Switch)
-                new_value = remote_switch.value
-                if self.config.get('REMOTE_WEBCONSOLE') != new_value:
-                    self.config['REMOTE_WEBCONSOLE'] = new_value
-                    save_config(self.config)
+                new_remote_value = remote_switch.value
+                if self.config.get('REMOTE_WEBCONSOLE') != new_remote_value:
+                    self.config['REMOTE_WEBCONSOLE'] = new_remote_value
+                    config_changed = True
+
+                if new_remote_value:
+                    quality_select = self.query_one("#quality-select", Select)
+                    new_quality_value = quality_select.value
+                    if new_quality_value is not Select.BLANK and self.config.get('VNC_QUALITY') != new_quality_value:
+                        self.config['VNC_QUALITY'] = new_quality_value
+                        config_changed = True
+
+                    compression_select = self.query_one("#compression-select", Select)
+                    new_compression_value = compression_select.value
+                    if new_compression_value is not Select.BLANK and self.config.get('VNC_COMPRESSION') != new_compression_value:
+                        self.config['VNC_COMPRESSION'] = new_compression_value
+                        config_changed = True
             else:
                 # Not remote, so webconsole must be local
                 if self.config.get('REMOTE_WEBCONSOLE') is not False:
                     self.config['REMOTE_WEBCONSOLE'] = False
-                    save_config(self.config)
+                    config_changed = True
+
+            if config_changed:
+                save_config(self.config)
             self.dismiss(True)
         elif event.button.id == "cancel":
             self.dismiss(False)
