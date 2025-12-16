@@ -8,6 +8,7 @@ DEFAULT_CONFIG = {
     'WC_PORT_RANGE_END': 40050,
     'websockify_path': '/usr/bin/websockify',
     'novnc_path': '/usr/share/novnc/',
+    'REMOTE_WEBCONSOLE': False,
     'servers': [
         {'name': 'Localhost', 'uri': 'qemu:///system'},
     ]

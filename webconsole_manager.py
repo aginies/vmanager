@@ -36,6 +36,7 @@ class WebConsoleManager:
 
     def start_console(self, vm, conn):
         """Starts a web console for a given VM."""
+        self.config = load_config()  # Reload config to get latest settings
         logging.info(f"Web console requested for VM: {vm.name()}")
         uuid = vm.UUIDString()
 
@@ -60,11 +61,16 @@ class WebConsoleManager:
                 self.app.show_error_message("Could not determine VNC port for the VM.")
                 return
 
-            vnc_target_host, vnc_target_port, ssh_info = self._setup_ssh_tunnel(
-                uuid, conn, vm.name(), int(vnc_port), graphics_info
-            )
+            parsed_uri = urlparse(conn.getURI())
+            is_remote_ssh = parsed_uri.hostname not in (None, 'localhost', '127.0.0.1') and parsed_uri.scheme == 'qemu+ssh'
 
-            self._launch_websockify(uuid, vm.name(), vnc_target_host, vnc_target_port, ssh_info)
+            if is_remote_ssh and self.config.get('REMOTE_WEBCONSOLE', False):
+                self._launch_remote_websockify(uuid, vm.name(), conn, int(vnc_port), graphics_info)
+            else:
+                vnc_target_host, vnc_target_port, ssh_info = self._setup_ssh_tunnel(
+                    uuid, conn, vm.name(), int(vnc_port), graphics_info
+                )
+                self._launch_websockify(uuid, vm.name(), vnc_target_host, vnc_target_port, ssh_info)
 
         except (libvirt.libvirtError, FileNotFoundError, Exception) as e:
             self.app.show_error_message(f"Failed to start web console: {e}")
@@ -89,6 +95,89 @@ class WebConsoleManager:
         for uuid, process_data in list(self.processes.items()):
             vm_name = process_data[4]
             self.stop_console(uuid, vm_name)
+
+    def _launch_remote_websockify(self, uuid: str, vm_name: str, conn, vnc_port: int, graphics_info: dict):
+        """Launches websockify on the remote server via SSH and shows the console dialog."""
+        logging.info(f"Launching remote websockify for VM: {vm_name}")
+
+        # Parse SSH connection details
+        parsed_uri = urlparse(conn.getURI())
+        user = parsed_uri.username
+        host = parsed_uri.hostname
+        remote_user_host = f"{user}@{host}" if user else host
+
+        # Determine target VNC host on the remote server
+        vnc_target_host = graphics_info.get('listen', '127.0.0.1')
+        if vnc_target_host in ['0.0.0.0', '::']:
+            vnc_target_host = '127.0.0.1'
+
+        # Find a free port for websockify on the remote server.
+        # This assumes the same port range is available and free remotely.
+        web_port = find_free_port(int(self.app.WC_PORT_RANGE_START), int(self.app.WC_PORT_RANGE_END))
+        if not web_port:
+            self.app.show_error_message("Could not find a free port for the web console.")
+            return
+
+        remote_websockify_path = self.config.get('websockify_path', '/usr/bin/websockify')
+        remote_novnc_path = self.config.get("novnc_path", "/usr/share/novnc/")
+
+        # Construct the websockify command to run on the remote server
+        remote_websockify_cmd_list = [
+            remote_websockify_path, "--run-once", str(web_port),
+            f"{vnc_target_host}:{vnc_port}", "--web", remote_novnc_path
+        ]
+
+        # Assume remote config directory for certs
+        remote_config_dir = "~/.config/vmanager"
+        remote_cert_file = f"{remote_config_dir}/cert.pem"
+        remote_key_file = f"{remote_config_dir}/key.pem"
+        url_scheme = "http"
+
+        # Check for remote certs and keys by attempting to add them to the command
+        remote_config_check_cmd = (
+            f"if [ -f {remote_cert_file} ] && [ -f {remote_key_file} ]; then "
+            f"echo 'cert_exists'; else echo 'no_cert'; fi"
+        )
+
+        try:
+            check_result = subprocess.run(
+                ["ssh", remote_user_host, remote_config_check_cmd], 
+                capture_output=True, text=True, check=True, timeout=5
+            )
+            if "cert_exists" in check_result.stdout:
+                remote_websockify_cmd_list.extend(["--cert", remote_cert_file, "--key", remote_key_file])
+                url_scheme = "https"
+                self.app.show_success_message("Remote cert/key found, using secure wss connection.")
+            else:
+                self.app.show_success_message("No remote cert/key found, using insecure ws connection.")
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as e:
+            logging.warning(f"Could not check for remote certs: {e}. Proceeding without SSL options.")
+            self.app.show_success_message("Could not check for remote cert/key, using insecure ws connection.")
+
+        remote_websockify_cmd_str = " ".join(remote_websockify_cmd_list)
+
+        # The final SSH command to run websockify on the remote server
+        # Run directly without nohup so terminating local ssh process kills remote websockify
+        ssh_command_list = [
+            "ssh", remote_user_host,
+            remote_websockify_cmd_str
+        ]
+
+        logging.info(f"Executing remote websockify command: {' '.join(ssh_command_list)}")
+
+        log_file_path = "vm_manager.log" # Use existing log file
+        with open(log_file_path, 'a') as log_file_handle:
+            proc = subprocess.Popen(ssh_command_list, stdout=subprocess.DEVNULL, stderr=log_file_handle)
+
+            # Construct the URL using the remote host
+            url = f"{url_scheme}://{host}:{web_port}/vnc.html?path=websockify"
+            # Store proc as the local ssh process, ssh_info is empty as no tunnel is created by us
+            self.processes[uuid] = (proc, web_port, url, {}, vm_name) 
+
+            self.app.push_screen(
+                WebConsoleDialog(url),
+                lambda result: self.stop_console(uuid, vm_name) if result == "stop" else None
+            )
 
     def _setup_ssh_tunnel(self, uuid: str, conn, vm_name: str, vnc_port: int, graphics_info: dict) -> tuple[str, int, dict]:
         """Sets up an SSH tunnel for remote connections if needed."""

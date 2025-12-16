@@ -1,3 +1,4 @@
+WebConsoleDialog,
 SnapshotNameDialog,
 SelectSnapshotDialog,
 ConfirmationDialog,
@@ -15,6 +16,7 @@ SelectServerModal {
 
 ConfirmationDialog #dialog Label,
 RenameVMDialog,
+WebConsoleDialog,
 XMLDisplayModal,
 WebConsoleDialog,
 SelectDiskModal,
@@ -258,6 +260,30 @@ XMLDisplayModal #dialog-buttons {
 }
 
 XMLDisplayModal #dialog-buttons Button {
-    width: 50%;
-    margin: 0 1;
+    content-align: center middle;
+    width: 100%;
+}
+
+#webconsole-dialog,
+#webconsole-config-dialog {
+    padding: 0 1;
+    width: 60;
+    content-align: center middle;
+    border: round $primary;
+}
+#webconsole-dialog {
+    height: 10;
+}
+#webconsole-config-dialog {
+    height: 18;
+}
+#remote-console-switch,
+#webconsole-config-title {
+    column-span: 2;
+    margin: 1 1;
+    content-align: center middle;
+    width: 100%;
+}
+.webconsole-config-label {
+    content-align: right middle;
 }

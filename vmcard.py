@@ -24,11 +24,12 @@ from vm_actions import clone_vm, rename_vm, start_vm
 from modals.vmanager_xml_modals import XMLDisplayModal
 from modals.utils_modals import ConfirmationDialog, LoadingModal
 from vmcard_dialog import (
-        DeleteVMConfirmationDialog,
+        DeleteVMConfirmationDialog, WebConsoleConfigDialog,
         CloneNameDialog, RenameVMDialog, SelectSnapshotDialog, SnapshotNameDialog
         )
 from utils import extract_server_name_from_uri
-from config import load_config
+from config import load_config, save_config
+from urllib.parse import urlparse
 
 # Load configuration once at module level
 _config = load_config()
@@ -429,8 +430,32 @@ class VMCard(Static):
             self.app.show_error_message(f"Error on VM {self.name} during 'connect': {e}")
 
     def _handle_web_console_button(self, event: Button.Pressed) -> None:
-        """Handles the web console button press by delegating to the WebConsoleManager."""
-        self.app.webconsole_manager.start_console(self.vm, self.conn)
+        """Handles the web console button press by opening a config dialog."""
+        uuid = self.vm.UUIDString()
+        if self.app.webconsole_manager.is_running(uuid):
+            self.app.webconsole_manager.start_console(self.vm, self.conn)
+            return
+
+        parsed_uri = urlparse(self.conn.getURI())
+        is_remote = parsed_uri.hostname not in (None, 'localhost', '127.0.0.1') and parsed_uri.scheme == 'qemu+ssh'
+
+        if is_remote:
+            def handle_dialog_result(should_start: bool) -> None:
+                if should_start:
+                    self.app.webconsole_manager.start_console(self.vm, self.conn)
+
+            self.app.push_screen(
+                WebConsoleConfigDialog(is_remote=is_remote),
+                handle_dialog_result
+            )
+        else:
+            # Local connection, so webconsole must be local.
+            # No need to show config dialog.
+            config = load_config()
+            if config.get('REMOTE_WEBCONSOLE') is not False:
+                config['REMOTE_WEBCONSOLE'] = False
+                save_config(config)
+            self.app.webconsole_manager.start_console(self.vm, self.conn)
 
     def _handle_snapshot_take_button(self, event: Button.Pressed) -> None:
         """Handles the snapshot take button press."""

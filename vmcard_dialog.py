@@ -2,11 +2,15 @@
 Dialog box for VMcard
 """
 
-from textual.containers import Horizontal, Vertical
+from textual.app import ComposeResult
+from textual.containers import ScrollableContainer, Horizontal, Vertical
+from textual.screen import ModalScreen
 from textual.widgets import (
-        Button, Label, Checkbox, Select, Input, Link, ListView, ListItem
+        Button, Label, Checkbox, Select, Input, Link, ListView, ListItem,
+        Switch, Markdown
         )
 from modals.base_modals import BaseDialog
+from config import load_config, save_config
 
 class DeleteVMConfirmationDialog(BaseDialog[tuple[bool, bool]]):
     """A dialog to confirm VM deletion with an option to delete storage."""
@@ -74,33 +78,6 @@ class ChangeNetworkDialog(BaseDialog[dict | None]):
         else:
             self.dismiss(None)
 
-class WebConsoleDialog(BaseDialog[str | None]):
-    """A dialog to show the web console URL."""
-
-    def __init__(self, url: str) -> None:
-        super().__init__()
-        self.url = url
-
-    def compose(self):
-        yield Vertical(
-            Label("Web Console is running at"),
-            Input(value=self.url, disabled=True),
-            Link("Open Link To a Browser", url=self.url),
-            Label(""),
-            Horizontal(
-                Button("Stop Web Console service", variant="error", id="stop"),
-                Button("Close this Window", variant="primary", id="close"),
-                id="dialog-buttons",
-            ),
-            id="dialog",
-            classes="info-container",
-        )
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "stop":
-            self.dismiss("stop")
-        else:
-            self.dismiss(None)
 
 class CloneNameDialog(BaseDialog[str | None]):
     """A dialog to ask for a new VM name when cloning."""
@@ -223,3 +200,79 @@ class SnapshotNameDialog(BaseDialog[str | None]):
             self.dismiss(snapshot_name)
         else:
             self.dismiss(None)
+
+class WebConsoleDialog(BaseDialog[str | None]):
+    """A dialog to show the web console URL."""
+
+    def __init__(self, url: str) -> None:
+        super().__init__()
+        self.url = url
+
+    def compose(self):
+        yield Vertical(
+            Label("Web Console is running at"),
+            Input(value=self.url, disabled=True),
+            Link("Open Link To a Browser", url=self.url),
+            Label(""),
+            Horizontal(
+                Button("Stop Web Console service", variant="error", id="stop"),
+                Button("Close this Window", variant="primary", id="close"),
+                id="dialog-buttons",
+            ),
+            id="webconsole-dialog",
+        )
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "stop":
+            self.dismiss("stop")
+        else:
+            self.dismiss(None)
+
+class WebConsoleConfigDialog(BaseDialog[bool]):
+    """A dialog to configure and start the web console."""
+
+    def __init__(self, is_remote: bool) -> None:
+        super().__init__()
+        self.is_remote = is_remote
+        self.config = load_config()
+        self.text_remote = "Run Web console on remote server. This will use a **LOT** of network bandwidth. It is recommended to **reduce quality** and enable **max compression**."
+
+    def compose(self) -> ComposeResult:
+        with ScrollableContainer(id="webconsole-config-dialog"):
+            yield Label("Web Console Configuration", id="webconsole-config-title")
+
+            if self.is_remote:
+                remote_console_enabled = self.config.get('REMOTE_WEBCONSOLE', False)
+                label_text = self.text_remote if remote_console_enabled else "Run Web console on local machine"
+                yield Markdown(label_text, id="console-location-label")
+                yield Switch(value=remote_console_enabled, id="remote-console-switch")
+            else:
+                yield Markdown("Web console will run locally.")
+
+            yield Button("Start Web Console", variant="primary", id="start")
+            yield Button("Cancel", variant="default", id="cancel")
+
+    def on_switch_changed(self, event: Switch.Changed) -> None:
+        if event.control.id == "remote-console-switch":
+            markdown = self.query_one("#console-location-label", Markdown)
+            if event.value:
+                markdown.update(self.text_remote)
+            else:
+                markdown.update("Run Web console on local machine")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "start":
+            if self.is_remote:
+                remote_switch = self.query_one("#remote-console-switch", Switch)
+                new_value = remote_switch.value
+                if self.config.get('REMOTE_WEBCONSOLE') != new_value:
+                    self.config['REMOTE_WEBCONSOLE'] = new_value
+                    save_config(self.config)
+            else:
+                # Not remote, so webconsole must be local
+                if self.config.get('REMOTE_WEBCONSOLE') is not False:
+                    self.config['REMOTE_WEBCONSOLE'] = False
+                    save_config(self.config)
+            self.dismiss(True)
+        elif event.button.id == "cancel":
+            self.dismiss(False)

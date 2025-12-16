@@ -25,6 +25,10 @@ Rainbow V Manager is a Textual-based TUI (Terminal User Interface) application f
 - View/Edit XML configuration
 - Connect to VM via virt-viewer
 - Web console access via novnc (when available)
+  - When connecting to a remote libvirt server via SSH, the web console can be configured to run either locally (default) or directly on the remote server.
+  - To enable running the web console on the remote server, set `REMOTE_WEBCONSOLE: True` in your `config.yaml`.
+  - When `REMOTE_WEBCONSOLE` is enabled, `websockify` and `novnc` assets must be installed on the remote server at the paths specified in `config.yaml` (default: `/usr/bin/websockify` and `/usr/share/novnc/`).
+  - For secure (HTTPS) remote web console access, `cert.pem` and `key.pem` files must also be present on the remote server in `~/.config/vmanager/`.
 
 ### Advanced Features
 - Filter VMs by status (All, Running, Paused, Stopped) and search by name
