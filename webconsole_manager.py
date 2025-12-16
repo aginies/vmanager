@@ -170,7 +170,9 @@ class WebConsoleManager:
             proc = subprocess.Popen(ssh_command_list, stdout=subprocess.DEVNULL, stderr=log_file_handle)
 
             # Construct the URL using the remote host
-            url = f"{url_scheme}://{host}:{web_port}/vnc.html?path=websockify"
+            quality = self.config.get('VNC_QUALITY', 0)
+            compression = self.config.get('VNC_COMPRESSION', 9)
+            url = f"{url_scheme}://{host}:{web_port}/vnc.html?path=websockify&quality={quality}&compression={compression}"
             # Store proc as the local ssh process, ssh_info is empty as no tunnel is created by us
             self.processes[uuid] = (proc, web_port, url, {}, vm_name) 
 
