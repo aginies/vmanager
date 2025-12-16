@@ -91,7 +91,6 @@ ConfirmationDialog #dialog-buttons Button {
 WebConsoleDialog,
 SelectDiskModal,
 SelectPoolModal,
-DeleteVMConfirmationDialog,
 SelectServerModal {
     height: auto;
 }
@@ -204,6 +203,11 @@ ChangeNetworkDialog #dialog-buttons Button {
 
 #storage-actions {
     height: auto;
+}
+#delete-vm-dialog {
+    height: 12;
+    border: round $primary;
+    width: 50;
 }
 
 .storage-action-label {
