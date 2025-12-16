@@ -229,8 +229,8 @@ Select {
 /* Styles for VMDetailModal */
 
 #vm-detail-container {
-    width: 90;
-    height: 90%;
+    width: 92;
+    height: 96%;
     border: round $primary-lighten-2;
     padding: 1;
     overflow: auto;
@@ -577,4 +577,32 @@ NetworkListItem {
 
 #net-autostart-check {
     width: 25%;
+}
+.boot-manager {
+    align: center top;
+    height: auto;
+    margin-top: 1;
+}
+
+.boot-list-container {
+    width: 42%;
+    height: 8;
+    border: round $primary;
+    padding: 0 1;
+}
+
+.boot-list-container ListView {
+    height: 10;
+}
+
+.boot-buttons {
+    width: 15%;
+    height: 8;
+    align: center middle;
+    padding: 0 0;
+}
+
+.boot-buttons Button {
+    width: 1;
+    margin: 1 0;
 }
