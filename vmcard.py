@@ -9,6 +9,7 @@ import os
 from functools import partial
 from urllib.parse import urlparse
 import libvirt
+import xml.etree.ElementTree as ET
 
 from textual.widgets import (
         Static, Button, TabbedContent,
@@ -294,6 +295,47 @@ class VMCard(Static):
         status_widget.remove_class("stopped", "running", "paused")
         status_widget.add_class(self.status.lower())
 
+    def _check_volume_usage(self, domain):
+        """Check if any volumes used by this VM are in use by other running VMs."""
+        xml_desc = domain.XMLDesc(0)
+        root = ET.fromstring(xml_desc)
+        conn = domain.connect()
+        
+        volumes_in_use = []
+        for disk in root.findall(".//devices/disk"):
+            if disk.get("device") != "disk":
+                continue
+            
+            source_elem = disk.find("source")
+            if source_elem is None:
+                continue
+            
+            if "pool" in source_elem.attrib and "volume" in source_elem.attrib:
+                pool_name = source_elem.get("pool")
+                vol_name = source_elem.get("volume")
+                try:
+                    pool = conn.storagePoolLookupByName(pool_name)
+                    if pool.isActive():
+                        vol = pool.storageVolLookupByName(vol_name)
+                        vol_path = vol.path()
+                        
+                        # Check if this volume is used by other VMs
+                        for other_domain in conn.listAllDomains(0):
+                            if other_domain.name() != domain.name() and other_domain.isActive():
+                                other_domain_xml = other_domain.XMLDesc(0)
+                                other_domain_root = ET.fromstring(other_domain_xml)
+                                for other_disk in other_domain_root.findall(".//devices/disk"):
+                                    other_source = other_disk.find("source")
+                                    if other_source is not None and "pool" in other_source.attrib and "volume" in other_source.attrib:
+                                        if (other_source.get("pool") == pool_name and 
+                                            other_source.get("volume") == vol_name):
+                                            volumes_in_use.append(vol_name)
+                                            break
+                except libvirt.libvirtError:
+                    continue
+        
+        return volumes_in_use
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
         button_handlers = {
@@ -322,6 +364,13 @@ class VMCard(Static):
         logging.info(f"Attempting to start VM: {self.name}")
         if not self.vm.isActive():
             try:
+                # Check if any volumes are in use by other VMs
+                volumes_in_use = self._check_volume_usage(self.vm)
+                if volumes_in_use:
+                    volume_list = ", ".join(volumes_in_use)
+                    self.app.show_error_message(f"Cannot start VM '{self.name}' because volume(s) {volume_list} are in use by other running VMs.")
+                    return
+                
                 start_vm(self.vm)
                 #self.vm.create()
                 self.app.refresh_vm_list()
