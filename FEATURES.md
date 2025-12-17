@@ -100,6 +100,17 @@ Rainbow V Manager is a Textual-based TUI (Terminal User Interface) application f
 - Set password for graphics access
 - Apply graphics settings (disabled when VM is running)
 
+### TPM Configuration
+- Select TPM model (tpm-crb, tpm-tis, or none)
+- Select TPM type (emulated or passthrough)
+- Configure device path for passthrough TPM
+- Configure backend type and path for passthrough TPM
+- Apply TPM settings (disabled when VM is running)
+
+### RNG Configuration
+- Configure Random Number Generator (RNG) host device.
+- Apply RNG settings (disabled when VM is running).
+
 ### Additional Features
 - Tabbed interface for organized configuration
 - Toggle between main and extended configuration tabs
