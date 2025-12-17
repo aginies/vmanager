@@ -2,6 +2,7 @@
 Module for managing libvirt storage pools and volumes.
 """
 from typing import List, Dict, Any
+import logging
 import libvirt
 from vm_queries import get_vm_disks_info
 
@@ -93,7 +94,9 @@ def set_pool_active(pool: libvirt.virStoragePool, active: bool):
             pool.destroy()
     except libvirt.libvirtError as e:
         state = "activate" if active else "deactivate"
-        raise logging.error(f"Error trying to {state} pool '{pool.name()}': {e}") from e
+        msg = f"Error trying to {state} pool '{pool.name()}': {e}"
+        logging.error(msg)
+        raise Exception(msg) from e
 
 def set_pool_autostart(pool: libvirt.virStoragePool, autostart: bool):
     """
@@ -102,7 +105,9 @@ def set_pool_autostart(pool: libvirt.virStoragePool, autostart: bool):
     try:
         pool.setAutostart(1 if autostart else 0)
     except libvirt.libvirtError as e:
-        raise logging.error(f"Error setting autostart for pool '{pool.name()}': {e}") from e
+        msg = f"Error setting autostart for pool '{pool.name()}': {e}"
+        logging.error(msg)
+        raise Exception(msg) from e
 
 def create_storage_pool(conn, name, pool_type, target, source_host=None, source_path=None, source_format=None):
     """
@@ -133,7 +138,9 @@ def create_volume(pool: libvirt.virStoragePool, name: str, size_gb: int, vol_for
     Creates a new storage volume in a pool.
     """
     if not pool.isActive():
-        raise logging.error(f"Pool '{pool.name()}' is not active.")
+        msg = f"Pool '{pool.name()}' is not active."
+        logging.error(msg)
+        raise Exception(msg)
 
     size_bytes = size_gb * 1024 * 1024 * 1024
 
@@ -149,7 +156,9 @@ def create_volume(pool: libvirt.virStoragePool, name: str, size_gb: int, vol_for
     try:
         pool.createXML(vol_xml, 0)
     except libvirt.libvirtError as e:
-        raise logging.error(f"Error creating volume '{name}': {e}") from e
+        msg = f"Error creating volume '{name}': {e}"
+        logging.error(msg)
+        raise Exception(msg) from e
 
 def delete_volume(vol: libvirt.virStorageVol):
     """
@@ -160,7 +169,9 @@ def delete_volume(vol: libvirt.virStorageVol):
         vol.delete(0)
     except libvirt.libvirtError as e:
         # Re-raise with a more informative message
-        raise logging.error(f"Error deleting volume '{vol.name()}': {e}") from e
+        msg = f"Error deleting volume '{vol.name()}': {e}"
+        logging.error(msg)
+        raise Exception(msg) from e
 
 def delete_storage_pool(pool: libvirt.virStoragePool):
     """
@@ -174,7 +185,9 @@ def delete_storage_pool(pool: libvirt.virStoragePool):
         # Undefine the pool (delete it)
         pool.undefine()
     except libvirt.libvirtError as e:
-        raise logging.error(f"Error deleting storage pool '{pool.name()}': {e}") from e
+        msg = f"Error deleting storage pool '{pool.name()}': {e}"
+        logging.error(msg)
+        raise Exception(msg) from e
 
 def get_all_storage_volumes(conn: libvirt.virConnect) -> List[libvirt.virStorageVol]:
     """
