@@ -762,9 +762,8 @@ class VMDetailModal(ModalScreen):
             return
 
         try:
-            set_vm_rng(self.domain, rng_device)
+            set_vm_rng(self.domain, "virtio", "random", rng_device)
             self.app.show_success_message(f"RNG settings applied successfully. Device: {rng_device}")
-            # In a complete implementation, you'd call a function like:
         except Exception as e:
             self.app.show_error_message(f"Error applying RNG settings: {e}")
 
