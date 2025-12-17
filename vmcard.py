@@ -182,7 +182,7 @@ class VMCard(Static):
     def on_mount(self) -> None:
         self.styles.background = "#323232"
         if self.is_selected:
-            self.styles.border = ("panel", "magenta")
+            self.styles.border = ("panel", "white")
         else:
             self.styles.border = ("solid", self.server_border_color)
         self.update_button_layout()
@@ -208,7 +208,7 @@ class VMCard(Static):
             pass # Widget not yet composed, ignore
 
         if new_value:
-            self.styles.border = ("panel", "magenta")
+            self.styles.border = ("panel", "white")
         else:
             self.styles.border = ("solid", self.server_border_color)
 
