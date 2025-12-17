@@ -207,13 +207,14 @@ class ServerPrefModal(BaseModal[None]):
         add_pool_btn.display = is_pool
 
         self.query_one("#del-vol-btn").display = is_volume
-        self.query_one("#add-vol-btn").display = is_pool
 
         if is_pool:
             is_active = node_data.get('status') == 'active'
             has_autostart = node_data.get('autostart', False)
             toggle_active_btn.label = "Deactivate" if is_active else "Activate"
             toggle_autostart_btn.label = "Autostart Off" if has_autostart else "Autostart On"
+
+        self.query_one("#add-vol-btn").display = is_pool and is_active
 
     @on(Button.Pressed, "#toggle-active-pool-btn")
     def on_toggle_active_pool_button_pressed(self, event: Button.Pressed) -> None:
