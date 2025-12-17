@@ -29,6 +29,7 @@ class FilterModal(BaseModal[dict | None]):
                     yield RadioButton("Running", id="status_running", value=self.current_status == "running")
                     yield RadioButton("Paused", id="status_paused", value=self.current_status == "paused")
                     yield RadioButton("Stopped", id="status_stopped", value=self.current_status == "stopped")
+                    yield RadioButton("Manually Selected", id="status_selected", value=self.current_status == "selected")
             with Horizontal():
                 yield Button("Apply", id="apply-btn", variant="success")
                 yield Button("Cancel", id="cancel-btn")
