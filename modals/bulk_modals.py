@@ -3,7 +3,7 @@ Modal for bulk VM operations
 """
 from textual.app import ComposeResult
 from textual.containers import Vertical, Horizontal, ScrollableContainer
-from textual.widgets import Label, Button, ListItem, ListView
+from textual.widgets import Label, Button, Markdown, Static
 
 from modals.base_modals import BaseModal
 
@@ -16,15 +16,14 @@ class BulkActionModal(BaseModal[None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="bulk-action-dialog"):
-            yield Label("Selected VMs for Bulk Action:")
+            yield Label("Selected VMs for Bulk Action")
+            yield Static(classes="button-separator")
             with ScrollableContainer():
-                yield ListView(
-                    *[ListItem(Label(name)) for name in self.vm_names],
-                    id="selected-vms-list"
-                )
+                all_vms = ", ".join(self.vm_names)
+                yield Markdown(all_vms, id="selected-vms-list")
             with Horizontal():
-                yield Button("Perform Action", variant="primary", id="perform-action-btn")
-                yield Button("Cancel", variant="default", id="cancel-btn")
+                yield Button("Perform Action", variant="primary", id="perform-action-btn", classes="button-container")
+                yield Button("Cancel", variant="default", id="cancel-btn", classes="button-container")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "perform-action-btn":
