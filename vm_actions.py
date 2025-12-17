@@ -1299,42 +1299,42 @@ def delete_vm(domain: libvirt.virDomain, delete_storage: bool):
     disks_to_delete = []
     if delete_storage:
         xml_desc = domain.XMLDesc(0)
+        # get_vm_disks_info returns a list of dicts, including 'path'
         disks_to_delete = get_vm_disks_info(conn, xml_desc)
 
+    # Undefine must happen after we have all the info we need from the domain object.
     if domain.isActive():
         domain.destroy()
     domain.undefine()
 
     if delete_storage:
         for disk_info in disks_to_delete:
-            try:
-                # Infer disk_type since get_vm_disks_info might not provide it directly
-                disk_type = None
-                if 'pool_name' in disk_info and 'volume_name' in disk_info:
-                    disk_type = 'volume'
-                elif 'path' in disk_info:
-                    disk_type = 'file'
+            disk_path = disk_info.get('path')
+            if not disk_path or not disk_info.get('status') == 'enabled':
+                continue
 
-                if disk_type == 'file' and disk_info['path']:
-                    if os.path.exists(disk_info['path']):
-                        os.remove(disk_info['path'])
-                        logging.info(f"Successfully deleted storage file: {disk_info['path']}")
-                    else:
-                        logging.warning(f"Storage file not found, skipping: {disk_info['path']}")
-                elif disk_type == 'volume' and disk_info['pool_name'] and disk_info['volume_name']:
-                    try:
-                        pool = conn.storagePoolLookupByName(disk_info['pool_name'])
-                        vol = pool.storageVolLookupByName(disk_info['volume_name'])
-                        vol.delete(0)
-                        logging.info(f"Successfully deleted storage volume: {disk_info['volume_name']} from pool {disk_info['pool_name']}")
-                    except libvirt.libvirtError as e:
-                        if e.get_error_code() == libvirt.VIR_ERR_NO_STORAGE_VOL:
-                            logging.warning(f"Storage volume '{disk_info['volume_name']}' not found in pool '{disk_info['pool_name']}', skipping deletion.")
-                        else:
-                            logging.error(f"Error deleting storage volume {disk_info['volume_name']} from pool {disk_info['pool_name']}: {e}")
-                            raise
+            try:
+                # Use the utility to find the volume object from its path.
+                # This is the robust way to handle any libvirt-managed volume.
+                vol, pool = _find_vol_by_path(conn, disk_path)
+
+                if vol:
+                    vol.delete(0)
+                    logging.info(f"Successfully deleted storage volume: {disk_path} from pool {pool.name()}")
                 else:
-                    logging.warning(f"Could not determine disk type for deletion for disk_info: {disk_info}")
-            except OSError as e:
-                logging.error(f"Error deleting storage file {disk_info.get('path', 'N/A')}: {e}")
+                    # If it's not a managed volume, we should not attempt to delete it.
+                    # This prevents PermissionError on files in /var/lib/libvirt/images
+                    # that should be managed by libvirt itself.
+                    logging.warning(f"Disk '{disk_path}' is not a managed libvirt volume. Skipping deletion.")
+
+            except libvirt.libvirtError as e:
+                # Handle cases where volume is already gone, which is not an error in this context.
+                if e.get_error_code() == libvirt.VIR_ERR_NO_STORAGE_VOL:
+                    logging.warning(f"Storage volume for path '{disk_path}' not found, skipping deletion.")
+                else:
+                    logging.error(f"Error deleting libvirt storage volume for path {disk_path}: {e}")
+                    raise # Re-raise other libvirt errors
+            except Exception as e:
+                # Catch other potential errors, like file system errors if we were to use os.remove
+                logging.error(f"An unexpected error occurred while trying to delete storage {disk_path}: {e}")
                 raise
