@@ -663,7 +663,11 @@ class VMCard(Static):
                     logging.error(f"An unexpected error occurred during VM deletion: {e}")
                     self.app.call_from_thread(self.app.show_error_message, f"An unexpected error occurred: {e}")
                 finally:
-                    self.app.call_from_thread(loading_modal.dismiss)
+                    try:
+                        self.app.call_from_thread(loading_modal.dismiss)
+                    except Exception:
+                        # If we can\'t dismiss the modal (e.g., app is no longer active), silently continue
+                        pass
 
             self.app.run_worker(do_delete, thread=True)
 
