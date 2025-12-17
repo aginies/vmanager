@@ -49,9 +49,10 @@ class WebConsoleManager:
             _, _, url, _, _ = self.processes[uuid]
 
             stopper_worker = partial(self.stop_console, uuid, vm_name)
-            callback = lambda result: self.app.run_worker(stopper_worker, thread=True) if result == "stop" else None
-
-            self.app.call_from_thread(self.app.push_screen, WebConsoleDialog(url), callback)
+            def on_dialog_dismiss(result):
+                if result == "stop":
+                    self.app.run_worker(stopper_worker, thread=True)
+            self.app.call_from_thread(self.app.push_screen, WebConsoleDialog(url), on_dialog_dismiss)
             return
 
         try:
@@ -206,12 +207,14 @@ class WebConsoleManager:
         self.processes[uuid] = (proc, web_port, url, {}, vm_name)
 
         stopper_worker = partial(self.stop_console, uuid, vm_name)
-        callback = lambda result: self.app.run_worker(stopper_worker, thread=True) if result == "stop" else None
+        def on_dialog_dismiss(result):
+            if result == "stop":
+                self.app.run_worker(stopper_worker, thread=True)
 
         self.app.call_from_thread(
             self.app.push_screen,
             WebConsoleDialog(url),
-            callback
+            on_dialog_dismiss
         )
 
     def _setup_ssh_tunnel(self, uuid: str, conn, vm_name: str, vnc_port: int, graphics_info: dict) -> tuple[str | None, int | None, dict]:
@@ -292,12 +295,14 @@ class WebConsoleManager:
             self.processes[uuid] = (proc, web_port, url, ssh_info, vm_name)
 
             stopper_worker = partial(self.stop_console, uuid, vm_name)
-            callback = lambda result: self.app.run_worker(stopper_worker, thread=True) if result == "stop" else None
+            def on_dialog_dismiss(result):
+                if result == "stop":
+                    self.app.run_worker(stopper_worker, thread=True)
 
             self.app.call_from_thread(
                 self.app.push_screen,
                 WebConsoleDialog(url),
-                callback
+                on_dialog_dismiss
             )
 
     def _stop_ssh_tunnel(self, vm_name: str, ssh_info: dict):
