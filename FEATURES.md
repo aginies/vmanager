@@ -191,15 +191,6 @@ Rainbow V Manager is a Textual-based TUI (Terminal User Interface) application f
 - Responsive UI that adapts to terminal size
 - Command-line mode support (--cmd flag)
 
-### Requirements
-- Minimal terminal size: 34x92
-- Python 3.7+
-- libvirt
-- textual
-- pyaml
-- virt-viewer (for connecting to VMs)
-- websockify and novnc (for web console access)
-
 ## User Experience
 - Visual feedback through notifications
 - Confirmation dialogs for destructive actions
