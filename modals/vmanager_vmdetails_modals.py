@@ -1152,7 +1152,7 @@ class VMDetailModal(ModalScreen):
             with TabbedContent(id="detail2-vm"):
                 with TabPane("RNG", id="detail-rng-tab"):
                     with Vertical(classes="info-details"):
-                        current_path = self.rng_info["backend_path"]# self.vm_info.get("rng_model")
+                        current_path = self.rng_info["backend_path"]
                         self.app.show_success_message(f"{current_path}")
                         yield Label("Host device")
                         yield Input(value=current_path, id="rng-host-device")
