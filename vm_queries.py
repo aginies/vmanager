@@ -626,12 +626,9 @@ def get_vm_sound_model(xml_content: str) -> str | None:
     """Extracts the sound model from a VM's XML definition."""
     try:
         root = ET.fromstring(xml_content)
-        devices = root.find("devices")
-        if devices is not None:
-            for sound_elem in devices.findall("sound"):
-                model_elem = sound_elem.find("model")
-                if model_elem is not None:
-                    return model_elem.get("type")
+        sound = root.find('.//devices/sound')
+        if sound is not None:
+            return sound.get("model")
     except ET.ParseError:
         pass
     return None
