@@ -373,7 +373,8 @@ class ServerPrefModal(BaseModal[None]):
     @on(Button.Pressed, "#toggle-net-active-btn")
     def on_toggle_net_active_pressed(self, event: Button.Pressed) -> None:
         table = self.query_one("#networks-table", DataTable)
-        if not table.cursor_coordinate: return
+        if not table.cursor_coordinate:
+            return
 
         row_key, _ = table.coordinate_to_cell_key(table.cursor_coordinate)
         net_name = row_key.value
@@ -390,7 +391,8 @@ class ServerPrefModal(BaseModal[None]):
     @on(Button.Pressed, "#toggle-net-autostart-btn")
     def on_toggle_net_autostart_pressed(self, event: Button.Pressed) -> None:
         table = self.query_one("#networks-table", DataTable)
-        if not table.cursor_coordinate: return
+        if not table.cursor_coordinate:
+            return
 
         row_key, _ = table.coordinate_to_cell_key(table.cursor_coordinate)
         net_name = row_key.value
