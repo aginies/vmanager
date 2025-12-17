@@ -1073,17 +1073,15 @@ def set_vm_tpm(domain: libvirt.virDomain, tpm_model: str, tpm_type: str = 'emula
     tpm_elem = ET.SubElement(devices, 'tpm', model=tpm_model)
 
     if tpm_type == 'passthrough':
-        # Add device path for passthrough TPM
+        # Add backend information
+        backend_elem = ET.SubElement(tpm_elem, 'backend')
+        if backend_type:
+            backend_elem.set('type', backend_type)
+        if backend_path:
+            backend_elem.set('path', backend_path)
+        # Add device path for passthrough TPM inside backend
         if device_path:
-            device_elem = ET.SubElement(tpm_elem, 'device', path=device_path)
-
-        # Add backend information if provided
-        if backend_type or backend_path:
-            backend_elem = ET.SubElement(tpm_elem, 'backend')
-            if backend_type:
-                backend_elem.set('type', backend_type)
-            if backend_path:
-                backend_elem.set('path', backend_path)
+            ET.SubElement(backend_elem, 'device', type='tpm', path=device_path)
     # For emulated TPM, we just set the model
 
     new_xml = ET.tostring(root, encoding='unicode')
@@ -1091,15 +1089,15 @@ def set_vm_tpm(domain: libvirt.virDomain, tpm_model: str, tpm_type: str = 'emula
 
 
 @log_function_call
-def set_vm_rng(domain: libvirt.virDomain, rng_model: str = 'virtio', backend_type: str = 'random', backend_path: str = '/dev/urandom'):
+def set_vm_rng(domain: libvirt.virDomain, rng_model: str = 'virtio', backend_model: str = 'random', backend_path: str = '/dev/urandom'):
     """
     Sets RNG (Random Number Generator) configuration for a VM.
     The VM must be stopped.
     
     Args:
         domain: libvirt domain object
-        rng_model: RNG model (e.g., 'virtio', 'isa')
-        backend_type: Backend type (e.g., 'random', 'egd')
+        rng_model: RNG model (e.g., 'virtio')
+        backend_model: Backend type (e.g., 'random', 'egd')
         backend_path: Path to backend device/file
     """
     if domain.isActive():
@@ -1117,13 +1115,12 @@ def set_vm_rng(domain: libvirt.virDomain, rng_model: str = 'virtio', backend_typ
     for elem in existing_rng_elements:
         devices.remove(elem)
 
-    # Create new RNG element
     rng_elem = ET.SubElement(devices, 'rng', model=rng_model)
-
-    # Add backend information
-    backend_elem = ET.SubElement(rng_elem, 'backend', type=backend_type, model=backend_type)
-    if backend_path:
-        backend_elem.set('path', backend_path)
+    backend_elem = ET.SubElement(rng_elem, 'backend', model=backend_model)
+    if backend_model == 'random' and backend_path:
+        backend_elem.text = backend_path
+    elif backend_path:
+        ET.SubElement(backend_elem, 'source', path=backend_path)
 
     new_xml = ET.tostring(root, encoding='unicode')
     domain.connect().defineXML(new_xml)
