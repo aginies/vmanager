@@ -849,12 +849,14 @@ def set_vm_video_model(domain: libvirt.virDomain, model: str | None):
 
     devices = root.find('devices')
     if devices is None:
-        if model is None: return
+        if model is None:
+            return
         devices = ET.SubElement(root, 'devices')
 
     video = devices.find('video')
     if video is None:
-        if model is None: return
+        if model is None:
+            return
         video = ET.SubElement(devices, 'video')
 
     model_elem = video.find('model')
