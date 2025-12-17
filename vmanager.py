@@ -489,7 +489,6 @@ class VMManagerTUI(App):
         else:
             if message.vm_uuid in self.selected_vm_uuids:
                 self.selected_vm_uuids.remove(message.vm_uuid)
-        logging.info(f"Selected VMs: {self.selected_vm_uuids}")
 
     def handle_create_vm_result(self, result: dict | None) -> None:
         """Handle the result from the CreateVMModal and create the VM."""
