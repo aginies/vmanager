@@ -1057,6 +1057,161 @@ def set_vm_graphics(domain: libvirt.virDomain, graphics_type: str | None, listen
 
 
 @log_function_call
+def set_vm_tpm(domain: libvirt.virDomain, tpm_model: str, tpm_type: str = 'emulated', device_path: str = None, backend_type: str = None, backend_path: str = None):
+    """
+    Sets TPM configuration for a VM.
+    The VM must be stopped.
+    
+    Args:
+        domain: libvirt domain object
+        tpm_model: TPM model (e.g., 'tpm-crb', 'tpm-tis')
+        tpm_type: Type of TPM ('emulated' or 'passthrough')
+        device_path: Path to TPM device (required for passthrough)
+        backend_type: Backend type (e.g., 'emulator', 'passthrough')
+        backend_path: Path to backend device (required for passthrough)
+    """
+    if domain.isActive():
+        raise libvirt.libvirtError("VM must be stopped to change TPM settings.")
+
+    xml_desc = domain.XMLDesc(0)
+    root = ET.fromstring(xml_desc)
+
+    devices = root.find('devices')
+    if devices is None:
+        devices = ET.SubElement(root, 'devices')
+
+    # Remove existing TPM elements
+    existing_tpm_elements = devices.findall('./tpm')
+    for elem in existing_tpm_elements:
+        devices.remove(elem)
+
+    # Create new TPM element
+    tpm_elem = ET.SubElement(devices, 'tpm', model=tpm_model)
+
+    if tpm_type == 'passthrough':
+        # Add device path for passthrough TPM
+        if device_path:
+            device_elem = ET.SubElement(tpm_elem, 'device', path=device_path)
+
+        # Add backend information if provided
+        if backend_type or backend_path:
+            backend_elem = ET.SubElement(tpm_elem, 'backend')
+            if backend_type:
+                backend_elem.set('type', backend_type)
+            if backend_path:
+                backend_elem.set('path', backend_path)
+    # For emulated TPM, we just set the model
+
+    new_xml = ET.tostring(root, encoding='unicode')
+    domain.connect().defineXML(new_xml)
+
+
+@log_function_call
+def set_vm_rng(domain: libvirt.virDomain, rng_model: str = 'virtio', backend_type: str = 'random', backend_path: str = '/dev/urandom'):
+    """
+    Sets RNG (Random Number Generator) configuration for a VM.
+    The VM must be stopped.
+    
+    Args:
+        domain: libvirt domain object
+        rng_model: RNG model (e.g., 'virtio', 'isa')
+        backend_type: Backend type (e.g., 'random', 'egd')
+        backend_path: Path to backend device/file
+    """
+    if domain.isActive():
+        raise libvirt.libvirtError("VM must be stopped to change RNG settings.")
+
+    xml_desc = domain.XMLDesc(0)
+    root = ET.fromstring(xml_desc)
+
+    devices = root.find('devices')
+    if devices is None:
+        devices = ET.SubElement(root, 'devices')
+
+    # Remove existing RNG elements
+    existing_rng_elements = devices.findall('./rng')
+    for elem in existing_rng_elements:
+        devices.remove(elem)
+
+    # Create new RNG element
+    rng_elem = ET.SubElement(devices, 'rng', model=rng_model)
+
+    # Add backend information
+    backend_elem = ET.SubElement(rng_elem, 'backend', type=backend_type)
+    if backend_path:
+        backend_elem.set('path', backend_path)
+
+    new_xml = ET.tostring(root, encoding='unicode')
+    domain.connect().defineXML(new_xml)
+
+
+@log_function_call
+def set_vm_watchdog(domain: libvirt.virDomain, watchdog_model: str = 'i6300esb', action: str = 'reset'):
+    """
+    Sets Watchdog configuration for a VM.
+    The VM must be stopped.
+    
+    Args:
+        domain: libvirt domain object
+        watchdog_model: Watchdog model (e.g., 'i6300esb', 'pcie-vpd')
+        action: Action to take when watchdog is triggered (e.g., 'reset', 'shutdown', 'poweroff')
+    """
+    if domain.isActive():
+        raise libvirt.libvirtError("VM must be stopped to change Watchdog settings.")
+
+    xml_desc = domain.XMLDesc(0)
+    root = ET.fromstring(xml_desc)
+
+    devices = root.find('devices')
+    if devices is None:
+        devices = ET.SubElement(root, 'devices')
+
+    # Remove existing Watchdog elements
+    existing_watchdog_elements = devices.findall('./watchdog')
+    for elem in existing_watchdog_elements:
+        devices.remove(elem)
+
+    # Create new Watchdog element
+    watchdog_elem = ET.SubElement(devices, 'watchdog', model=watchdog_model, action=action)
+
+    new_xml = ET.tostring(root, encoding='unicode')
+    domain.connect().defineXML(new_xml)
+
+
+@log_function_call
+def set_vm_input(domain: libvirt.virDomain, input_type: str = 'tablet', input_bus: str = 'usb'):
+    """
+    Sets Input (keyboard and mouse) configuration for a VM.
+    The VM must be stopped.
+    
+    Args:
+        domain: libvirt domain object
+        input_type: Input device type (e.g., 'mouse', 'keyboard', 'tablet')
+        input_bus: Bus type (e.g., 'usb', 'ps2', 'virtio')
+    """
+    if domain.isActive():
+        raise libvirt.libvirtError("VM must be stopped to change Input settings.")
+
+    xml_desc = domain.XMLDesc(0)
+    root = ET.fromstring(xml_desc)
+
+    devices = root.find('devices')
+    if devices is None:
+        devices = ET.SubElement(root, 'devices')
+
+    # Remove existing input elements of the same type
+    existing_input_elements = devices.findall(f'./input[@type="{input_type}"]')
+    for elem in existing_input_elements:
+        devices.remove(elem)
+
+    # Create new input element
+    input_elem = ET.SubElement(devices, 'input', type=input_type, bus=input_bus)
+
+    new_xml = ET.tostring(root, encoding='unicode')
+    domain.connect().defineXML(new_xml)
+
+
+@log_function_call
 def start_vm(domain):
     """
     Starts a VM after checking for missing disks.
