@@ -1073,16 +1073,12 @@ def set_vm_tpm(domain: libvirt.virDomain, tpm_model: str, tpm_type: str = 'emula
     tpm_elem = ET.SubElement(devices, 'tpm', model=tpm_model)
 
     if tpm_type == 'passthrough':
-        # Add backend information
-        backend_elem = ET.SubElement(tpm_elem, 'backend')
-        if backend_type:
-            backend_elem.set('type', backend_type)
-        if backend_path:
-            backend_elem.set('path', backend_path)
-        # Add device path for passthrough TPM inside backend
+        backend_elem = ET.SubElement(tpm_elem, 'backend', type='passthrough')
         if device_path:
-            ET.SubElement(backend_elem, 'device', type='tpm', path=device_path)
-    # For emulated TPM, we just set the model
+            ET.SubElement(backend_elem, 'device', path=device_path)
+    elif tpm_type == 'emulated':
+        # For emulated TPM, add a backend of type 'emulator'
+        ET.SubElement(tpm_elem, 'backend', type='emulator')
 
     new_xml = ET.tostring(root, encoding='unicode')
     domain.connect().defineXML(new_xml)
