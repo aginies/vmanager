@@ -36,6 +36,7 @@ from modals.vmanager_modals import (
         FilterModal, CreateVMModal,
         )
 from modals.bulk_modals import BulkActionModal
+from modals.utils_modals import ProgressModal
 from modals.server_prefs_modals import ServerPrefModal
 from modals.vmanager_vmdetails_modals import VMDetailModal
 from modals.vmanager_virsh_modals import VirshShellScreen
@@ -511,7 +512,7 @@ class VMManagerTUI(App):
 
     def handle_bulk_action_result(self, result: dict | None) -> None:
         """Handles the result from the BulkActionModal."""
-        if result is None: # User cancelled or no action selected
+        if result is None:  # User cancelled or no action selected
             return
 
         action_type = result.get('action')
@@ -519,12 +520,14 @@ class VMManagerTUI(App):
             self.show_error_message("No action type received from bulk action modal.")
             return
 
-        selected_uuids_copy = list(self.selected_vm_uuids) # Take a copy for the worker
+        selected_uuids_copy = list(self.selected_vm_uuids)  # Take a copy for the worker
 
         # Clear selection immediately and set bulk operation flag
         self.selected_vm_uuids.clear()
         self.bulk_operation_in_progress = True
-        self.refresh_vm_list() # Refresh to update selection borders
+        self.refresh_vm_list()  # Refresh to update selection borders
+
+        self.push_screen(ProgressModal(title=f"Bulk {action_type.capitalize()}: Pending..."))
 
         # Perform the action in a worker to avoid blocking the UI
         self.run_worker(
@@ -535,10 +538,20 @@ class VMManagerTUI(App):
 
     def _perform_bulk_action_worker(self, action_type: str, vm_uuids: list[str]) -> None:
         """Worker function to perform the selected bulk action on VMs."""
+        total_vms = len(vm_uuids)
+
+        def setup_progress_bar(total: int):
+            try:
+                bar = self.query_one(ProgressBar)
+                bar.total = total
+                bar.progress = 0
+            except Exception as e:
+                logging.error(f"Failed to setup progress bar: {e}")
+        self.call_from_thread(setup_progress_bar, total_vms)
         try:
             successful_vms = []
             failed_vms = []
-            for vm_uuid in vm_uuids:
+            for i, vm_uuid in enumerate(vm_uuids):
                 domain = None
                 vm_name = "Unknown VM"
 
@@ -552,7 +565,18 @@ class VMManagerTUI(App):
                         break
                     except libvirt.libvirtError:
                         continue
-                
+
+                def update_progress_ui(name: str, current: int, total: int):
+                    try:
+                        bar = self.query_one(ProgressBar)
+                        bar.advance(1)
+                        title = self.query_one("#progress-title", Label)
+                        title.update(f"Action '{action_type}' on '{name}' ({current}/{total})")
+                    except Exception as e:
+                        logging.error(f"Failed to update progress UI: {e}")
+
+                self.call_from_thread(update_progress_ui, vm_name, i + 1, total_vms)
+
                 if not domain:
                     self.call_from_thread(self.show_error_message, f"VM with UUID {vm_uuid} not found on any active server.")
                     failed_vms.append(vm_uuid)
@@ -593,6 +617,7 @@ class VMManagerTUI(App):
                 self.call_from_thread(logging.error, f"Bulk action '{action_type}' failed for: {', '.join(failed_vms)}")
         finally:
             def unset_flag_and_refresh():
+                self.pop_screen()
                 self.bulk_operation_in_progress = False
                 self.refresh_vm_list()
             self.call_from_thread(unset_flag_and_refresh)
@@ -656,6 +681,9 @@ class VMManagerTUI(App):
             domains_to_display = [(d, c) for d, c in domains_to_display if self.search_text.lower() in d.name().lower()]
 
         total_filtered_vms = len(domains_to_display)
+
+        if self.current_page > 0 and self.current_page * self.VMS_PER_PAGE >= total_filtered_vms:
+            self.current_page = 0
 
         start_index = self.current_page * self.VMS_PER_PAGE
         end_index = start_index + self.VMS_PER_PAGE
