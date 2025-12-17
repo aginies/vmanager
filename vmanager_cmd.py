@@ -6,7 +6,7 @@ import re
 import libvirt
 from config import load_config
 from libvirt_utils import find_all_vm
-from vm_actions import start_vm, delete_vm
+from vm_actions import start_vm, delete_vm, stop_vm, pause_vm, force_off_vm
 from connection_manager import ConnectionManager
 from storage_manager import list_unused_volumes, list_storage_pools
 
@@ -285,7 +285,7 @@ If no VM names are provided, it will stop the selected VMs."""
                     print(f"VM '{vm_name}' is not running.")
                     continue
 
-                domain.shutdown()
+                stop_vm(domain)
                 print(f"Sent shutdown signal to VM '{vm_name}'.")
             except libvirt.libvirtError as e:
                 print(f"Error stopping VM '{vm_name}': {e}")
@@ -311,7 +311,7 @@ If no VM names are provided, it will force off the selected VMs."""
                 if not domain.isActive():
                     print(f"VM '{vm_name}' is not running.")
                     continue
-                domain.destroy()
+                force_off_vm(domain)
                 print(f"VM '{vm_name}' forcefully powered off.")
             except libvirt.libvirtError as e:
                 print(f"Error forcefully powering off VM '{vm_name}': {e}")
@@ -342,7 +342,7 @@ If no VM names are provided, it will pause the selected VMs."""
                 if domain.info()[0] == libvirt.VIR_DOMAIN_PAUSED:
                     print(f"VM '{vm_name}' is already paused.")
                     continue
-                domain.suspend()
+                pause_vm(domain)
                 print(f"VM '{vm_name}' paused.")
             except libvirt.libvirtError as e:
                 print(f"Error pausing VM '{vm_name}': {e}")
