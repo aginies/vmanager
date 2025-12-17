@@ -318,7 +318,7 @@ class VMCard(Static):
                     pool = conn.storagePoolLookupByName(pool_name)
                     if pool.isActive():
                         vol = pool.storageVolLookupByName(vol_name)
-                        vol_path = vol.path()
+                        #vol_path = vol.path()
                         
                         # Check if this volume is used by other VMs
                         for other_domain in conn.listAllDomains(0):
