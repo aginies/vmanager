@@ -93,7 +93,7 @@ def delete_network(conn, network_name):
             net.destroy()
         net.undefine()
     except libvirt.libvirtError as e:
-        raise Exception(f"Error deleting network '{network_name}': {e}")
+        raise logging.error(f"Error deleting network '{network_name}': {e}")
 
 
 @log_function_call
@@ -131,7 +131,7 @@ def set_network_active(conn, network_name, active):
         else:
             net.destroy()
     except libvirt.libvirtError as e:
-        raise Exception(f"Error setting network active status: {e}")
+        raise logging.error(f"Error setting network active status: {e}")
 
 @log_function_call
 def set_network_autostart(conn, network_name, autostart):
@@ -144,7 +144,7 @@ def set_network_autostart(conn, network_name, autostart):
         net = conn.networkLookupByName(network_name)
         net.setAutostart(autostart)
     except libvirt.libvirtError as e:
-        raise Exception(f"Error setting network autostart status: {e}")
+        raise logging.error(f"Error setting network autostart status: {e}")
 
 
 @log_function_call
