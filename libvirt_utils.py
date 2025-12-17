@@ -68,21 +68,6 @@ def _find_pool_by_path(conn: libvirt.virConnect, file_path: str):
             continue
     return None
 
-def _get_disk_info(disk_path: str) -> dict:
-    """
-    Uses qemu-img info to get details about a disk image, particularly its format.
-    """
-    try:
-        command = f"qemu-img info --output=json '{disk_path}'"
-        result = run_shell_command(command, description="Get disk image info using qemu-img")
-        if result.stderr:
-            raise Exception(f"qemu-img error: {result.stderr}")
-        import json
-        info = json.loads(result.stdout)
-        return info
-    except Exception as e:
-        raise Exception(f"Failed to get disk info for {disk_path}: {e}")
-
 def get_cpu_models(conn, arch):
     """
     Get a list of CPU models for a given architecture.
