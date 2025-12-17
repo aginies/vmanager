@@ -9,7 +9,7 @@ import libvirt
 
 from textual.app import App, ComposeResult, on
 from textual.widgets import (
-        Header, Footer, Button, Label, Static, Link
+        Header, Footer, Button, Label, Static, Link, ProgressBar
         )
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
@@ -283,9 +283,9 @@ class VMManagerTUI(App):
         """Handle the result from the SelectServer screen."""
         if selected_uris is None: # User cancelled
             return
-            
+
         logging.info(f"Servers selected: {selected_uris}")
-        
+
         # Disconnect from servers that are no longer selected
         uris_to_disconnect = [uri for uri in self.active_uris if uri not in selected_uris]
         for uri in uris_to_disconnect:
@@ -293,7 +293,7 @@ class VMManagerTUI(App):
 
         self.active_uris = selected_uris
         self.current_page = 0
-        
+
         self.refresh_vm_list()
 
     @on(Button.Pressed, "#filter_button")
@@ -499,7 +499,7 @@ class VMManagerTUI(App):
         if not conn:
             self.show_error_message("Not connected to libvirt. Cannot create VM.")
             return
-            
+
         vm_name = result.get('name')
         memory = int(result.get('memory', 0))
         vcpu = int(result.get('vcpu', 0))
