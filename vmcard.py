@@ -317,6 +317,8 @@ class VMCard(Static):
         # Update Snapshot TabPane title
         try:
             tabbed_content = self.query_one(TabbedContent)
+            if not tabbed_content.is_mounted:
+                return
             snapshot_tab_pane = tabbed_content.get_pane("snapshot-tab")
             # Only update the title if the widget is still mounted to prevent crashes
             if snapshot_tab_pane and self.is_mounted:
@@ -746,6 +748,8 @@ class VMCard(Static):
         """Handles the clone button press."""
         logging.info(f"Attempting to clone VM: {self.name}")
 
+        app = self.app
+
         def handle_clone_results(result: dict | None) -> None:
             if not result:
                 return
@@ -755,7 +759,7 @@ class VMCard(Static):
             suffix = result["suffix"] # Retrieve the suffix
 
             progress_modal = ProgressModal(title=f"Cloning {self.name}...")
-            self.app.push_screen(progress_modal)
+            app.push_screen(progress_modal)
 
             def do_clone() -> None:
                 # Validate that new VM names do not already exist
@@ -765,8 +769,8 @@ class VMCard(Static):
                     for domain in all_domains:
                         existing_vm_names.add(domain.name())
                 except libvirt.libvirtError as e:
-                    self.app.call_from_thread(self.app.show_error_message, f"Error getting existing VM names: {e}")
-                    self.app.call_from_thread(progress_modal.dismiss)
+                    app.call_from_thread(app.show_error_message, f"Error getting existing VM names: {e}")
+                    app.call_from_thread(progress_modal.dismiss)
                     return
 
                 proposed_names = []
@@ -780,11 +784,11 @@ class VMCard(Static):
                 conflicting_names = [name for name in proposed_names if name in existing_vm_names]
 
                 if conflicting_names:
-                    self.app.call_from_thread(
-                        self.app.show_error_message,
+                    app.call_from_thread(
+                        app.show_error_message,
                         f"The following VM names already exist: {', '.join(conflicting_names)}. Aborting cloning."
                     )
-                    self.app.call_from_thread(progress_modal.dismiss)
+                    app.call_from_thread(progress_modal.dismiss)
                     return
 
                 success_clones = []
@@ -794,7 +798,7 @@ class VMCard(Static):
                 def set_progress_total():
                     pb = progress_modal.query_one("#progress-bar")
                     pb.total = count
-                self.app.call_from_thread(set_progress_total)
+                app.call_from_thread(set_progress_total)
 
                 for i in range(1, count + 1):
                     if count > 1:
@@ -814,28 +818,28 @@ class VMCard(Static):
                         def advance_progress_bar():
                             pb = progress_modal.query_one("#progress-bar")
                             pb.advance(1)
-                        self.app.call_from_thread(advance_progress_bar)
+                        app.call_from_thread(advance_progress_bar)
 
                 # Show summary messages
                 if success_clones:
-                    self.app.call_from_thread(
-                        self.app.show_success_message,
+                    app.call_from_thread(
+                        app.show_success_message,
                         f"Successfully cloned to: {', '.join(success_clones)}"
                     )
                 if failed_clones:
-                    self.app.call_from_thread(
-                        self.app.show_error_message,
+                    app.call_from_thread(
+                        app.show_error_message,
                         f"Failed to clone to: {', '.join(failed_clones)}"
                     )
 
                 if success_clones:
-                    self.app.call_from_thread(self.app.refresh_vm_list)
+                    app.call_from_thread(app.refresh_vm_list)
 
-                self.app.call_from_thread(progress_modal.dismiss)
+                app.call_from_thread(progress_modal.dismiss)
 
-            self.app.run_worker(do_clone, thread=True)
+            app.run_worker(do_clone, thread=True)
 
-        self.app.push_screen(AdvancedCloneDialog(), handle_clone_results)
+        app.push_screen(AdvancedCloneDialog(), handle_clone_results)
 
     def _handle_rename_button(self, event: Button.Pressed) -> None:
         """Handles the rename button press."""
