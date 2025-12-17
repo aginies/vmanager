@@ -1,12 +1,11 @@
 """
 Module for managing network-related operations for virtual machines.
 """
-import os
 import subprocess
 import secrets
-import libvirt
-import xml.etree.ElementTree as ET
 import ipaddress
+import xml.etree.ElementTree as ET
+import libvirt
 from utils import log_function_call
 
 
