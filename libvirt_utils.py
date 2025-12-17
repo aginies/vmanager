@@ -170,3 +170,16 @@ def get_sound_domain_capabilities(xml_content: str) -> dict:
         logging.error(f"An unexpected error occurred during XML parsing: {e}")
 
     return supported_models
+
+def _get_vm_names_from_uuids(conn: libvirt.virConnect, vm_uuids: list[str]) -> list[str]:
+    """
+    Get VM name from their vm_uuids
+    """
+    vm_names = []
+    for uuid in vm_uuids:
+        try:
+            domain = conn.lookupByUUIDString(uuid)
+            vm_names.append(domain.name())
+        except libvirt.libvirtError:
+            pass
+    return vm_names
