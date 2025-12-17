@@ -1153,7 +1153,6 @@ class VMDetailModal(ModalScreen):
                 with TabPane("RNG", id="detail-rng-tab"):
                     with Vertical(classes="info-details"):
                         current_path = self.rng_info["backend_path"]
-                        self.app.show_success_message(f"{current_path}")
                         yield Label("Host device")
                         yield Input(value=current_path, id="rng-host-device")
                         yield Button("Apply RNG Settings", id="apply-rng-btn", variant="primary")
