@@ -39,12 +39,12 @@ This project is part of a SUSE **hackweek** project, its not mature, under heavy
 - Minimal terminal size: 34x92
 - Remote connection to libvirt server ssh needs an SSH key copy to server! (ssh-copy-id with no password)
 - Python 3.7+
-- ![libvirt](https://libvirt.org/)
-- ![textual](https://pypi.org/project/textual/)
-- ![pyaml](https://pypi.org/project/pyaml/)
-- ![virt-viewer](https://gitlab.com/virt-viewer/virt-viewer)
-- ![novnc](https://novnc.com/noVNC/)
-- ![websockify](https://pypi.org/project/websockify/)
+- [libvirt](https://libvirt.org/)
+- [textual](https://pypi.org/project/textual/)
+- [pyaml](https://pypi.org/project/pyaml/)
+- [virt-viewer](https://gitlab.com/virt-viewer/virt-viewer)
+- [novnc](https://novnc.com/noVNC/)
+- [websockify](https://pypi.org/project/websockify/)
 
 ## Installation
 
