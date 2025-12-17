@@ -91,7 +91,6 @@ def clone_vm(original_vm, new_vm_name):
 
     return new_vm
 
-@log_function_call
 def rename_vm(domain, new_name, delete_snapshots=False):
     """
     Renames a VM.
@@ -148,7 +147,6 @@ def rename_vm(domain, new_name, delete_snapshots=False):
         conn.defineXML(xml_desc)
         raise Exception(f"Failed to rename VM, but restored original state. Error: {e}")
 
-@log_function_call
 def add_disk(domain, disk_path, device_type='disk', create=False, size_gb=10, disk_format='qcow2'):
     """
     Adds a disk to a VM. Can optionally create a new disk image in a libvirt storage pool.
@@ -286,7 +284,6 @@ def add_disk(domain, disk_path, device_type='disk', create=False, size_gb=10, di
     domain.attachDeviceFlags(disk_xml, flags)
     return target_dev
 
-@log_function_call
 def remove_disk(domain, disk_dev_path):
     """
     Removes a disk from a VM based on its device path (e.g. /path/to/disk.img) or device name (vda)
@@ -426,7 +423,6 @@ def add_virtiofs(domain: libvirt.virDomain, source_path: str, target_path: str, 
     conn.defineXML(new_xml)
 
 
-@log_function_call
 def add_network_interface(domain: libvirt.virDomain, network: str, model: str):
     """Adds a network interface to a VM."""
     if not domain:
@@ -445,7 +441,6 @@ def add_network_interface(domain: libvirt.virDomain, network: str, model: str):
 
     domain.attachDeviceFlags(interface_xml, flags)
 
-@log_function_call
 def remove_network_interface(domain: libvirt.virDomain, mac_address: str):
     """Removes a network interface from a VM."""
     if not domain:
@@ -473,7 +468,6 @@ def remove_network_interface(domain: libvirt.virDomain, mac_address: str):
     domain.detachDeviceFlags(interface_xml, flags)
 
 
-@log_function_call
 def change_vm_network(domain: libvirt.virDomain, mac_address: str, new_network: str, new_model: str = None):
     """Changes the network for a VM's network interface."""
     xml_desc = domain.XMLDesc(0)
@@ -515,7 +509,6 @@ def change_vm_network(domain: libvirt.virDomain, mac_address: str, new_network: 
     domain.updateDeviceFlags(interface_xml, flags)
 
 
-@log_function_call
 def disable_disk(domain, disk_path):
     """Disables a disk by moving it to a metadata section in the XML."""
     if domain.isActive():
@@ -553,7 +546,6 @@ def disable_disk(domain, disk_path):
     new_xml = ET.tostring(root, encoding='unicode')
     conn.defineXML(new_xml)
 
-@log_function_call
 def enable_disk(domain, disk_path):
     """Enables a disk by moving it from metadata back to devices."""
     if domain.isActive():
@@ -591,7 +583,6 @@ def enable_disk(domain, disk_path):
     new_xml = ET.tostring(root, encoding='unicode')
     conn.defineXML(new_xml)
 
-@log_function_call
 def set_vcpu(domain, vcpu_count: int):
     """
     Sets the number of virtual CPUs for a VM.
@@ -627,7 +618,6 @@ def set_vcpu(domain, vcpu_count: int):
                 "The configuration has been saved and will apply on the next reboot."
             )
 
-@log_function_call
 def set_memory(domain, memory_mb: int):
     """
     Sets the memory for a VM in megabytes.
@@ -708,7 +698,6 @@ def set_disk_properties(domain: libvirt.virDomain, disk_path: str, properties: d
     conn = domain.connect()
     conn.defineXML(new_xml)
 
-@log_function_call
 def set_machine_type(domain, new_machine_type):
     """
     Sets the machine type for a VM.
@@ -735,7 +724,6 @@ def set_machine_type(domain, new_machine_type):
     conn.defineXML(new_xml_desc)
 
 
-@log_function_call
 def set_shared_memory(domain: libvirt.virDomain, enable: bool):
     """Enable or disable shared memory for a VM."""
     if domain.isActive():
@@ -851,7 +839,6 @@ def set_boot_info(domain: libvirt.virDomain, menu_enabled: bool, order: list[str
     new_xml = ET.tostring(root, encoding='unicode')
     conn.defineXML(new_xml)
 
-@log_function_call
 def set_vm_video_model(domain: libvirt.virDomain, model: str | None):
     """Sets the video model for a VM."""
     if domain.isActive():
@@ -896,7 +883,6 @@ def set_vm_video_model(domain: libvirt.virDomain, model: str | None):
     domain.connect().defineXML(new_xml)
 
 
-@log_function_call
 def set_cpu_model(domain: libvirt.virDomain, cpu_model: str):
     """Sets the CPU model for a VM."""
     if domain.isActive():
@@ -952,7 +938,6 @@ def set_uefi_file(domain: libvirt.virDomain, uefi_path: str, secure_boot: bool):
     new_xml = ET.tostring(root, encoding='unicode')
     domain.connect().defineXML(new_xml)
 
-@log_function_call
 def set_vm_sound_model(domain: libvirt.virDomain, model: str):
     """
     Sets the sound model for a VM.
@@ -987,7 +972,6 @@ def set_vm_sound_model(domain: libvirt.virDomain, model: str):
     domain.connect().defineXML(new_xml)
 
 
-@log_function_call
 def set_vm_graphics(domain: libvirt.virDomain, graphics_type: str | None, listen_type: str, address: str, port: int | None, autoport: bool, password_enabled: bool, password: str | None):
     """
     Sets the graphics configuration (VNC/Spice) for a VM.
@@ -1137,7 +1121,7 @@ def set_vm_rng(domain: libvirt.virDomain, rng_model: str = 'virtio', backend_typ
     rng_elem = ET.SubElement(devices, 'rng', model=rng_model)
 
     # Add backend information
-    backend_elem = ET.SubElement(rng_elem, 'backend', type=backend_type)
+    backend_elem = ET.SubElement(rng_elem, 'backend', type=backend_type, model=backend_type)
     if backend_path:
         backend_elem.set('path', backend_path)
 
@@ -1211,7 +1195,6 @@ def set_vm_input(domain: libvirt.virDomain, input_type: str = 'tablet', input_bu
     domain.connect().defineXML(new_xml)
 
 
-@log_function_call
 def start_vm(domain):
     """
     Starts a VM after checking for missing disks.
@@ -1246,7 +1229,6 @@ def start_vm(domain):
 
     domain.create()
 
-@log_function_call
 def delete_vm(domain: libvirt.virDomain, delete_storage: bool):
     """
     Deletes a VM and optionally its associated storage.
