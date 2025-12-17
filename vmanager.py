@@ -42,7 +42,7 @@ from modals.vmanager_virsh_modals import VirshShellScreen
 from modals.vmanager_select_server_modals import SelectServerModal, SelectOneServerModal
 from connection_manager import ConnectionManager
 from webconsole_manager import WebConsoleManager
-from vm_actions import start_vm, delete_vm#, stop_vm
+from vm_actions import start_vm, delete_vm, stop_vm, pause_vm, force_off_vm#, stop_vm
 
 # Configure logging
 logging.basicConfig(
@@ -86,6 +86,7 @@ class VMManagerTUI(App):
     search_text = reactive("")
     num_pages = reactive(1)
     selected_vm_uuids: reactive[list[str]] = reactive(list)
+    bulk_operation_in_progress = reactive(False)
 
     SERVER_COLOR_PALETTE = [
         "#33FF57",  # Green
@@ -508,6 +509,94 @@ class VMManagerTUI(App):
         except libvirt.libvirtError as e:
             self.show_error_message(f"Error creating VM '{vm_name}': {e}")
 
+    def handle_bulk_action_result(self, result: dict | None) -> None:
+        """Handles the result from the BulkActionModal."""
+        if result is None: # User cancelled or no action selected
+            return
+
+        action_type = result.get('action')
+        if not action_type:
+            self.show_error_message("No action type received from bulk action modal.")
+            return
+
+        selected_uuids_copy = list(self.selected_vm_uuids) # Take a copy for the worker
+
+        # Clear selection immediately and set bulk operation flag
+        self.selected_vm_uuids.clear()
+        self.bulk_operation_in_progress = True
+        self.refresh_vm_list() # Refresh to update selection borders
+
+        # Perform the action in a worker to avoid blocking the UI
+        self.run_worker(
+            lambda: self._perform_bulk_action_worker(action_type, selected_uuids_copy),
+            name=f"bulk_action_{action_type}",
+            thread=True
+        )
+
+    def _perform_bulk_action_worker(self, action_type: str, vm_uuids: list[str]) -> None:
+        """Worker function to perform the selected bulk action on VMs."""
+        try:
+            successful_vms = []
+            failed_vms = []
+            for vm_uuid in vm_uuids:
+                domain = None
+                vm_name = "Unknown VM"
+
+                for uri in self.active_uris:
+                    conn = self.connection_manager.connect(uri)
+                    if not conn:
+                        continue
+                    try:
+                        domain = conn.lookupByUUIDString(vm_uuid)
+                        vm_name = domain.name()
+                        break
+                    except libvirt.libvirtError:
+                        continue
+                
+                if not domain:
+                    self.call_from_thread(self.show_error_message, f"VM with UUID {vm_uuid} not found on any active server.")
+                    failed_vms.append(vm_uuid)
+                    continue
+
+                try:
+                    if action_type == "start":
+                        start_vm(domain)
+                        self.call_from_thread(self.show_success_message, f"VM '{vm_name}' started.")
+                    elif action_type == "stop":
+                        stop_vm(domain)
+                        self.call_from_thread(self.show_success_message, f"Sent shutdown signal to VM '{vm_name}'.")
+                    elif action_type == "force_off":
+                        force_off_vm(domain)
+                        self.call_from_thread(self.show_success_message, f"VM '{vm_name}' forcefully powered off.")
+                    elif action_type == "pause":
+                        pause_vm(domain)
+                        self.call_from_thread(self.show_success_message, f"VM '{vm_name}' paused.")
+                    elif action_type == "delete":
+                        # For bulk delete, default to deleting storage as requested.
+                        delete_vm(domain, delete_storage=True)
+                        self.call_from_thread(self.show_success_message, f"VM '{vm_name}' and its storage deleted.")
+                    else:
+                        self.call_from_thread(self.show_error_message, f"Unknown bulk action type: {action_type}")
+                        failed_vms.append(vm_name)
+                        continue
+                    successful_vms.append(vm_name)
+                except libvirt.libvirtError as e:
+                    self.call_from_thread(self.show_error_message, f"Error performing '{action_type}' on VM '{vm_name}': {e}")
+                    failed_vms.append(vm_name)
+                except Exception as e:
+                    self.call_from_thread(self.show_error_message, f"Unexpected error on '{action_type}' for VM '{vm_name}': {e}")
+                    failed_vms.append(vm_name)
+
+            if successful_vms:
+                self.call_from_thread(logging.info, f"Bulk action '{action_type}' successful for: {', '.join(successful_vms)}")
+            if failed_vms:
+                self.call_from_thread(logging.error, f"Bulk action '{action_type}' failed for: {', '.join(failed_vms)}")
+        finally:
+            def unset_flag_and_refresh():
+                self.bulk_operation_in_progress = False
+                self.refresh_vm_list()
+            self.call_from_thread(unset_flag_and_refresh)
+
     def change_connection(self, uri: str) -> None:
         """Change the active connection to a single server and refresh."""
         logging.info(f"Changing connection to {uri}")
@@ -574,27 +663,35 @@ class VMManagerTUI(App):
 
         new_cards = []
         for domain, conn in paginated_domains:
-            info = domain.info()
-            uuid = domain.UUIDString()
-            if uuid not in self.sparkline_data:
-                self.sparkline_data[uuid] = {"cpu": [], "mem": []}
+            try:
+                info = domain.info()
+                uuid = domain.UUIDString()
+                if uuid not in self.sparkline_data:
+                    self.sparkline_data[uuid] = {"cpu": [], "mem": []}
 
-            cpu_hist = self.sparkline_data[uuid]["cpu"]
-            mem_hist = self.sparkline_data[uuid]["mem"]
+                cpu_hist = self.sparkline_data[uuid]["cpu"]
+                mem_hist = self.sparkline_data[uuid]["mem"]
 
-            is_vm_selected = uuid in self.selected_vm_uuids
-            vm_card = VMCard(cpu_history=cpu_hist, mem_history=mem_hist, is_selected=is_vm_selected)
-            vm_card.name = domain.name()
-            vm_card.status = get_status(domain)
-            vm_card.cpu = info[3]
-            vm_card.memory = info[1] // 1024
-            vm_card.vm = domain
-            vm_card.conn = conn
-            xml_content = domain.XMLDesc(0)
-            graphics_info = get_vm_graphics_info(xml_content)
-            vm_card.graphics_type = graphics_info.get("type", "vnc")
-            vm_card.server_border_color = self.get_server_color(conn.getURI())
-            new_cards.append(vm_card)
+                is_vm_selected = uuid in self.selected_vm_uuids
+                vm_card = VMCard(cpu_history=cpu_hist, mem_history=mem_hist, is_selected=is_vm_selected)
+                vm_card.name = domain.name()
+                vm_card.status = get_status(domain)
+                vm_card.cpu = info[3]
+                vm_card.memory = info[1] // 1024
+                vm_card.vm = domain
+                vm_card.conn = conn
+                xml_content = domain.XMLDesc(0)
+                graphics_info = get_vm_graphics_info(xml_content)
+                vm_card.graphics_type = graphics_info.get("type", "vnc")
+                vm_card.server_border_color = self.get_server_color(conn.getURI())
+                new_cards.append(vm_card)
+            except libvirt.libvirtError as e:
+                if e.get_error_code() == libvirt.VIR_ERR_NO_DOMAIN:
+                    logging.warning(f"Skipping display of non-existent VM with UUID {domain.UUIDString()}.")
+                    continue
+                else:
+                    self.call_from_thread(self.show_error_message, f"Error getting info for VM '{domain.name() if domain else 'Unknown' }': {e}")
+                    continue
 
         def update_ui():
             vms_container = self.query_one("#vms-container")
@@ -666,7 +763,9 @@ class VMManagerTUI(App):
             vm_names_list = sorted(list(all_names))
 
             if vm_names_list:
-                self.call_from_thread(self.push_screen, BulkActionModal(vm_names_list))
+                self.call_from_thread(
+                    self.push_screen, BulkActionModal(vm_names_list), self.handle_bulk_action_result
+                )
             else:
                 self.call_from_thread(
                     self.show_error_message, "Could not retrieve names for selected VMs."
