@@ -545,10 +545,30 @@ ListView > ListItem {
     height: 1;
     padding: 0 0;
     content-align-vertical: middle;
+    border: none;
 }
+#network-select,
+#model-select,
+#net-forward-input,
+#disk-format-select,
+#vol-format-select,
+#edit-cache-mode,
+#edit-discard-mode,
+#server-select,
+#pool-type-select,
+#netfs-format-select,
+#uefi-file-select,
+#video-model-select,
+#sound-model-select,
+#graphics-type-select,
+#graphics-listen-type-select,
+#tpm-model-select,
+#tpm-type-select,
+#cpu-model-select,
 ListView > ListItem:hover {
     height: auto;
     background: $primary-darken-2;
+    border: none;
 }
 /* Input focus styling */
 Input:focus {
@@ -593,6 +613,7 @@ NetworkListItem {
 
 .boot-list-container ListView {
     height: 10;
+    border: none;
 }
 
 .boot-buttons {
