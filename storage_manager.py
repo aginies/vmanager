@@ -120,7 +120,7 @@ def create_storage_pool(conn, name, pool_type, target, source_host=None, source_
             xml += f"<dir path='{source_path}'/>"
         if source_format:
             xml += f"<format type='{source_format}'/>"
-        xml += f"</source>"
+        xml += "</source>"
         xml += f"<target><path>{target}</path></target>"
     xml += "</pool>"
     pool = conn.storagePoolDefineXML(xml, 0)

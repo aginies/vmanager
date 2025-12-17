@@ -333,7 +333,7 @@ def remove_disk(domain, disk_dev_path):
         elif current_target_dev == disk_dev_path: # This is for matching by "vda", "vdb" etc.
             match = True
         else:
-            logging.debug(f"remove_disk: No exact match found for this disk element.")
+            logging.debug("remove_disk: No exact match found for this disk element.")
 
         if match:
             disk_to_remove_xml = ET.tostring(disk, encoding="unicode")
