@@ -189,6 +189,18 @@ class VMCard(Static):
         """Stop the timer when the widget is removed."""
         self.timer.stop()
 
+    def watch_is_selected(self, old_value: bool, new_value: bool) -> None:
+        """Called when is_selected changes to update the checkbox."""
+        try:
+            checkbox = self.query_one("#vm-select-checkbox", Checkbox)
+            checkbox.value = new_value
+            if new_value:
+                self.styles.border = ("panel", "magenta")
+            else:
+                self.styles.border = ("solid", self.server_border_color)
+        except NoMatches:
+            pass # Widget not yet composed, ignore
+
     def update_stats(self) -> None:
         """Update CPU and memory statistics."""
         self._update_webc_status() # Call on mount
