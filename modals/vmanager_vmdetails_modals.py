@@ -29,7 +29,8 @@ from vm_actions import (
         disable_disk, change_vm_network, set_shared_memory, remove_virtiofs,
         add_virtiofs, set_vm_video_model, set_cpu_model, set_uefi_file,
         set_vm_graphics, set_disk_properties, set_vm_sound_model,
-        add_network_interface, remove_network_interface, set_boot_info, set_vm_rng, set_vm_tpm
+        add_network_interface, remove_network_interface, set_boot_info, set_vm_rng, set_vm_tpm,
+        check_for_other_spice_devices, remove_spice_devices
 )
 from network_manager import (
     list_networks,
@@ -714,18 +715,18 @@ class VMDetailModal(ModalScreen):
             self.app.show_error_message("VM must be stopped to apply graphics settings.")
             return
 
-        graphics_type = self.query_one("#graphics-type-select", Select).value
+        original_graphics_type = self.graphics_info.get('type')
+        new_graphics_type = self.query_one("#graphics-type-select", Select).value
         listen_type = self.query_one("#graphics-listen-type-select", Select).value
         
-        # Determine address
-        address = None # Default for 'none' listen type
+        logging.info(f"Attempting to change graphics from '{original_graphics_type}' to '{new_graphics_type}'.")
+
+        address = None
         if listen_type == 'address':
             address_radioset = self.query_one("#graphics-address-radioset", RadioSet)
             if address_radioset.pressed_button.id == "graphics-address-localhost":
                 address = "127.0.0.1"
-            elif address_radioset.pressed_button.id == "graphics-address-all":
-                address = "0.0.0.0"
-            else: # Hypervisor default, which can be expressed as 0.0.0.0 in libvirt or omitted
+            else:
                 address = "0.0.0.0"
 
         autoport = self.query_one("#graphics-autoport-checkbox", Checkbox).value
@@ -736,25 +737,49 @@ class VMDetailModal(ModalScreen):
         password_input = self.query_one("#graphics-password-input", Input)
         password = password_input.value if password_enabled else None
 
-        try:
-            set_vm_graphics(
-                self.domain,
-                graphics_type if graphics_type != "" else None, # Convert "None" string back to None
-                listen_type,
-                address,
-                port,
-                autoport,
-                password_enabled,
-                password
+        def do_apply_graphics_settings():
+            try:
+                set_vm_graphics(
+                    self.domain,
+                    new_graphics_type if new_graphics_type != "" else None,
+                    listen_type,
+                    address,
+                    port,
+                    autoport,
+                    password_enabled,
+                    password
+                )
+                self.app.show_success_message("Graphics settings applied successfully.")
+                self.graphics_info = get_vm_graphics_info(self.domain.XMLDesc(0))
+                self._update_graphics_ui()
+            except (libvirt.libvirtError, Exception) as e:
+                self.app.show_error_message(f"Error applying graphics settings: {e}")
+
+        # Check if switching from SPICE to VNC and other SPICE devices exist
+        has_other_spice_devices = check_for_other_spice_devices(self.domain)
+        logging.info(f"Checking for other SPICE devices... Found: {has_other_spice_devices}")
+
+        if new_graphics_type == 'vnc' and has_other_spice_devices:
+            logging.info("Condition met for SPICE removal, showing confirmation dialog.")
+
+            def on_confirm_spice_removal(confirmed: bool):
+                if confirmed:
+                    try:
+                        remove_spice_devices(self.domain)
+                        self.app.show_success_message("Removed associated SPICE devices.")
+                    except Exception as e:
+                        self.app.show_error_message(f"Error removing SPICE devices: {e}")
+                        return # Abort on failure
+
+                do_apply_graphics_settings()
+
+            self.app.push_screen(
+                ConfirmationDialog("This VM has other SPICE-related devices (e.g., channels, QXL video).\nDo you want to remove them for a clean switch to VNC?"),
+                on_confirm_spice_removal
             )
-            self.app.show_success_message("Graphics settings applied successfully.")
-            # Refresh graphics_info after successful application
-            self.graphics_info = get_vm_graphics_info(self.domain.XMLDesc(0))
-            self._update_graphics_ui()
-        except libvirt.libvirtError as e:
-            self.app.show_error_message(f"Error applying graphics settings: {e}")
-        except Exception as e:
-            self.app.show_error_message(f"An unexpected error occurred: {e}")
+        else:
+            logging.info("Condition NOT met for SPICE removal, applying settings directly.")
+            do_apply_graphics_settings()
 
     @on(Button.Pressed, "#apply-rng-btn")
     def on_rng_apply_button_pressed(self, event: Button.Pressed) -> None:
