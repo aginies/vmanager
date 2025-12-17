@@ -1,4 +1,3 @@
-#name,
 #info-container,
 #status {
     content-align: center middle;
@@ -10,10 +9,13 @@ VMCard {
     width: 43;
     height: 14;
 }
-#name {
+#vmname {
     background: green;
     color: white;
     text-style: bold;
+    height: 1;
+    content-align: center middle;
+ /*   padding-left: 2;*/
 }
 #info-container {
     background: $background;
@@ -48,7 +50,9 @@ VMCard {
 #cpu-sparkline,
 #mem-sparkline {
     background: $panel;
-    margin-right: 1;
+    width: 26;
+    margin-right: 2;
+    padding-right: 2;
 }
 
 #cpu-sparkline {
@@ -93,9 +97,14 @@ Button,
     display: none !important;
 }
 
+#vm-header-row {
+    height: 3;
+    align: center middle; /* Align children vertically */
+}
+
 #status {
-    margin: 0 2;
-    padding: 0 1;
+    margin: 0 0;
+    padding: 0 0;
     text-style: bold;
     margin-bottom: 1;
 }
@@ -165,4 +174,9 @@ Button {
 
 #connect {
     background: red;
+}
+
+.vm-select-checkbox {
+    width: 7;
+    height: 3;
 }

@@ -1,5 +1,5 @@
 """
-Main Interface
+VMcard Interface
 """
 import subprocess
 import logging
@@ -13,7 +13,7 @@ import libvirt
 
 from textual.widgets import (
         Static, Button, TabbedContent,
-        TabPane, Sparkline,
+        TabPane, Sparkline, Checkbox
         )
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
@@ -44,6 +44,14 @@ class VMNameClicked(Message):
         self.vm_name = vm_name
         self.vm_uuid = vm_uuid
 
+class VMSelectionChanged(Message):
+    """Posted when a VM's selection state changes."""
+
+    def __init__(self, vm_uuid: str, is_selected: bool) -> None:
+        super().__init__()
+        self.vm_uuid = vm_uuid
+        self.is_selected = is_selected
+
 class VMCard(Static):
     """
     Main VM card
@@ -58,13 +66,15 @@ class VMCard(Static):
     webc_status_indicator = reactive("")
     graphics_type = reactive("vnc")
     server_border_color = reactive("green")
+    is_selected = reactive(False)
 
-    def __init__(self, cpu_history: list[float] = None, mem_history: list[float] = None) -> None:
+    def __init__(self, cpu_history: list[float] = None, mem_history: list[float] = None, is_selected: bool = False) -> None:
         super().__init__()
         self.cpu_history = cpu_history if cpu_history is not None else []
         self.mem_history = mem_history if mem_history is not None else []
         self.last_cpu_time = 0
         self.last_cpu_time_ts = 0
+        self.is_selected = is_selected
 
     def _get_snapshot_tab_title(self) -> str:
         if self.vm:
@@ -102,14 +112,16 @@ class VMCard(Static):
     def compose(self):
         with Vertical(id="info-container"):
             classes = ""
-            # Show VM name with server name
-            if hasattr(self, 'conn') and self.conn:
-                server_display = extract_server_name_from_uri(self.conn.getURI())
-                yield Static(f"{self.name} ({server_display})", id="name", classes=classes)
-            else:
-                yield Static(self.name, id="name", classes=classes)
-            status_class = self.status.lower()
-            yield Static(f"Status: {self.status}{self.webc_status_indicator}", id="status", classes=status_class)
+            with Horizontal(id="vm-header-row"):
+                yield Checkbox("", id="vm-select-checkbox", classes="vm-select-checkbox", value=self.is_selected)
+                with Vertical(): # New Vertical container for name and status
+                    if hasattr(self, 'conn') and self.conn:
+                        server_display = extract_server_name_from_uri(self.conn.getURI())
+                        yield Static(f"{self.name} ({server_display})", id="vmname", classes="vmname")
+                    else:
+                        yield Static(self.name, id="vmname", classes="vmname")
+                    status_class = self.status.lower()
+                    yield Static(f"Status: {self.status}{self.webc_status_indicator}", id="status", classes=status_class)
             with Horizontal(id="cpu-sparkline-container", classes="sparkline-container"):
                 cpu_spark = Static(f"{self.cpu} VCPU", id="cpu-mem-info", classes="sparkline-label")
                 yield cpu_spark
@@ -810,6 +822,12 @@ class VMCard(Static):
     def _handle_configure_button(self, event: Button.Pressed) -> None:
         """Handles the configure button press."""
         self.post_message(VMNameClicked(vm_name=self.name, vm_uuid=self.vm.UUIDString()))
+
+    @on(Checkbox.Changed, "#vm-select-checkbox")
+    def on_vm_select_checkbox_changed(self, event: Checkbox.Changed) -> None:
+        """Handles when the VM selection checkbox is changed."""
+        self.is_selected = event.value
+        self.post_message(VMSelectionChanged(vm_uuid=self.vm.UUIDString(), is_selected=event.value))
 
     @on(Click, "#cpu-mem-info")
     def on_click_cpu_mem_info(self) -> None:
