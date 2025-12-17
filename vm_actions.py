@@ -1151,7 +1151,7 @@ def set_vm_watchdog(domain: libvirt.virDomain, watchdog_model: str = 'i6300esb',
         devices.remove(elem)
 
     # Create new Watchdog element
-    watchdog_elem = ET.SubElement(devices, 'watchdog', model=watchdog_model, action=action)
+    ET.SubElement(devices, 'watchdog', model=watchdog_model, action=action)
 
     new_xml = ET.tostring(root, encoding='unicode')
     domain.connect().defineXML(new_xml)
@@ -1184,7 +1184,7 @@ def set_vm_input(domain: libvirt.virDomain, input_type: str = 'tablet', input_bu
         devices.remove(elem)
 
     # Create new input element
-    input_elem = ET.SubElement(devices, 'input', type=input_type, bus=input_bus)
+    ET.SubElement(devices, 'input', type=input_type, bus=input_bus)
 
     new_xml = ET.tostring(root, encoding='unicode')
     domain.connect().defineXML(new_xml)

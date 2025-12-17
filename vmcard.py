@@ -8,8 +8,8 @@ from datetime import datetime
 import os
 from functools import partial
 from urllib.parse import urlparse
-import libvirt
 import xml.etree.ElementTree as ET
+import libvirt
 
 from textual.widgets import (
         Static, Button, TabbedContent,
@@ -317,7 +317,7 @@ class VMCard(Static):
                 try:
                     pool = conn.storagePoolLookupByName(pool_name)
                     if pool.isActive():
-                        vol = pool.storageVolLookupByName(vol_name)
+                        #vol = pool.storageVolLookupByName(vol_name)
                         #vol_path = vol.path()
                         
                         # Check if this volume is used by other VMs
