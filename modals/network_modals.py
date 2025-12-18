@@ -74,7 +74,7 @@ class AddEditNetworkInterfaceModal(BaseDialog[dict | None]):
         else:
             self.dismiss(None)
 
-class CreateNetworkModal(BaseModal[None]):
+class AddEditNetworkModal(BaseModal[None]):
     """Modal screen for creating a new network."""
 
     def __init__(self, conn) -> None:
