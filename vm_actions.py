@@ -1287,9 +1287,9 @@ def force_off_vm(domain: libvirt.virDomain):
 
     domain.destroy()
 
-def delete_vm(domain: libvirt.virDomain, delete_storage: bool):
+def delete_vm(domain: libvirt.virDomain, delete_storage: bool, delete_nvram: bool = False):
     """
-    Deletes a VM and optionally its associated storage.
+    Deletes a VM and optionally its associated storage and NVRAM.
     If the VM has snapshots, their metadata will be removed as well.
     """
     if not domain:
@@ -1298,15 +1298,24 @@ def delete_vm(domain: libvirt.virDomain, delete_storage: bool):
     conn = domain.connect()
 
     disks_to_delete = []
-    if delete_storage:
+    xml_desc = None
+    if delete_storage or delete_nvram:
         xml_desc = domain.XMLDesc(0)
-        disks_to_delete = get_vm_disks_info(conn, xml_desc)
+        if delete_storage:
+            disks_to_delete = get_vm_disks_info(conn, xml_desc)
 
     if domain.isActive():
         domain.destroy()
 
-    # Undefine the VM, also removing any snapshot metadata.
-    domain.undefineFlags(libvirt.VIR_DOMAIN_UNDEFINE_SNAPSHOTS_METADATA)
+    # Undefine the VM
+    undefine_flags = libvirt.VIR_DOMAIN_UNDEFINE_SNAPSHOTS_METADATA
+    if delete_nvram and xml_desc:
+        root = ET.fromstring(xml_desc)
+        os_elem = root.find('os')
+        if os_elem is not None and os_elem.find('nvram') is not None:
+            undefine_flags |= libvirt.VIR_DOMAIN_UNDEFINE_NVRAM
+
+    domain.undefineFlags(undefine_flags)
 
     if delete_storage:
         for disk_info in disks_to_delete:
