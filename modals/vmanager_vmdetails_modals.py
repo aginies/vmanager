@@ -4,6 +4,7 @@ Main interface
 import os
 import logging
 from collections import namedtuple
+import xml.etree.ElementTree as ET
 
 from textual.app import ComposeResult
 from textual.widgets import (
@@ -39,7 +40,9 @@ from firmware_manager import (
     get_uefi_files, get_host_sev_capabilities
 )
 import storage_manager
-from libvirt_utils import get_cpu_models
+from libvirt_utils import (
+        get_cpu_models, get_domain_capabilities_xml, get_video_domain_capabilities
+        )
 from modals.utils_modals import ConfirmationDialog
 from modals.vmanager_modals import (
         AddEditVirtIOFSModal,
@@ -900,7 +903,6 @@ class VMDetailModal(ModalScreen):
                         current_cpu_model = self.vm_info.get('cpu_model', 'default')
                         yield Label(f"CPU Model: {current_cpu_model}", id="cpu-model-label", classes="tabd")
 
-                        import xml.etree.ElementTree as ET
                         xml_root = ET.fromstring(self.vm_info['xml'])
                         arch_elem = xml_root.find(".//os/type")
                         arch = arch_elem.get('arch') if arch_elem is not None else 'x86_64'
@@ -1048,7 +1050,37 @@ class VMDetailModal(ModalScreen):
                     with Vertical(classes="info-details"):
                         current_model = self.vm_info.get('video_model') or "default"
                         is_stopped = self.vm_info.get("status") == "Stopped"
-                        video_models = ["default", "virtio", "qxl", "vga", "cirrus", "bochs", "ramfb", "none"]
+
+                        video_models = []
+                        try:
+                            xml_root = ET.fromstring(self.vm_info['xml'])
+
+                            os_type_elem = xml_root.find(".//os/type")
+                            arch = os_type_elem.get('arch') if os_type_elem is not None else 'x86_64'
+                            machine = os_type_elem.get('machine') if os_type_elem is not None else None
+
+                            emulator_elem = xml_root.find(".//devices/emulator")
+                            emulatorbin = emulator_elem.text if emulator_elem is not None else None
+
+                            if machine and emulatorbin:
+                                caps_xml = get_domain_capabilities_xml(self.conn, emulatorbin, arch, machine)
+                                if caps_xml:
+                                    video_caps = get_video_domain_capabilities(caps_xml)
+                                    video_models = video_caps.get('video_models', [])
+
+                        except Exception as e:
+                            logging.error(f"Could not dynamically get video models: {e}")
+
+                        # Fallback to hardcoded list if dynamic fetch fails or returns empty
+                        if not video_models:
+                            video_models = ["default", "virtio", "qxl", "vga", "cirrus", "bochs", "ramfb", "none"]
+
+                        # Ensure 'default' and 'none' are present, as they are special values
+                        if 'default' not in video_models:
+                            video_models.insert(0, 'default')
+                        if 'none' not in video_models:
+                            video_models.append('none')
+
                         video_model_options = [(model, model) for model in video_models]
 
                         yield Label(f"Video Model: {current_model}", id="video-model-label")
@@ -1064,7 +1096,11 @@ class VMDetailModal(ModalScreen):
                     with Vertical(classes="info-details"):
                         current_sound_model = self.vm_info.get('sound_model') or "none"
                         is_stopped = self.vm_info.get("status") == "Stopped"
-                        sound_models = ["none", "ich6", "ich9", "ac97", "sb16", "usb"]
+
+                        sound_models = self.app.config.get('sound_models', [])
+                        if not sound_models:
+                            sound_models = ["none", "ich6", "ich9", "ac97", "sb16", "usb"]
+
                         sound_model_options = [(model, model) for model in sound_models]
 
                         yield Label(f"Sound Model: {current_sound_model}", id="sound-model-label")
@@ -1383,7 +1419,14 @@ class VMDetailModal(ModalScreen):
                                     except Exception as e:
                                         self.app.show_error_message(f"An unexpected error occurred: {e}")
                             self.app.push_screen(ConfirmationDialog(message), on_confirm_edit)
-                    self.app.push_screen(AddEditNetworkInterfaceModal(is_edit=True, networks=self.available_networks, interface_info=interface_to_edit), edit_interface_callback)
+
+                    network_models = self.app.config.get('network_models', [])
+                    self.app.push_screen(AddEditNetworkInterfaceModal(
+                        is_edit=True,
+                        networks=self.available_networks,
+                        network_models=network_models,
+                        interface_info=interface_to_edit
+                    ), edit_interface_callback)
                 else:
                     self.app.show_error_message("Could not retrieve information for the selected network interface.")
 
@@ -1400,7 +1443,12 @@ class VMDetailModal(ModalScreen):
                         self._update_networks_table()
                     except (libvirt.libvirtError, ValueError) as e:
                         self.app.show_error_message(f"Error adding network interface: {e}")
-            self.app.push_screen(AddEditNetworkInterfaceModal(is_edit=False, networks=self.available_networks), add_interface_callback)
+            network_models = self.app.config.get('network_models', [])
+            self.app.push_screen(AddEditNetworkInterfaceModal(
+                is_edit=False,
+                networks=self.available_networks,
+                network_models=network_models
+            ), add_interface_callback)
 
         elif event.button.id == "remove-network-interface-button":
             if self.selected_network_interface:
