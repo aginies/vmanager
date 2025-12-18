@@ -16,6 +16,7 @@ from vm_queries import (
       get_all_vm_nvram_usage, get_all_vm_disk_usage,
       get_all_network_usage
       )
+from libvirt_utils import get_network_info
 from network_manager import (
       list_networks, get_vms_using_network, delete_network,
       set_network_active, set_network_autostart
@@ -52,7 +53,7 @@ class ServerPrefModal(BaseModal[None]):
                             yield Button("Toggle Autostart", id="toggle-net-autostart-btn", classes="toggle-detail-button", variant="primary", disabled=True)
                         with Horizontal():
                             yield Button("Add", id="add-net-btn", variant="success", classes="toggle-detail-button")
-                            #yield Button("Edit", id="edit-net-btn", variant="success", classes="toggle-detail-button")
+                            yield Button("Edit", id="edit-net-btn", variant="success", classes="toggle-detail-button", disabled=True)
                             yield Button("View", id="view-net-btn", variant="success", classes="toggle-detail-button", disabled=True)
                             yield Button("Delete", id="delete-net-btn", variant="error", classes="toggle-detail-button", disabled=True)
                 with TabPane("Storage", id="tab-storage"):
@@ -360,6 +361,7 @@ class ServerPrefModal(BaseModal[None]):
     def on_network_table_row_selected(self, event: DataTable.RowSelected) -> None:
         self.query_one("#view-net-btn").disabled = False
         self.query_one("#delete-net-btn").disabled = False
+        self.query_one("#edit-net-btn").disabled = False
 
         toggle_active_btn = self.query_one("#toggle-net-active-btn")
         toggle_autostart_btn = self.query_one("#toggle-net-autostart-btn")
@@ -432,10 +434,22 @@ class ServerPrefModal(BaseModal[None]):
                 self.app.show_error_message(f"An unexpected error occurred: {e}")
 
         elif event.button.id == "edit-net-btn":
+            table = self.query_one("#networks-table", DataTable)
+            if not table.cursor_coordinate:
+                return
+
+            row_key, _ = table.coordinate_to_cell_key(table.cursor_coordinate)
+            network_name = row_key.value
+
+            network_info = get_network_info(self.conn, network_name)
+            if not network_info:
+                self.app.show_error_message(f"Could not retrieve info for network '{network_name}'.")
+                return
+
             def on_create(success: bool):
                 if success:
                     self._load_networks()
-            self.app.push_screen(AddEditNetworkModal(self.conn), on_create)
+            self.app.push_screen(AddEditNetworkModal(self.conn, network_info=network_info), on_create)
 
         elif event.button.id == "add-net-btn":
             def on_create(success: bool):
