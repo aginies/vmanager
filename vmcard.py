@@ -5,7 +5,6 @@ import subprocess
 import logging
 import traceback
 from datetime import datetime
-import os
 from functools import partial
 from urllib.parse import urlparse
 import xml.etree.ElementTree as ET
@@ -21,7 +20,7 @@ from textual.message import Message
 from textual import on
 from textual.events import Click
 from textual.css.query import NoMatches
-from vm_queries import get_vm_disks_info, get_status
+from vm_queries import get_status
 from vm_actions import clone_vm, delete_vm, rename_vm, start_vm
 
 from modals.vmanager_xml_modals import XMLDisplayModal
@@ -176,7 +175,7 @@ class VMCard(Static):
                             yield Button("Delete", id="delete", variant="success", classes="delete-button")
                             yield Static(classes="button-separator")
                             yield Button("Clone", id="clone", classes="clone-button")
-                            yield Button("Migration", id="migration", variant="primary", classes="migration-button")
+                            yield Button("W! Migration!", id="migration", variant="primary", classes="migration-button")
                         with Vertical():
                             yield Button("View XML", id="xml")
                             yield Static(classes="button-separator")
@@ -899,16 +898,19 @@ class VMCard(Static):
             self.app.show_error_message("Cannot migrate running/paused and stopped VMs at the same time. Please select VMs with the same state.")
             return
 
+        # Get all active connections from the connection manager
+        active_uris = self.app.connection_manager.get_all_uris()
         all_connections = {}
-        for card in self.app.query("VMCard"):
-            try:
-                uri = card.conn.getURI()
-                if uri not in all_connections:
-                    all_connections[uri] = card.conn
-            except (libvirt.libvirtError, AttributeError):
-                continue # Ignore cards with bad/no connection
+        for uri in active_uris:
+            conn = self.app.connection_manager.get_connection(uri)
+            if conn: # Ensure connection is valid
+                all_connections[uri] = conn
+        def on_confirm(confirmed: bool) -> None:
+            if not confirmed:
+                return
+            self.app.push_screen(MigrationModal(vms=selected_vms, is_live=is_live, connections=all_connections))
 
-        self.app.push_screen(MigrationModal(vms=selected_vms, is_live=is_live, connections=all_connections))
+        self.app.push_screen(ConfirmationDialog("Experimental Features! not yet fully tested!"), on_confirm)
 
     @on(Checkbox.Changed, "#vm-select-checkbox")
     def on_vm_select_checkbox_changed(self, event: Checkbox.Changed) -> None:
