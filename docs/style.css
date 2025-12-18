@@ -1,21 +1,62 @@
 body {
-    background-color: #002b36;
-    color: #073642;
+    background-color: #073642;
+    color: #839496;
+    font-family: Arial, sans-serif;
 }
 
-.sidebar {
-    float: left;
-    width: 15%;
+header {
+    background-color: #073642;
+    color: #839496;
     padding: 10px;
-    background-color: #002b36;
-    color: #073642;
-    border-right: 1px solid #839496;
+    text-align: center;
+    width: 100%;
 }
-.main-content {
-    float: right;
-    width: 85%;
-    padding-left: 15%;
-    color: #073642;
+
+nav ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    justify-content: center;
+}
+
+nav ul li {
+    margin: 0 10px;
+}
+
+nav ul a {
+    color: #839496;
+    text-decoration: none;
+}
+
+nav ul a:hover {
+    color: white;
+    text-decoration: underline;
+}
+
+.content {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+.media-section {
+    text-align: center;
+    margin: 20px 0;
+}
+
+.feature-list {
+    margin: 15px 0;
+}
+
+a {
+    color: #839496;
+    text-decoration: none;
+}
+
+a:hover {
+    color: white;
+    text-decoration: underline;
 }
 
 .gallery img {
@@ -23,7 +64,7 @@ body {
     height: auto;
     margin: 5px;
     cursor: pointer;
-    border: 1px solid #839496;
+    border: 1px solid #586e75;
 }
 
 #lightbox {
