@@ -12,14 +12,6 @@ from textual.widgets import (
         DataTable, Static,
         TabbedContent, TabPane, Tree
         )
-from modals.base_modals import BaseModal
-from modals.network_modals import CreateNetworkModal, NetworkXMLModal
-from modals.disk_pool_modals import (
-        AddPoolModal,
-        CreateVolumeModal,
-        )
-from modals.utils_modals import ConfirmationDialog
-
 from vm_queries import (
       get_all_vm_nvram_usage, get_all_vm_disk_usage,
       get_all_network_usage
@@ -29,6 +21,14 @@ from network_manager import (
       set_network_active, set_network_autostart
       )
 import storage_manager
+
+from modals.base_modals import BaseModal
+from modals.network_modals import AddEditNetworkModal, NetworkXMLModal
+from modals.disk_pool_modals import (
+        AddPoolModal,
+        CreateVolumeModal,
+        )
+from modals.utils_modals import ConfirmationDialog
 
 
 class ServerPrefModal(BaseModal[None]):
@@ -52,6 +52,7 @@ class ServerPrefModal(BaseModal[None]):
                             yield Button("Toggle Autostart", id="toggle-net-autostart-btn", classes="toggle-detail-button", variant="primary", disabled=True)
                         with Horizontal():
                             yield Button("Add", id="add-net-btn", variant="success", classes="toggle-detail-button")
+                            #yield Button("Edit", id="edit-net-btn", variant="success", classes="toggle-detail-button")
                             yield Button("View", id="view-net-btn", variant="success", classes="toggle-detail-button", disabled=True)
                             yield Button("Delete", id="delete-net-btn", variant="error", classes="toggle-detail-button", disabled=True)
                 with TabPane("Storage", id="tab-storage"):
@@ -430,11 +431,18 @@ class ServerPrefModal(BaseModal[None]):
             except Exception as e:
                 self.app.show_error_message(f"An unexpected error occurred: {e}")
 
+        elif event.button.id == "edit-net-btn":
+            def on_create(success: bool):
+                if success:
+                    self._load_networks()
+            self.app.push_screen(AddEditNetworkModal(self.conn), on_create)
+
         elif event.button.id == "add-net-btn":
             def on_create(success: bool):
                 if success:
                     self._load_networks()
-            self.app.push_screen(CreateNetworkModal(self.conn), on_create)
+            self.app.push_screen(AddEditNetworkModal(self.conn), on_create)
+
         elif event.button.id == "delete-net-btn":
             table = self.query_one("#networks-table", DataTable)
             if not table.cursor_coordinate:
