@@ -26,6 +26,7 @@ from vm_actions import clone_vm, delete_vm, rename_vm, start_vm
 
 from modals.vmanager_xml_modals import XMLDisplayModal
 from modals.utils_modals import ConfirmationDialog, LoadingModal, ProgressModal
+from modals.migration_modals import MigrationModal
 from vmcard_dialog import (
         DeleteVMConfirmationDialog, WebConsoleConfigDialog,
         AdvancedCloneDialog, RenameVMDialog, SelectSnapshotDialog, SnapshotNameDialog
@@ -175,6 +176,7 @@ class VMCard(Static):
                             yield Button("Delete", id="delete", variant="success", classes="delete-button")
                             yield Static(classes="button-separator")
                             yield Button("Clone", id="clone", classes="clone-button")
+                            yield Button("Migration", id="migration", variant="primary", classes="migration-button")
                         with Vertical():
                             yield Button("View XML", id="xml")
                             yield Static(classes="button-separator")
@@ -302,6 +304,7 @@ class VMCard(Static):
             snapshot_delete_button = self.query_one("#snapshot_delete", Button)
             info_button = self.query_one("#configure-button", Button)
             clone_button = self.query_one("#clone", Button)
+            migration_button = self.query_one("#migration", Button)
             rename_button = self.query_one("#rename-button", Button)
             cpu_sparkline_container = self.query_one("#cpu-sparkline-container")
             mem_sparkline_container = self.query_one("#mem-sparkline-container")
@@ -341,6 +344,7 @@ class VMCard(Static):
         stop_button.display = is_running or is_paused
         delete_button.display = is_running or is_paused or is_stopped
         clone_button.display = is_stopped
+        migration_button.display = True
         rename_button.display = is_stopped
         pause_button.display = is_running
         resume_button.display = is_paused
@@ -426,6 +430,7 @@ class VMCard(Static):
             "snapshot_delete": self._handle_snapshot_delete_button,
             "delete": self._handle_delete_button,
             "clone": self._handle_clone_button,
+            "migration": self._handle_migration_button,
             "rename-button": self._handle_rename_button,
             "configure-button": self._handle_configure_button,
         }
@@ -874,6 +879,36 @@ class VMCard(Static):
                 self.app.refresh_vm_list()
                 return
             self.app.show_error_message(f"Error getting UUID for {self.name}: {e}")
+
+    def _handle_migration_button(self, event: Button.Pressed) -> None:
+        """Handles the migration button press."""
+        selected_vms = [card.vm for card in self.app.query("VMCard") if card.is_selected]
+        if not selected_vms:
+            selected_vms = [self.vm]
+
+        logging.info(f"Migration initiated for VMs: {[vm.name() for vm in selected_vms]}")
+
+        source_conns = {vm.connect().getURI() for vm in selected_vms}
+        if len(source_conns) > 1:
+            self.app.show_error_message("Cannot migrate VMs from different source hosts at the same time.")
+            return
+
+        active_vms = [vm for vm in selected_vms if vm.isActive()]
+        is_live = len(active_vms) > 0
+        if is_live and len(active_vms) < len(selected_vms):
+            self.app.show_error_message("Cannot migrate running/paused and stopped VMs at the same time. Please select VMs with the same state.")
+            return
+
+        all_connections = {}
+        for card in self.app.query("VMCard"):
+            try:
+                uri = card.conn.getURI()
+                if uri not in all_connections:
+                    all_connections[uri] = card.conn
+            except (libvirt.libvirtError, AttributeError):
+                continue # Ignore cards with bad/no connection
+
+        self.app.push_screen(MigrationModal(vms=selected_vms, is_live=is_live, connections=all_connections))
 
     @on(Checkbox.Changed, "#vm-select-checkbox")
     def on_vm_select_checkbox_changed(self, event: Checkbox.Changed) -> None:
