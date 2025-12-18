@@ -45,3 +45,19 @@
     cursor: pointer;
     font-size: 24px;
 }
+
+/* Navigation buttons */
+#prev, #next {
+    color: white;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    font-size: 30px;
+}
+#prev {
+    left: 20px;
+}
+#next {
+    right: 20px;
+}
