@@ -14,17 +14,6 @@ This terminal solution is simple, very few deps, remote control with low bandwid
 
 This project is part of a SUSE **hackweek** project, its not mature, under heavy developement, its lacks a lot of features, and surely contains tons of bugs. You have been warned. Please report any bugs or ask for specific features.
 
-## Media
-
-![Screenshot](https://paste.opensuse.org/pastes/706a2fe96295/raw)
-![Screenshot](https://paste.opensuse.org/pastes/54611f2dc75a/raw)
-![Screenshot](https://paste.opensuse.org/pastes/dfb48c4390b5/raw)
-![Screenshot](https://paste.opensuse.org/pastes/37d250075470/raw)
-![Screenshot](https://paste.opensuse.org/pastes/c31c9cf0ee2c/raw)
-![Screenshot](https://paste.opensuse.org/pastes/b596408544c0/raw)
-![Screenshot](https://paste.opensuse.org/pastes/a37c655832a8/raw)
-![Screenshot](https://paste.opensuse.org/pastes/54a634950a79/raw)
-
 ## Features
 
 [Features](FEATURES.md)
