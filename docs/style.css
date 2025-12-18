@@ -1,36 +1,47 @@
-body { 
-    font-family: 'Helvetica Neue', Arial, sans-serif; 
-    max-width: 800px; 
-    margin: 0 auto; 
-    padding: 20px; 
-    background-color: #fdf6e3; 
-    color: #657b83;
+/* Existing styles */
+.sidebar {
+    float: left;
+    width: 15%;
+    padding: 10px;
+    background-color: #f0f0f0;
+    border-right: 1px solid #ccc;
 }
-h1 { 
-    color: #268bd2; 
-    margin-bottom: 10px;
+.main-content {
+    float: right;
+    width: 85%;
+    padding-left: 15%;
 }
-a { 
-    color: #268bd2; 
-    text-decoration: none; 
-}
-a:hover { 
-    text-decoration: underline; 
-}
-.feature-list { 
-    margin: 20px 0; 
-}
-p {
-    line-height: 1.5;
-}
-.media-section {
-    margin: 30px 0;
-    text-align: center;
-}
-.media-section img {
-    max-width: 100%;
+
+/* New gallery styles */
+.gallery img {
+    max-width: 200px;
     height: auto;
-    border: 1px solid #eee;
-    border-radius: 4px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin: 5px;
+    cursor: pointer;
+}
+
+/* Lightbox styles */
+#lightbox {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+#lightbox-img {
+    max-width: 90%;
+    max-height: 90%;
+}
+#close-lightbox {
+    color: white;
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    cursor: pointer;
+    font-size: 24px;
 }

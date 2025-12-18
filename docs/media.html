@@ -11,16 +11,65 @@
     <div class="gallery">
         <img src="https://paste.opensuse.org/pastes/ed4b8571f3ff/raw" alt="Rainbow V Manager Interface">
         <img src="https://paste.opensuse.org/pastes/ed4b8571f3ff/raw" alt="VM Management View">
-	<img src="https://paste.opensuse.org/pastes/d65d1c424bf0/raw" alt="Server Network Preferences">
-	<img src="https://paste.opensuse.org/pastes/89c327e81294/raw" alt="Server List Management">
-	<img src="https://paste.opensuse.org/pastes/5cf19668df25/raw" alt="Server To Display">
+        <img src="https://paste.opensuse.org/pastes/d65d1c424bf0/raw" alt="Server Network Preferences">
+        <img src="https://paste.opensuse.org/pastes/89c327e81294/raw" alt="Server List Management">
+        <img src="https://paste.opensuse.org/pastes/5cf19668df25/raw" alt="Server To Display">
         <img src="https://paste.opensuse.org/pastes/ed4b8571f3ff/raw" alt="Server Selection">
-	<img src="https://paste.opensuse.org/pastes/609001704a2c/raw" alt="Clone result">
-	<img src="https://paste.opensuse.org/pastes/15b1cb0945af/raw" alt="Clone">
-	<img src="https://paste.opensuse.org/pastes/6914a2578554/raw" alt="TPM">
-	<img src="https://paste.opensuse.org/pastes/8fb71474fdcc/raw" alt="Graphics">
-	<img src="https://paste.opensuse.org/pastes/f5a5e6892a4e/raw" alt="Boot">
-	<img src="https://paste.opensuse.org/pastes/32c592108214/raw" alt="Bulk Command">
+        <img src="https://paste.opensuse.org/pastes/609001704a2c/raw" alt="Clone result">
+        <img src="https://paste.opensuse.org/pastes/15b1cb0945af/raw" alt="Clone">
+        <img src="https://paste.opensuse.org/pastes/6914a2578554/raw" alt="TPM">
+        <img src="https://paste.opensuse.org/pastes/8fb71474fdcc/raw" alt="Graphics">
+        <img src="https://paste.opensuse.org/pastes/f5a5e6892a4e/raw" alt="Boot">
+        <img src="https://paste.opensuse.org/pastes/32c592108214/raw" alt="Bulk Command">
     </div>
+
+    <div id="lightbox" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); justify-content:center; align-items:center; z-index:1000;">
+        <span id="prev" style="color: white; position: absolute; left: 20px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 30px;">&lt;</span>
+        <img id="lightbox-img" style="max-width:90%; max-height:90%;">
+        <span id="next" style="color: white; position: absolute; right: 20px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 30px;">&gt;</span>
+        <span id="close-lightbox" style="color:white; position:absolute; top:20px; right:20px; cursor:pointer;">&times;</span>
+    </div>
+
+    <script>
+        let currentImageIndex = 0;
+        const galleryImages = document.querySelectorAll('.gallery img');
+
+        document.querySelectorAll('.gallery img').forEach((img, index) => {
+            img.addEventListener('click', function() {
+                currentImageIndex = index;
+                document.getElementById('lightbox-img').src = this.src;
+                document.getElementById('lightbox').style.display = 'flex';
+            });
+        });
+
+        document.getElementById('prev').addEventListener('click', function() {
+            currentImageIndex = (currentImageIndex - 1 + galleryImages.length) % galleryImages.length;
+            document.getElementById('lightbox-img').src = galleryImages[currentImageIndex].src;
+        });
+
+        document.getElementById('next').addEventListener('click', function() {
+            currentImageIndex = (currentImageIndex + 1) % galleryImages.length;
+            document.getElementById('lightbox-img').src = galleryImages[currentImageIndex].src;
+        });
+
+        document.getElementById('close-lightbox').addEventListener('click', function() {
+            document.getElementById('lightbox').style.display = 'none';
+        });
+
+        // Add keyboard navigation
+        document.addEventListener('keydown', function(event) {
+            if (document.getElementById('lightbox').style.display === 'flex') {
+                if (event.key === 'ArrowLeft') {
+                    currentImageIndex = (currentImageIndex - 1 + galleryImages.length) % galleryImages.length;
+                    document.getElementById('lightbox-img').src = galleryImages[currentImageIndex].src;
+                } else if (event.key === 'ArrowRight') {
+                    currentImageIndex = (currentImageIndex + 1) % galleryImages.length;
+                    document.getElementById('lightbox-img').src = galleryImages[currentImageIndex].src;
+                } else if (event.key === 'Escape') {
+                    document.getElementById('lightbox').style.display = 'none';
+                }
+            }
+        });
+    </script>
 </body>
 </html>
