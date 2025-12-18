@@ -43,13 +43,13 @@ class MigrationModal(ModalScreen):
             yield Static(f"[{migration_type}] Migrate VMs: [b]{vm_names}[/b]")
             yield Static("Select destination server:")
             yield Select(dest_servers, id="dest-server-select", prompt="Destination...")
-    yield Static("Migration Options:")
-    with Horizontal():
-        yield Checkbox("--copy-storage-all", id="copy-storage-all")
-        yield Checkbox("--unsafe", id="unsafe")
-        yield Checkbox("--persistent", id="persistent")
-        yield Checkbox("--compress", id="compress")
-        yield Checkbox("--tunnelled", id="tunnelled")
+            yield Static("Migration Options:")
+            with Horizontal():
+                yield Checkbox("Copy storage all", id="copy-storage-all", tooltip="Copy all disk files during migration")
+                yield Checkbox("Unsafe migration", id="unsafe", tooltip="Perform unsafe migration (may lose data)")
+                yield Checkbox("Persistent migration", id="persistent", tooltip="Keep VM persistent on destination")
+                yield Checkbox("Compress data", id="compress", tooltip="Compress data during migration")
+                yield Checkbox("Tunnelled migration", id="tunnelled", tooltip="Tunnel migration data through libvirt daemon")
             yield Static("Compatibility Check Results / Migration Log:")
             yield Log(id="results-log", classes="log-view", highlight=True)
             with Horizontal(classes="modal-buttons"):
@@ -128,10 +128,26 @@ class MigrationModal(ModalScreen):
             write_log(f"\n--- Migrating {vm.name()} ---")
             try:
                 if self.is_live:
-                    flags = (
-                             libvirt.VIR_MIGRATE_LIVE |
-                             libvirt.VIR_MIGRATE_PEER2PEER |
-                             libvirt.VIR_MIGRATE_PERSIST_DEST)
+                    flags = libvirt.VIR_MIGRATE_LIVE | libvirt.VIR_MIGRATE_PEER2PEER | libvirt.VIR_MIGRATE_PERSIST_DEST
+                    # Get checkbox values
+                    copy_storage_all = self.query_one("#copy-storage-all", Checkbox).value
+                    unsafe = self.query_one("#unsafe", Checkbox).value
+                    persistent = self.query_one("#persistent", Checkbox).value
+                    compress = self.query_one("#compress", Checkbox).value
+                    tunnelled = self.query_one("#tunnelled", Checkbox).value
+
+                    # Apply flags based on checkbox values
+                    if copy_storage_all:
+                        flags |= libvirt.VIR_MIGRATE_COPY_STORAGE_ALL
+                    if unsafe:
+                        flags |= libvirt.VIR_MIGRATE_UNSAFE
+                    if persistent:
+                        flags |= libvirt.VIR_MIGRATE_PERSIST_DEST
+                    if compress:
+                        flags |= libvirt.VIR_MIGRATE_COMPRESSED
+                    if tunnelled:
+                        flags |= libvirt.VIR_MIGRATE_TUNNELLED
+
                     vm.migrate(self.dest_conn, flags, None, None, 0)
                 else: # Offline migration
                     xml_desc = vm.XMLDesc(0)
