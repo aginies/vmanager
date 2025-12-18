@@ -15,12 +15,12 @@ from network_manager import (
 class AddEditNetworkInterfaceModal(BaseDialog[dict | None]):
     """A dialog to add or edit a VM's network interface."""
 
-    def __init__(self, is_edit: bool, networks: list[str], interface_info: dict | None = None) -> None:
+    def __init__(self, is_edit: bool, networks: list[str], network_models: list[str], interface_info: dict | None = None) -> None:
         super().__init__()
         self.is_edit = is_edit
         self.interface_info = interface_info
         self.networks = networks
-        self.models = ["virtio", "e1000", "e1000e", "rtl8139", "ne2k_pci", "pcnet"]
+        self.models = network_models if network_models else ["virtio", "e1000", "e1000e", "rtl8139", "ne2k_pci", "pcnet"]
 
     def compose(self):
         network_options = [(str(net), str(net)) for net in self.networks]
