@@ -239,3 +239,28 @@ def get_existing_subnets(conn: libvirt.virConnect) -> list[ipaddress.IPv4Network
         except libvirt.libvirtError:
             continue # Ignore networks we can't get XML for
     return subnets
+
+@log_function_call
+def get_host_network_info(conn: libvirt.virConnect):
+    """
+    Parses host capabilities XML to extract IP addresses and their subnet prefixes.
+    Returns a list of ipaddress.IPv4Network or IPv6Network objects.
+    """
+    networks = []
+    try:
+        caps_xml = conn.getCapabilities()
+        root = ET.fromstring(caps_xml)
+        for interface in root.findall(".//interface"):
+            ip_elem = interface.find("ip")
+            if ip_elem is not None:
+                address = ip_elem.get("address")
+                prefix = ip_elem.get("prefix")
+                if address and prefix:
+                    try:
+                        network = ipaddress.ip_network(f"{address}/{prefix}", strict=False)
+                        networks.append(network)
+                    except ValueError:
+                        logging.warning(f"Could not parse IP address or prefix: {address}/{prefix}")
+    except libvirt.libvirtError as e:
+        logging.error(f"Failed to get capabilities or parse XML for host: {e}")
+    return networks
