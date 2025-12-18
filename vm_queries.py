@@ -4,10 +4,9 @@ Module for retrieving information about virtual machines.
 import xml.etree.ElementTree as ET
 import libvirt
 from libvirt_utils import _get_disabled_disks_elem, VMANAGER_NS
-from utils import log_function_call
+#from utils import log_function_call
 
 
-@log_function_call
 def get_vm_info(conn):
     """
     get all VM info
@@ -46,7 +45,7 @@ def get_vm_info(conn):
 
     return vm_info_list
 
-@log_function_call
+#@log_function_call
 def get_vm_network_dns_gateway_info(domain: libvirt.virDomain):
     """
     Extracts DNS and gateway information for networks connected to the VM.
@@ -367,7 +366,6 @@ def get_vm_devices_info(xml_content: str) -> dict:
     return devices_info
 
 
-@log_function_call
 def get_vm_disks_info(conn: libvirt.virConnect, xml_content: str) -> list[dict]:
     """
     Extracts disks info from a VM's XML definition.
@@ -439,7 +437,6 @@ def get_vm_disks_info(conn: libvirt.virConnect, xml_content: str) -> list[dict]:
 
     return disks
 
-@log_function_call
 def get_all_vm_disk_usage(conn: libvirt.virConnect) -> dict[str, str]:
     """
     Scans all VMs and returns a mapping of disk path to VM name.
@@ -467,7 +464,6 @@ def get_all_vm_disk_usage(conn: libvirt.virConnect) -> dict[str, str]:
 
     return disk_to_vm_map
 
-@log_function_call
 def get_all_vm_nvram_usage(conn: libvirt.virConnect) -> dict[str, str]:
     """
     Scans all VMs and returns a mapping of NVRAM file path to VM name.
@@ -537,7 +533,6 @@ def get_vm_shared_memory_info(xml_content: str) -> bool:
         pass
     return False
 
-@log_function_call
 def get_boot_info(xml_content: str, conn: libvirt.virConnect) -> dict:
     """Extracts boot information from the VM's XML."""
     root = ET.fromstring(xml_content)
@@ -597,7 +592,6 @@ def get_boot_info(xml_content: str, conn: libvirt.virConnect) -> dict:
     return {'menu_enabled': menu_enabled, 'order': order_from_os}
 
 
-@log_function_call
 def get_vm_video_model(xml_content: str) -> str | None:
     """Extracts the video model from a VM's XML definition."""
     try:
@@ -609,7 +603,6 @@ def get_vm_video_model(xml_content: str) -> str | None:
         pass
     return None
 
-@log_function_call
 def get_vm_cpu_model(xml_content: str) -> str | None:
     """Extracts the cpu model from a VM's XML definition."""
     try:
@@ -621,7 +614,6 @@ def get_vm_cpu_model(xml_content: str) -> str | None:
         pass
     return None
 
-@log_function_call
 def get_vm_sound_model(xml_content: str) -> str | None:
     """Extracts the sound model from a VM's XML definition."""
     try:
@@ -633,7 +625,6 @@ def get_vm_sound_model(xml_content: str) -> str | None:
         pass
     return None
 
-@log_function_call
 def get_vm_tpm_info(xml_content: str) -> list[dict]:
     """
     Extracts TPM information from a VM's XML definition.
@@ -679,7 +670,6 @@ def get_vm_tpm_info(xml_content: str) -> list[dict]:
 
     return tpm_info
 
-@log_function_call
 def get_vm_rng_info(xml_content: str) -> dict:
     """
     Extracts RNG (Random Number Generator) information from a VM's XML definition.
@@ -715,7 +705,6 @@ def get_vm_rng_info(xml_content: str) -> dict:
 
     return rng_info
 
-@log_function_call
 def get_vm_watchdog_info(xml_content: str) -> dict:
     """
     Extracts Watchdog information from a VM's XML definition.
@@ -741,7 +730,6 @@ def get_vm_watchdog_info(xml_content: str) -> dict:
 
     return watchdog_info
 
-@log_function_call
 def get_vm_input_info(xml_content: str) -> list[dict]:
     """
     Extracts Input (keyboard and mouse) information from a VM's XML definition.
