@@ -42,14 +42,27 @@ def clone_vm(original_vm, new_vm_name):
         if source_elem is None:
             continue
 
-        original_disk_path = source_elem.get('file')
-        if not original_disk_path:
-            continue
+        original_vol = None
+        original_pool = None
+        disk_type = disk.get('type')
 
-        original_vol, original_pool = _find_vol_by_path(conn, original_disk_path)
-        # If the disk is not a managed libvirt storage volume, skip it as per user's instruction.
-        if not original_vol:
-            logging.info(f"Skipping cloning of non-libvirt managed disk: {original_disk_path}")
+        if disk_type == 'file':
+            original_disk_path = source_elem.get('file')
+            if original_disk_path:
+                original_vol, original_pool = _find_vol_by_path(conn, original_disk_path)
+        elif disk_type == 'volume':
+            pool_name = source_elem.get('pool')
+            vol_name = source_elem.get('volume')
+            if pool_name and vol_name:
+                try:
+                    original_pool = conn.storagePoolLookupByName(pool_name)
+                    original_vol = original_pool.storageVolLookupByName(vol_name)
+                except libvirt.libvirtError as e:
+                    logging.warning(f"Could not find volume '{vol_name}' in pool '{pool_name}'. Skipping disk clone. Error: {e}")
+                    continue
+        
+        if not original_vol or not original_pool:
+            logging.info(f"Skipping cloning for non-volume disk source: {ET.tostring(source_elem, encoding='unicode').strip()}")
             continue
 
         original_vol_xml = original_vol.XMLDesc(0)
@@ -70,15 +83,12 @@ def clone_vm(original_vm, new_vm_name):
 
         new_vol_xml = ET.tostring(vol_root, encoding='unicode')
 
-        # Clone the volume. Use REFLINK for efficiency (thin clone).
+        # Clone the volume. A flag of 0 indicates a full (deep) clone.
         try:
-            new_vol = original_pool.createXMLFrom(new_vol_xml, original_vol, libvirt.VIR_STORAGE_VOL_CREATE_REFLINK)
+            new_vol = original_pool.createXMLFrom(new_vol_xml, original_vol, 0)
         except libvirt.libvirtError as e:
-            # If reflinking is not supported by the storage backend, fall back to a full clone.
-            if 'unsupported flags' in str(e).lower():
-                new_vol = original_pool.createXMLFrom(new_vol_xml, original_vol, 0)
-            else:
-                raise
+            # Re-raise the error with a more informative message.
+            raise libvirt.libvirtError(f"Failed to perform a full clone of volume '{original_vol.name()}': {e}")
 
         disk.set('type', 'volume')
         if 'file' in source_elem.attrib:
@@ -302,7 +312,12 @@ def add_disk(domain, disk_path, device_type='disk', create=False, size_gb=10, di
 
 def remove_disk(domain, disk_dev_path):
     """
-    Removes a disk from a VM based on its device path (e.g. /path/to/disk.img) or device name (vda)
+    Removes a disk from a VM based on its device path (e.g., /path/to/disk.img),
+    device name (e.g., vda), or volume name. If the backing storage volume is missing,
+    it will still detach the disk from the VM's XML configuration.
+
+    Returns:
+        A warning message if the backing volume was not found, otherwise None.
     """
     if not domain:
         raise ValueError("Invalid domain object.")
@@ -310,61 +325,64 @@ def remove_disk(domain, disk_dev_path):
     xml_desc = domain.XMLDesc(0)
     root = ET.fromstring(xml_desc)
     logging.debug(f"remove_disk: Attempting to remove disk: {disk_dev_path}")
-    logging.debug(f"remove_disk: VM XML description:\n{xml_desc}")
 
-    disk_to_remove_xml = None
+    disk_to_detach_elem = None
+    warning_message = None
 
-    # Try two separate findall calls and combine
-    disks_type_disk = root.findall(".//disk[@device='disk']")
-    disks_type_cdrom = root.findall(".//disk[@device='cdrom']")
-    all_matching_disks = disks_type_disk + disks_type_cdrom
+    all_disks = root.findall(".//disk[@device='disk']") + root.findall(".//disk[@device='cdrom']")
 
-    for disk in all_matching_disks:
+    for disk in all_disks:
         source = disk.find("source")
         target = disk.find("target")
 
-        current_disk_path = ""
-        current_target_dev = ""
+        # 1. Match by target device name (e.g., 'vda')
+        if target is not None and target.get("dev") == disk_dev_path:
+            disk_to_detach_elem = disk
+            break
 
         if source is not None:
-            if "file" in source.attrib:
-                current_disk_path = source.get("file")
+            # 2. Match by direct file path
+            if "file" in source.attrib and source.get("file") == disk_dev_path:
+                disk_to_detach_elem = disk
+                break
+
+            # 3. Match by pool/volume
             elif "pool" in source.attrib and "volume" in source.attrib:
                 pool_name = source.get("pool")
                 vol_name = source.get("volume")
                 try:
                     pool = domain.connect().storagePoolLookupByName(pool_name)
                     vol = pool.storageVolLookupByName(vol_name)
-                    current_disk_path = vol.path()
-                except libvirt.libvirtError as e:
-                    current_disk_path = f"ERROR: Could not resolve volume path for {vol_name} in {pool_name}: {e}"
+                    resolved_path = vol.path()
+                    # Check against resolved path OR volume name
+                    if resolved_path == disk_dev_path or vol_name == disk_dev_path:
+                        disk_to_detach_elem = disk
+                        break
+                except libvirt.libvirtError:
+                    # Force removal: If we can't find the volume, but the provided identifier
+                    # matches the volume name, assume it's the right one.
+                    if os.path.basename(disk_dev_path) == vol_name or disk_dev_path == vol_name:
+                        disk_to_detach_elem = disk
+                        warning_message = (
+                            f"Removed disk entry '{vol_name}' from the VM configuration. "
+                            f"Note: The backing volume was not found in pool '{pool_name}' and was not deleted."
+                        )
+                        break
 
-        if target is not None:
-            current_target_dev = target.get("dev")
-
-        match = False
-        logging.debug(f"remove_disk: Comparing disk_dev_path={repr(disk_dev_path)} with current_disk_path={repr(current_disk_path)} and current_target_dev={repr(current_target_dev)}")
-        if current_disk_path == disk_dev_path:
-            match = True
-        elif current_target_dev == disk_dev_path: # This is for matching by "vda", "vdb" etc.
-            match = True
-        else:
-            logging.debug("remove_disk: No exact match found for this disk element.")
-
-        if match:
-            disk_to_remove_xml = ET.tostring(disk, encoding="unicode")
-            break
-
-    if not disk_to_remove_xml:
+    if not disk_to_detach_elem:
         msg = f"Disk with device path or name '[red]{disk_dev_path}[/red]' not found."
         logging.error(msg)
         raise Exception(msg)
+
+    disk_to_detach_xml = ET.tostring(disk_to_detach_elem, encoding="unicode")
 
     flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
     if domain.isActive():
         flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
 
-    domain.detachDeviceFlags(disk_to_remove_xml, flags)
+    domain.detachDeviceFlags(disk_to_detach_xml, flags)
+
+    return warning_message
 
 
 @log_function_call
