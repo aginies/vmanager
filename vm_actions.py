@@ -21,7 +21,7 @@ def clone_vm(original_vm, new_vm_name, log_callback=None):
     original_xml = original_vm.XMLDesc(0)
     root = ET.fromstring(original_xml)
 
-    msg_start = "Setting up new VM, cleaning some paramaters..."
+    msg_start = f"Setting up new VM {new_vm_name}, cleaning some paramaters..."
     logging.info(msg_start)
     log_callback(msg_start)
     name_elem = root.find('name')
