@@ -1314,7 +1314,7 @@ def force_off_vm(domain: libvirt.virDomain):
 
     domain.destroy()
 
-def delete_vm(domain: libvirt.virDomain, delete_storage: bool, delete_nvram: bool = False):
+def delete_vm(domain: libvirt.virDomain, delete_storage: bool, delete_nvram: bool = False, log_callback=None):
     """
     Deletes a VM and optionally its associated storage and NVRAM.
     If the VM has snapshots, their metadata will be removed as well.
@@ -1322,59 +1322,96 @@ def delete_vm(domain: libvirt.virDomain, delete_storage: bool, delete_nvram: boo
     if not domain:
         raise ValueError("Invalid domain object.")
 
+    def log(message):
+        if log_callback:
+            log_callback(message)
+        # Also log to file for debugging.
+        if "[red]ERROR" in message:
+            logging.error(message)
+        else:
+            logging.info(message)
+
+    vm_name = "unknown"
+    try:
+        vm_name = domain.name()
+    except libvirt.libvirtError:
+        pass # Domain might already be gone
+
+    log(f"Starting deletion process for VM '{vm_name}'...")
+
     conn = domain.connect()
 
     disks_to_delete = []
     xml_desc = None
     if delete_storage or delete_nvram:
-        xml_desc = domain.XMLDesc(0)
-        if delete_storage:
-            disks_to_delete = get_vm_disks_info(conn, xml_desc)
+        try:
+            xml_desc = domain.XMLDesc(0)
+            if delete_storage:
+                disks_to_delete = get_vm_disks_info(conn, xml_desc)
+        except libvirt.libvirtError as e:
+            log(f"[red]ERROR:[/] Could not get XML description for '{vm_name}': {e}")
+            raise
 
     if domain.isActive():
-        domain.destroy()
+        log(f"VM '{vm_name}' is active. Forcefully stopping it...")
+        try:
+            domain.destroy()
+            log(f"VM '{vm_name}' stopped.")
+        except libvirt.libvirtError as e:
+            log(f"[red]ERROR:[/] Failed to stop VM '{vm_name}': {e}")
+            raise
 
     # Undefine the VM
+    log(f"Undefining VM '{vm_name}'...")
     undefine_flags = libvirt.VIR_DOMAIN_UNDEFINE_SNAPSHOTS_METADATA
     if delete_nvram and xml_desc:
         root = ET.fromstring(xml_desc)
         os_elem = root.find('os')
         if os_elem is not None and os_elem.find('nvram') is not None:
+            log("...including NVRAM.")
             undefine_flags |= libvirt.VIR_DOMAIN_UNDEFINE_NVRAM
 
-    domain.undefineFlags(undefine_flags)
+    try:
+        domain.undefineFlags(undefine_flags)
+        log(f"VM '{vm_name}' undefined.")
+    except libvirt.libvirtError as e:
+        # It might already be gone, which is fine.
+        if e.get_error_code() == libvirt.VIR_ERR_NO_DOMAIN:
+            log(f"VM '{vm_name}' was already undefined.")
+        else:
+            log(f"[red]ERROR:[/] Failed to undefine VM '{vm_name}': {e}")
+            raise
 
     if delete_storage:
+        if not disks_to_delete:
+            log("No storage volumes found to delete.")
+        else:
+            log(f"Deleting {len(disks_to_delete)} storage volume(s)...")
+
         for disk_info in disks_to_delete:
             disk_path = disk_info.get('path')
             if not disk_path or not disk_info.get('status') == 'enabled':
                 continue
 
+            log(f"Attempting to delete volume: {disk_path}")
             try:
-                # Use the utility to find the volume object from its path.
-                # This is the robust way to handle any libvirt-managed volume.
                 vol, pool = _find_vol_by_path(conn, disk_path)
 
                 if vol:
                     vol.delete(0)
-                    logging.info(f"Successfully deleted storage volume: {disk_path} from pool {pool.name()}")
+                    log(f"  - Deleted: {disk_path} from pool {pool.name()}")
                 else:
-                    # If it's not a managed volume, we should not attempt to delete it.
-                    # This prevents PermissionError on files in /var/lib/libvirt/images
-                    # that should be managed by libvirt itself.
-                    logging.warning(f"Disk '{disk_path}' is not a managed libvirt volume. Skipping deletion.")
+                    log(f"  - [yellow]Skipped:[/] Disk '{disk_path}' is not a managed libvirt volume.")
 
             except libvirt.libvirtError as e:
-                # Handle cases where volume is already gone, which is not an error in this context.
                 if e.get_error_code() == libvirt.VIR_ERR_NO_STORAGE_VOL:
-                    logging.warning(f"Storage volume for path '{disk_path}' not found, skipping deletion.")
+                    log(f"  - [yellow]Skipped:[/] Volume for path '{disk_path}' not found.")
                 else:
-                    logging.error(f"Error deleting libvirt storage volume for path {disk_path}: {e}")
-                    raise # Re-raise other libvirt errors
+                    log(f"  - [red]ERROR:[/] Error deleting volume for path {disk_path}: {e}")
             except Exception as e:
-                # Catch other potential errors, like file system errors if we were to use os.remove
-                logging.error(f"An unexpected error occurred while trying to delete storage {disk_path}: {e}")
-                raise
+                log(f"  - [red]ERROR:[/] Unexpected error deleting storage {disk_path}: {e}")
+
+    log(f"Finished deletion process for VM '{vm_name}'.")
 
 
 @log_function_call
