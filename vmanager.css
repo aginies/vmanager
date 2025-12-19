@@ -210,6 +210,16 @@ Select {
     border: none;
     margin: 0 0;
 }
+#migration-dialog {
+    height: 32;
+    border: round $primary;
+}
+#migration-dialog Checkbox {
+    padding: 0 0;
+    margin-bottom: 1;
+    border: none;
+}
+
 .disk-info {
     margin: 0 2;
     padding: 0 0;
@@ -630,5 +640,5 @@ NetworkListItem {
     margin: 1 0;
 }
 #results-log {
-    height: 9;
+    height: 12;
 }
