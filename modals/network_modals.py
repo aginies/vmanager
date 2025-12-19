@@ -32,6 +32,9 @@ class AddEditNetworkInterfaceModal(BaseDialog[dict | None]):
 
         if self.is_edit and self.interface_info:
             network_value = self.interface_info.get("network")
+            if network_value not in self.networks:
+                self.app.show_error_message(f"Network '{network_value}' not found. Please select an available network.")
+                network_value = self.networks[0] if self.networks else None # Set to first available network if any, otherwise None
             model_value = self.interface_info.get("model", "virtio")
             mac_value = self.interface_info.get("mac", "")
         elif not self.is_edit and self.networks:
