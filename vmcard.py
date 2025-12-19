@@ -202,6 +202,15 @@ class VMCard(Static):
         if self.timer:
             self.timer.stop()
 
+    def toggle_updates(self, enable: bool) -> None:
+        """Enable or disable the periodic statistics update."""
+        if self.timer:
+            if enable:
+                self.timer.resume()
+                self.update_stats() # Trigger an immediate update
+            else:
+                self.timer.pause()
+
     def watch_is_selected(self, old_value: bool, new_value: bool) -> None:
         """Called when is_selected changes to update the checkbox."""
         try:
@@ -217,9 +226,6 @@ class VMCard(Static):
 
     def update_stats(self) -> None:
         """Update CPU and memory statistics."""
-        if self.app.bulk_operation_in_progress:
-            return
-
         self._update_webc_status()
 
         if self.vm:
@@ -775,7 +781,7 @@ class VMCard(Static):
                     else:
                         new_name = base_name
                     proposed_names.append(new_name)
-                    log_callback(f"INFO: Proposed Name(s): {proposed_names}")
+                log_callback(f"INFO: Proposed Name(s): {proposed_names}")
 
                 conflicting_names = [name for name in proposed_names if name in existing_vm_names]
 
