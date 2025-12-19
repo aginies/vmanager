@@ -227,6 +227,8 @@ class MigrationModal(ModalScreen):
         self.app.call_from_thread(lambda: setattr(progress_bar, "total", len(self.vms_to_migrate)))
         self.app.call_from_thread(lambda: setattr(progress_bar, "progress", 0))
         self.app.call_from_thread(lambda: setattr(progress_bar.styles, "display", "block"))
+        # Hide the migration summary grid when migration starts
+        self.query_one("#migration-summary-grid").styles.display = "none"
 
         copy_storage_all = self.query_one("#copy-storage-all", Checkbox).value
         unsafe = self.query_one("#unsafe", Checkbox).value
