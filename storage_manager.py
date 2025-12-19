@@ -4,6 +4,8 @@ Module for managing libvirt storage pools and volumes.
 from typing import List, Dict, Any
 import logging
 import libvirt
+import os
+import xml.etree.ElementTree as ET
 from vm_queries import get_vm_disks_info
 
 def list_storage_pools(conn: libvirt.virConnect) -> List[Dict[str, Any]]:
@@ -173,6 +175,176 @@ def delete_volume(vol: libvirt.virStorageVol):
         logging.error(msg)
         raise Exception(msg) from e
 
+def find_vms_using_volume(conn: libvirt.virConnect, vol_path: str) -> List[libvirt.virDomain]:
+    """Finds VMs that are using a specific storage volume path."""
+    vms_using_volume = []
+    if not conn:
+        return vms_using_volume
+
+    try:
+        domains = conn.listAllDomains(0)
+        for domain in domains:
+            # Quick check to avoid parsing XML for every VM
+            xml_desc = domain.XMLDesc(0)
+            if vol_path not in xml_desc:
+                continue
+
+            root = ET.fromstring(xml_desc)
+            for disk in root.findall('.//disk'):
+                source_element = disk.find('source')
+                if source_element is not None:
+                    if source_element.get('file') == vol_path or source_element.get('dev') == vol_path:
+                        vms_using_volume.append(domain)
+                        break  # Found it in this VM, move to the next
+    except (libvirt.libvirtError, ET.ParseError) as e:
+        logging.error(f"Error finding VMs using volume {vol_path}: {e}")
+
+    return vms_using_volume
+
+
+def move_volume(conn: libvirt.virConnect, source_pool_name: str, dest_pool_name: str, volume_name: str, new_volume_name: str = None, progress_callback=None, log_callback=None) -> List[str]:
+    """
+    Moves a storage volume by downloading it to a temporary file and then uploading it to a new volume.
+    This is a compatible and safe method for moving volumes across different pools.
+    """
+    def log_and_callback(message):
+        logging.info(message)
+        if log_callback:
+            log_callback(message)
+
+    if not new_volume_name:
+        new_volume_name = volume_name
+
+    source_pool = conn.storagePoolLookupByName(source_pool_name)
+    dest_pool = conn.storagePoolLookupByName(dest_pool_name)
+    source_vol = source_pool.storageVolLookupByName(volume_name)
+
+    source_info = source_vol.info()
+    source_capacity = source_info[1]
+    source_format = "qcow2"  # Default
+    try:
+        source_format = ET.fromstring(source_vol.XMLDesc(0)).findtext("target/format[@type]", "qcow2")
+    except (ET.ParseError, libvirt.libvirtError):
+        pass  # Use default if XML parsing fails
+
+    new_vol_xml = f"""
+    <volume>
+        <name>{new_volume_name}</name>
+        <capacity>{source_capacity}</capacity>
+        <target>
+            <format type='{source_format}'/>
+        </target>
+    </volume>
+    """
+    new_vol = dest_pool.createXML(new_vol_xml, 0)
+    updated_vm_names = []
+
+    # Use a temporary file in the destination pool's directory if possible, else /tmp
+    temp_dir = "/tmp"
+    try:
+        pool_xml = ET.fromstring(dest_pool.XMLDesc(0))
+        path_elem = pool_xml.find("target/path")
+        if path_elem is not None and os.path.isdir(path_elem.text):
+            temp_dir = path_elem.text
+    except (ET.ParseError, libvirt.libvirtError):
+        pass
+    
+    temp_path = os.path.join(temp_dir, f"{new_volume_name}.tmp")
+    log_and_callback(f"Using temporary file for transfer: {temp_path}")
+
+    try:
+        # 1. Download source volume to the temporary file
+        log_and_callback(f"Downloading '{volume_name}' to {temp_path}...")
+        downloaded_bytes = 0
+        with open(temp_path, "wb") as f:
+            stream = conn.newStream(0)
+            def stream_writer(stream, data, opaque_file):
+                nonlocal downloaded_bytes
+                opaque_file.write(data)
+                written = len(data)
+                downloaded_bytes += written
+                if progress_callback and source_capacity > 0:
+                    # Download is first 50%
+                    progress = (downloaded_bytes / source_capacity) * 50
+                    progress_callback(progress)
+                return 0
+            source_vol.download(stream, 0, source_capacity)
+            stream.recvAll(stream_writer, f)
+        log_and_callback("Download to temporary file complete.")
+        if progress_callback:
+            progress_callback(50)
+
+        # 2. Upload from the temporary file to the new volume
+        log_and_callback(f"Uploading from {temp_path} to '{new_volume_name}'...")
+        uploaded_bytes = 0
+        with open(temp_path, "rb") as f:
+            stream = conn.newStream(0)
+            def stream_reader(stream, nbytes, opaque_file):
+                nonlocal uploaded_bytes
+                chunk = opaque_file.read(nbytes)
+                uploaded_bytes += len(chunk)
+                if progress_callback and source_capacity > 0:
+                    # Upload is second 50%
+                    progress = 50 + (uploaded_bytes / source_capacity) * 50
+                    progress_callback(progress)
+                return chunk
+            new_vol.upload(stream, 0, source_capacity)
+            stream.sendAll(stream_reader, f)
+        log_and_callback("Upload to new volume complete.")
+        if progress_callback:
+            progress_callback(100)
+
+        # Update any VM configurations that use this volume
+        old_path = source_vol.path()
+        new_path = new_vol.path()
+
+        vms_to_update = find_vms_using_volume(conn, old_path)
+        if vms_to_update:
+            log_and_callback(f"Found {len(vms_to_update)} VM(s) using the volume: {[vm.name() for vm in vms_to_update]}")
+            for vm in vms_to_update:
+                log_and_callback(f"Updating VM '{vm.name()}' configuration...")
+                xml_desc = vm.XMLDesc(0)
+                root = ET.fromstring(xml_desc)
+                
+                updated = False
+                for disk in root.findall('.//disk'):
+                    source_element = disk.find('source')
+                    if source_element is not None:
+                        if source_element.get('file') == old_path:
+                            source_element.set('file', new_path)
+                            updated = True
+                        if source_element.get('dev') == old_path:
+                            source_element.set('dev', new_path)
+                            updated = True
+                
+                if updated:
+                    new_xml_desc = ET.tostring(root, encoding='unicode')
+                    conn.defineXML(new_xml_desc)
+                    updated_vm_names.append(vm.name())
+            log_and_callback(f"Updated configurations for VMs: {', '.join(updated_vm_names)}")
+
+        # 3. Delete the original volume after successful copy
+        log_and_callback(f"Deleting original volume '{volume_name}'...")
+        source_vol.delete(0)
+        log_and_callback("Original volume deleted.")
+
+    except Exception as e:
+        # If anything fails, try to clean up the newly created (but possibly incomplete) volume
+        logging.error(f"An error occurred during volume move: {e}. Cleaning up destination volume.")
+        try:
+            new_vol.delete(0)
+        except libvirt.libvirtError as del_e:
+            logging.error(f"Failed to clean up destination volume '{new_volume_name}': {del_e}")
+        # Re-raise the original exception
+        raise
+    finally:
+        # 4. Clean up the temporary file in all cases
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+            log_and_callback(f"Removed temporary file: {temp_path}")
+    
+    return updated_vm_names
+
 def delete_storage_pool(pool: libvirt.virStoragePool):
     """
     Deletes a storage pool.
@@ -248,3 +420,54 @@ def list_unused_volumes(conn: libvirt.virConnect, pool_name: str = None) -> List
             unused_volumes.append(vol)
 
     return unused_volumes
+
+def find_shared_storage_pools(source_conn: libvirt.virConnect, dest_conn: libvirt.virConnect) -> List[str]:
+    """
+    Finds storage pools that are present on both source and destination servers
+    with the same name and target path.
+
+    This is useful for identifying shared storage for live migration.
+    """
+    if not source_conn or not dest_conn:
+        return []
+
+    source_pools_info = list_storage_pools(source_conn)
+    dest_pools_info = list_storage_pools(dest_conn)
+
+    def get_pool_path(pool: libvirt.virStoragePool) -> str | None:
+        """Parse pool XML to get the target path."""
+        try:
+            xml_desc = pool.XMLDesc(0)
+            root = ET.fromstring(xml_desc)
+            path_element = root.find("target/path")
+            if path_element is not None:
+                return path_element.text
+        except (libvirt.libvirtError, ET.ParseError) as e:
+            logging.warning(f"Could not parse XML for pool {pool.name()}: {e}")
+            return None
+        return None
+
+    source_pools = {}
+    for pool_info in source_pools_info:
+        # We only care for active pools
+        if pool_info['status'] == 'active':
+            pool = pool_info['pool']
+            path = get_pool_path(pool)
+            if path:
+                source_pools[pool_info['name']] = path
+
+    dest_pools = {}
+    for pool_info in dest_pools_info:
+        # We only care for active pools
+        if pool_info['status'] == 'active':
+            pool = pool_info['pool']
+            path = get_pool_path(pool)
+            if path:
+                dest_pools[pool_info['name']] = path
+
+    shared_pool_names = []
+    for name, path in source_pools.items():
+        if dest_pools.get(name) == path:
+            shared_pool_names.append(name)
+
+    return shared_pool_names
