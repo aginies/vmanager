@@ -175,7 +175,7 @@ class VMCard(Static):
                             yield Button("Delete", id="delete", variant="success", classes="delete-button")
                             yield Static(classes="button-separator")
                             yield Button("Clone", id="clone", classes="clone-button")
-                            yield Button("W! Migration!", id="migration", variant="primary", classes="migration-button")
+                            yield Button("! Migration !", id="migration", variant="primary", classes="migration-button")
                         with Vertical():
                             yield Button("View XML", id="xml")
                             yield Static(classes="button-separator")
@@ -919,6 +919,15 @@ class VMCard(Static):
                 all_connections[uri] = conn
 
         source_uri = selected_vms[0].connect().getURI()
+
+        # Migration from localhost is not supported as it requires a full remote URI.
+        if source_uri == "qemu:///system":
+            self.app.show_error_message(
+                "Migration from localhost (qemu:///system) is not supported.\n"
+                "A full remote URI (e.g., qemu+ssh://user@host/system) is required."
+            )
+            return
+
         dest_uris = [uri for uri in active_uris if uri != source_uri]
         if not dest_uris:
             self.app.show_error_message("No destination servers available (all active servers are either the source, or there are no active servers).")
