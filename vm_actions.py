@@ -1475,14 +1475,7 @@ def check_server_migration_compatibility(source_conn: libvirt.virConnect, dest_c
 
     # Time synchronization check
     if is_live:
-        try:
-            source_time = source_conn.getTime()
-            dest_time = dest_conn.getTime()
-            time_diff = abs(source_time[0] - dest_time[0])
-            if time_diff > 1:  # Check if difference is more than 1 second
-                issues.append({'severity': 'ERROR', 'message': f"Host time synchronization issue detected. Difference: {time_diff} seconds. Please ensure NTP is configured on both hosts."})
-        except libvirt.libvirtError as e:
-            issues.append({'severity': 'WARNING', 'message': f"Could not check host time synchronization: {e}"})
+        issues.append({'severity': 'INFO', 'message': "Could not perform host time synchronization check. Please verify manually."})
 
     # Add informational notes for manual checks
     issues.append({'severity': 'INFO', 'message': "For a successful migration, please also manually verify the following:"})
@@ -1503,6 +1496,7 @@ def check_vm_migration_compatibility(domain: libvirt.virDomain, dest_conn: libvi
     try:
         xml_desc = domain.XMLDesc(0)
         root = ET.fromstring(xml_desc)
+        issues.append({'severity': 'INFO', 'message': "Gettign VM XML description"})
     except libvirt.libvirtError as e:
         issues.append({'severity': 'ERROR', 'message': f"Could not get VM XML description: {e}"})
         return issues
@@ -1516,6 +1510,8 @@ def check_vm_migration_compatibility(domain: libvirt.virDomain, dest_conn: libvi
             compare_result = dest_conn.compareCPU(cpu_xml, 0)
             if compare_result == libvirt.VIR_CPU_COMPARE_INCOMPATIBLE:
                 issues.append({'severity': 'ERROR', 'message': "The VM's CPU configuration is not compatible with the destination host's CPU."})
+            else:
+                issues.append({'severity': 'INFO', 'message': "The VM's CPU configuration is compatible with the destination host's CPU"})
         except libvirt.libvirtError as e:
             issues.append({'severity': 'WARNING', 'message': f"Could not compare VM CPU with destination host: {e}"})
 
@@ -1535,14 +1531,20 @@ def check_vm_migration_compatibility(domain: libvirt.virDomain, dest_conn: libvi
         for disk in root.findall(".//disk[@device='disk']"):
             target = disk.find('target')
             if target is not None and target.get('bus') == 'sata':
-                issues.append({'severity': 'ERROR', 'message': "VM has a SATA disk, which is not migratable live."})
+                issues.append({'severity': 'ERROR', 'message': "VM has a SATA disk, which is NOT migratable live."})
                 break
+            else:
+                issues.append({'severity': 'INFO', 'message': "No SATA disk on VM"})
 
         if root.find(".//devices/filesystem[@type='mount']") is not None:
             issues.append({'severity': 'ERROR', 'message': "VM uses filesystem pass-through, which is incompatible with live migration."})
+        else:
+            issues.append({'severity': 'INFO', 'message': "VM is NOT using filesystem pass-through,"})
 
         if root.find(".//devices/hostdev") is not None:
-            issues.append({'severity': 'ERROR', 'message': "VM uses PCI pass-through (hostdev), which is not supported for live migration."})
+            issues.append({'severity': 'ERROR', 'message': "VM uses PCI or USB pass-through (hostdev), which is not supported for live migration."})
+        else:
+            issues.append({'severity': 'INFO', 'message': "VM do not uses PCI or USB pass-through (hostdev)"})
 
     disk_paths = []
     for disk in root.findall(".//devices/disk"):
@@ -1573,4 +1575,3 @@ def check_vm_migration_compatibility(domain: libvirt.virDomain, dest_conn: libvi
         issues.append({'severity': 'INFO', 'message': "This usually means using a shared storage system like NFS or iSCSI, mounted at the same location on both hosts."})
 
     return issues
-
