@@ -275,6 +275,11 @@ class VMManagerTUI(App):
         logging.info(message)
         self.notify(message, timeout=10, title="Info")
 
+    def watch_bulk_operation_in_progress(self, in_progress: bool) -> None:
+        """Pause or resume VMCard updates when a bulk operation starts or stops."""
+        for card in self.query(VMCard):
+            card.toggle_updates(not in_progress)
+
     @on(Button.Pressed, "#select_server_button")
     def action_select_server(self) -> None:
         """Select servers to connect to."""
@@ -542,7 +547,7 @@ class VMManagerTUI(App):
         # Clear selection immediately and set bulk operation flag
         self.selected_vm_uuids.clear()
         self.bulk_operation_in_progress = True
-        self.refresh_vm_list()  # Refresh to update selection borders
+        #self.refresh_vm_list()  # Refresh to update selection borders
 
         self.push_screen(ProgressModal(title=f"Bulk {action_type.capitalize()}: Pending..."))
 
@@ -557,14 +562,27 @@ class VMManagerTUI(App):
         """Worker function to perform the selected bulk action on VMs."""
         total_vms = len(vm_uuids)
 
-        def setup_progress_bar(total: int):
+        def setup_progress(total: int):
+            """Sets up the progress modal."""
             try:
-                bar = self.query_one(ProgressBar)
+                modal = self.query_one(ProgressModal)
+                bar = modal.query_one(ProgressBar)
                 bar.total = total
                 bar.progress = 0
             except Exception as e:
                 logging.error(f"Failed to setup progress bar: {e}")
-        self.call_from_thread(setup_progress_bar, total_vms)
+
+        def add_log_message(message: str) -> None:
+            """Adds a message to the log in the progress modal."""
+            try:
+                modal = self.query_one(ProgressModal)
+                modal.add_log(message)
+            except Exception as e:
+                logging.error(f"Failed to add log to ProgressModal: {e}")
+
+        self.call_from_thread(setup_progress, total_vms)
+        self.call_from_thread(add_log_message, f"Starting bulk '{action_type}' on {total_vms} VMs...")
+
         try:
             successful_vms = []
             failed_vms = []
@@ -585,9 +603,10 @@ class VMManagerTUI(App):
 
                 def update_progress_ui(name: str, current: int, total: int):
                     try:
-                        bar = self.query_one(ProgressBar)
+                        modal = self.query_one(ProgressModal)
+                        bar = modal.query_one(ProgressBar)
                         bar.advance(1)
-                        title = self.query_one("#progress-title", Label)
+                        title = modal.query_one("#progress-title", Label)
                         title.update(f"Action '{action_type}' on '{name}' ({current}/{total})")
                     except Exception as e:
                         logging.error(f"Failed to update progress UI: {e}")
@@ -595,49 +614,81 @@ class VMManagerTUI(App):
                 self.call_from_thread(update_progress_ui, vm_name, i + 1, total_vms)
 
                 if not domain:
-                    self.call_from_thread(self.show_error_message, f"VM with UUID {vm_uuid} not found on any active server.")
+                    msg = f"VM with UUID {vm_uuid} not found on any active server."
+                    self.call_from_thread(add_log_message, f"[red]ERROR:[/] {msg}")
                     failed_vms.append(vm_uuid)
                     continue
 
                 try:
+                    msg = None # Default message is None
                     if action_type == "start":
                         start_vm(domain)
-                        self.call_from_thread(self.show_success_message, f"VM '{vm_name}' started.")
+                        msg = f"VM '{vm_name}' started."
                     elif action_type == "stop":
                         stop_vm(domain)
-                        self.call_from_thread(self.show_success_message, f"Sent shutdown signal to VM '{vm_name}'.")
+                        msg = f"Sent shutdown signal to VM '{vm_name}'."
                     elif action_type == "force_off":
                         force_off_vm(domain)
-                        self.call_from_thread(self.show_success_message, f"VM '{vm_name}' forcefully powered off.")
+                        msg = f"VM '{vm_name}' forcefully powered off."
                     elif action_type == "pause":
                         pause_vm(domain)
-                        self.call_from_thread(self.show_success_message, f"VM '{vm_name}' paused.")
+                        msg = f"VM '{vm_name}' paused."
                     elif action_type == "delete":
-                        delete_vm(domain, delete_storage=delete_storage_flag)
-                        storage_msg = "and its storage " if delete_storage_flag else ""
-                        self.call_from_thread(self.show_success_message, f"VM '{vm_name}' {storage_msg}deleted.")
+                        # delete_vm now handles its own logging via the callback
+                        log_callback = lambda m: self.call_from_thread(add_log_message, m)
+                        delete_vm(domain, delete_storage=delete_storage_flag, log_callback=log_callback)
                     else:
-                        self.call_from_thread(self.show_error_message, f"Unknown bulk action type: {action_type}")
+                        msg = f"Unknown bulk action type: {action_type}"
+                        self.call_from_thread(add_log_message, f"[red]ERROR:[/] {msg}")
                         failed_vms.append(vm_name)
                         continue
+
+                    # Log the generic message if one was set
+                    if msg:
+                        self.call_from_thread(add_log_message, msg)
                     successful_vms.append(vm_name)
+
                 except libvirt.libvirtError as e:
-                    self.call_from_thread(self.show_error_message, f"Error performing '{action_type}' on VM '{vm_name}': {e}")
+                    msg = f"Error performing '{action_type}' on VM '{vm_name}': {e}"
+                    self.call_from_thread(add_log_message, f"[red]ERROR:[/] {msg}")
                     failed_vms.append(vm_name)
                 except Exception as e:
-                    self.call_from_thread(self.show_error_message, f"Unexpected error on '{action_type}' for VM '{vm_name}': {e}")
+                    msg = f"Unexpected error on '{action_type}' for VM '{vm_name}': {e}"
+                    self.call_from_thread(add_log_message, f"[red]ERROR:[/] {msg}")
                     failed_vms.append(vm_name)
 
+            summary = f"\n[bold]Bulk action '{action_type}' complete.[/bold]\n"
+            summary += f"  - [green]Successful:[/] {len(successful_vms)}\n"
+            summary += f"  - [red]Failed:[/]     {len(failed_vms)}"
+            self.call_from_thread(add_log_message, summary)
+
             if successful_vms:
-                self.call_from_thread(logging.info, f"Bulk action '{action_type}' successful for: {', '.join(successful_vms)}")
+                logging.info(f"Bulk action '{action_type}' successful for: {', '.join(successful_vms)}")
             if failed_vms:
-                self.call_from_thread(logging.error, f"Bulk action '{action_type}' failed for: {', '.join(failed_vms)}")
+                logging.error(f"Bulk action '{action_type}' failed for: {', '.join(failed_vms)}")
         finally:
-            def unset_flag_and_refresh():
-                self.pop_screen()
-                self.bulk_operation_in_progress = False
-                self.refresh_vm_list()
-            self.call_from_thread(unset_flag_and_refresh)
+            def update_title_and_button():
+                try:
+                    modal = self.query_one(ProgressModal)
+                    title = modal.query_one("#progress-title", Label)
+                    title.update("Bulk Action Finished")
+                    # Add a close button to the modal
+                    button = Button("Close", variant="primary", id="close-progress-modal")
+                    modal.mount(button)
+                    @modal.on(Button.Pressed, "#close-progress-modal")
+                    def close_modal():
+                        self.pop_screen()
+                        self.refresh_vm_list()
+                        self.bulk_operation_in_progress = False
+
+                except Exception as e:
+                    logging.error(f"Error finalizing progress modal: {e}")
+                    # Fallback to original behavior if something goes wrong
+                    self.pop_screen()
+                    self.refresh_vm_list()
+                    self.bulk_operation_in_progress = False
+
+            self.call_from_thread(update_title_and_button)
 
     def change_connection(self, uri: str) -> None:
         """Change the active connection to a single server and refresh."""
