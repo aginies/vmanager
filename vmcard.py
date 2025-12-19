@@ -905,12 +905,20 @@ class VMCard(Static):
             conn = self.app.connection_manager.get_connection(uri)
             if conn: # Ensure connection is valid
                 all_connections[uri] = conn
+
+        source_uri = selected_vms[0].connect().getURI()
+        dest_uris = [uri for uri in active_uris if uri != source_uri]
+        if not dest_uris:
+            self.app.show_error_message("No destination servers available (all active servers are either the source, or there are no active servers).")
+            return
+
         def on_confirm(confirmed: bool) -> None:
             if not confirmed:
                 return
             self.app.push_screen(MigrationModal(vms=selected_vms, is_live=is_live, connections=all_connections))
 
-        self.app.push_screen(ConfirmationDialog("Experimental Features! not yet fully tested!"), on_confirm)
+        #self.app.push_screen(ConfirmationDialog("Experimental Features! not yet fully tested!"), on_confirm)
+        self.app.push_screen(MigrationModal(vms=selected_vms, is_live=is_live, connections=all_connections))
 
     @on(Checkbox.Changed, "#vm-select-checkbox")
     def on_vm_select_checkbox_changed(self, event: Checkbox.Changed) -> None:
