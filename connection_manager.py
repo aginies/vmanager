@@ -50,7 +50,12 @@ class ConnectionManager:
                     conn = future.result(timeout=10)
                 except TimeoutError:
                     # If it times out, we raise a libvirtError to be caught by the existing error handling.
-                    raise libvirt.libvirtError("Connection timed out after 10 seconds")
+                    msg = "Connection timed out after 10 seconds."
+                    # Check if the URI suggests an SSH connection
+                    if 'ssh' in uri.lower(): # Use .lower() for robustness
+                        msg += " If using SSH, this can happen if a password or SSH key passphrase is required."
+                        msg += " Please use an SSH agent or a key without a passphrase, as interactive prompts are not supported."
+                    raise libvirt.libvirtError(msg)
 
             if conn is None:
                 # This case can happen if the URI is valid but the hypervisor is not running
