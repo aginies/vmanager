@@ -442,7 +442,7 @@ Select:focus {
 .delete-button, .cancel-button { background: red; }
 .rename-button, .edit-button, .add-button { background: green; }
 .delete-button, .done-button, .cancel-button, .edit-button, .add-button { height: 1; width: 25%; color: white; }
-.toggle-detail-button { width: 18%; height: 1; align: center top; }
+.toggle-detail-button { width: 16%; height: 1; align: center top; }
 .clone-button { height: 1; color: black; background: pink; }
 .edit-detail-btn { width: auto; height: 1; background: $primary; min-height: 1; margin: 0 0 0 1; }
 .create-net-btn { border: none; width: 50%; margin-top: 1; background: green; }
