@@ -667,7 +667,7 @@ NetworkListItem {
 }
 
 #migration-content-wrapper {
-    height: 30;
+    height: 32;
     overflow-y: auto;
     layout: vertical; /* Ensure vertical layout for content wrapper */
 }
@@ -676,19 +676,18 @@ NetworkListItem {
     grid-size-rows: 2;
     grid-size-columns: 2;
     grid-gutter: 1;
-    height: 12;
+    height: auto;
     margin-top: 1;
 }
 
 #migration-summary-grid .summary-tittle {
-    height: 1;
     margin: 0 0;
     text-align: center;
 }
 
 #can-migrate-list,
 #cannot-migrate-list {
-    height: 4;
+    height: auto;
     width: 100%;
     padding: 0 0;
     background: $panel;
@@ -702,7 +701,6 @@ NetworkListItem {
 }
 #select-one-server-container {
     height: 10;
-
 }
 #select-one-server-container Button {
     width: 50%;
