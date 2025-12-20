@@ -322,9 +322,15 @@ Select:focus {
 }
 
 #migration-content-wrapper {
-    height: 32;
+    height: 1fr;
     overflow-y: auto;
     layout: vertical;
+}
+
+#migration-dialog .modal-buttons {
+    height: auto;
+    align: center middle;
+    padding-top: 1;
 }
 
 #migration-summary-grid {

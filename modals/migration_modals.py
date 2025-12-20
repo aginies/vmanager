@@ -67,7 +67,7 @@ class MigrationModal(ModalScreen):
             default_dest_uri = dest_servers[0][1]
             self.dest_conn = self.connections[default_dest_uri]
 
-        with ScrollableContainer(id="migration-dialog",):
+        with Vertical(id="migration-dialog",):
             with Vertical(id="migration-content-wrapper"):
                 yield Label(f"[{migration_type}] Migrate VMs: [b]{vm_names}[/b]")
                 yield Static("Select destination server:")
