@@ -24,24 +24,34 @@
 	<p>A Textual-based TUI (Terminal User Interface) application for managing QEMU/KVM virtual machines using the libvirt python API.</p><p>Author: aginies@suse.com</p>
         
         <h2 id="key-features">Key Features</h2>
+
+        <h3>Overall Architecture &amp; UX</h3>
+        <ul class="feature-list">
+            <li><strong>Zero X11 Dependency</strong>: Full control via terminal, eliminating the need for graphical environments.</li>
+            <li><strong>Multi-Server Transhypervisor View</strong>: Visualize and manage VMs across multiple hypervisors from a unified interface.</li>
+            <li><strong>Low-Bandwidth Remote Operations</strong>: Efficient remote administration ideal for cloud and edge environments.</li>
+            <li><strong>Color-Coded Status &amp; Server Identification</strong>: Use intuitive color schemes to indicate VM status and server origins for quick identification.</li>
+        </ul>
+
+        <h3>Server &amp; Host Management</h3>
+        <ul class="feature-list">
+            <li><strong>Host Resource Management</strong>: Manage not just VMs, but also the underlying server resources like Storage Pools and Virtual Networks.</li>
+            <li><strong>Embedded Virsh Shell</strong>: Instantly access a `virsh` shell for any managed server directly within the application for advanced commands.</li>
+            <li><strong>Websockify SSH &amp; noVNC Integration</strong>: Enable secure SSH and noVNC remote viewing for headless server environments.</li>
+            <li><strong>Move Storage Volume</strong>: Move storage volumes between different pools, updating VM guest config if needed.</li>
+        </ul>
+
+        <h3>Virtual Machine Management</h3>
         <ul class="feature-list">
             <li><strong>Scalable VM Management</strong>: Manage hundreds of VMs across multiple libvirt servers with a single, consistent interface.</li>
-            <li><strong>Zero X11 Dependency</strong>: Full control via terminal, eliminating the need for graphical environments.</li>
-            <li><strong>Advanced VM Resource Control</strong>: Disable disks, switch machine types, etc..</li>
-            <li><strong>Low-Bandwidth Remote Operations</strong>: Efficient remote administration ideal for cloud and edge environments.</li>
-            <li><strong>Bulk Command Execution</strong>: Execute commands across multiple selected VMs simultaneously for streamlined management.</li>
-            <li><strong>Spice to VNC Transition</strong>: Automatically Replace Spice graphics with VNC for simplified remote access and reduced resource usage.</li>
-            <li><strong>Websockify SSH & noVNC Integration</strong>: Enable secure SSH and noVNC remote viewing.</li>
-            <li><strong>Multi-Server Transhypervisor View</strong>: Visualize and manage VMs across multiple hypervisors from a unified interface.</li>
-            <li><strong>Color-Coded Status & Server Identification</strong>: Use intuitive color schemes to indicate VM status and server origins for quick identification.</li>
-            <li><strong>VM Migration</strong>: Migrate VMs offline and live between servers, pre-checks on server and VM guest config.</li>
-            <li><strong>Move Storage Volume</strong>: Move storage volumes between different pools, updating VM guest config if needed.</li>
-            <li><strong>Clone VM Capabilities</strong>: Clone VMs with advanced options, including specifying a custom suffix, cloning multiple instances at once, and automatic creation of storage for the new clones.</li>
             <li><strong>Live Performance Monitoring</strong>: View real-time CPU and memory usage with sparkline graphs on each VM card.</li>
             <li><strong>In-Depth Hardware Configuration</strong>: Control virtually all aspects of a VM's hardware, from CPU and memory to UEFI, Secure Boot, TPM, and boot order.</li>
             <li><strong>Full Snapshot Management</strong>: Easily create, delete, and revert to VM snapshots through the interface.</li>
-            <li><strong>Host Resource Management</strong>: Manage not just VMs, but also the underlying server resources like Storage Pools and Virtual Networks.</li>
-            <li><strong>Embedded Virsh Shell</strong>: Instantly access a `virsh` shell for any managed server directly within the application for advanced commands.</li>
+            <li><strong>Advanced VM Resource Control</strong>: Disable disks, switch machine types, etc..</li>
+            <li><strong>VM Migration</strong>: Migrate VMs offline and live between servers, with pre-checks on server and VM guest config.</li>
+            <li><strong>Clone VM Capabilities</strong>: Clone VMs with advanced options, including specifying a custom suffix, cloning multiple instances at once, and automatic creation of storage for the new clones.</li>
+            <li><strong>Bulk Command Execution</strong>: Execute commands across multiple selected VMs simultaneously for streamlined management.</li>
+            <li><strong>Spice to VNC Transition</strong>: Automatically replace Spice graphics with VNC for simplified remote access and reduced resource usage.</li>
         </ul>
 	<h2 id="xp-features">Experimental Features</h2>
 	<ul class="xp-list">
