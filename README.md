@@ -10,9 +10,11 @@ Virt-manager is only usable with X or X forward, and this is very slow and not p
 
 This terminal solution is simple, very few deps, remote control with low bandwidth. Moreover it includes some features like disabling a disk (intead or removing it completly), change machine-type, etc.... 
 
+I worked in the past on some other Virtu related project like [pvirsh](https://github.com/aginies/pvirsh), [virt-scenario](https://github.com/aginies/virt-scenario), and most of their features will be integrated into this project in the futur some are already availables).
+
 ## Warning
 
-Born during a **SUSE hackweek**, this project is a work-in-progress—packed with potential but still missing a few features and tests, all while being co-piloted by an AI agent for extra creativity and efficiency!
+Born during a **SUSE hackweek**, this project is a work-in-progress—packed with potential bugs, but still missing features and tests. Devel is also co-piloted by some AI agent for extra efficiency.
 
 ## Features
 
