@@ -273,6 +273,92 @@ Usage: select_vm <vm_name_1> <vm_name_2> ...
             completions = [f for f in all_vms if f.startswith(text)]
         return completions
 
+    def do_unselect_vm(self, args):
+        """Unselect one or more VMs. Can use patterns with 're:' prefix or use 'all' to unselect all.
+Usage: unselect_vm <vm_name_1> <vm_name_2> ...
+       unselect_vm re:<pattern>
+       unselect_vm all"""
+        if not self.selected_vms:
+            print("No VMs are currently selected.")
+            return
+
+        arg_list = args.split()
+        if not arg_list:
+            print("Usage: unselect_vm <vm_name_1> <vm_name_2> ... or unselect_vm re:<pattern> or unselect_vm all")
+            return
+
+        if 'all' in arg_list:
+            self.selected_vms = {}
+            print("All VMs have been unselected.")
+            self._update_prompt()
+            return
+
+        # Get a flat list of currently selected VM names
+        currently_selected_vms = {vm_name for server_vms in self.selected_vms.values() for vm_name in server_vms}
+
+        vms_to_unselect = set()
+        not_found = []
+
+        for arg in arg_list:
+            if arg.startswith("re:"):
+                pattern_str = arg[3:]
+                try:
+                    pattern = re.compile(pattern_str)
+                    # Find matches within the currently selected VMs
+                    matched_vms = {vm_name for vm_name in currently_selected_vms if pattern.match(vm_name)}
+                    if matched_vms:
+                        vms_to_unselect.update(matched_vms)
+                    else:
+                        not_found.append(arg)
+                except re.error as e:
+                    print(f"Error: Invalid regular expression '{pattern_str}': {e}")
+            else:
+                if arg in currently_selected_vms:
+                    vms_to_unselect.add(arg)
+                else:
+                    not_found.append(arg)
+
+        if not vms_to_unselect:
+            print("No matching VMs to unselect found in the current selection.")
+            if not_found:
+                 print(f"The following VMs/patterns were not found: {', '.join(not_found)}")
+            return
+
+        # New dictionary for selected VMs
+        new_selected_vms = {}
+        for server_name, vm_list in self.selected_vms.items():
+            vms_to_keep = [vm for vm in vm_list if vm not in vms_to_unselect]
+            if vms_to_keep:
+                new_selected_vms[server_name] = vms_to_keep
+
+        self.selected_vms = new_selected_vms
+
+        print(f"Unselected VM(s): {', '.join(sorted(list(vms_to_unselect)))}")
+        if not_found:
+            print(f"Warning: The following were not found in the selection: {', '.join(not_found)}")
+
+        if self.selected_vms:
+            print("Remaining selected VMs:")
+            for server, vms in self.selected_vms.items():
+                print(f"  on {server}: {', '.join(vms)}")
+        else:
+            print("No VMs are selected anymore.")
+
+        self._update_prompt()
+
+    def complete_unselect_vm(self, text, line, begidx, endidx):
+        """Auto-completion for unselect_vm from the list of selected VMs."""
+        if not self.selected_vms:
+            return []
+
+        selected_vms_flat = {vm_name for vms_list in self.selected_vms.values() for vm_name in vms_list}
+
+        if not text:
+            completions = list(selected_vms_flat)
+        else:
+            completions = sorted([f for f in selected_vms_flat if f.startswith(text)])
+        return completions
+
     def do_status(self, args):
         """Shows the status of one or more VMs across any connected server.
 Usage: status [vm_name_1] [vm_name_2] ...
