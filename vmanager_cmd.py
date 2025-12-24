@@ -6,7 +6,7 @@ import re
 import libvirt
 from config import load_config
 from libvirt_utils import find_all_vm
-from vm_actions import start_vm, delete_vm, stop_vm, pause_vm, force_off_vm
+from vm_actions import start_vm, delete_vm, stop_vm, pause_vm, force_off_vm, clone_vm
 from connection_manager import ConnectionManager
 from storage_manager import list_unused_volumes, list_storage_pools
 
@@ -614,6 +614,72 @@ If no VM names are provided, it will delete the selected VMs."""
                     print(f"An unexpected error occurred with VM '{vm_name}': {e}")
 
     def complete_delete(self, text, line, begidx, endidx):
+        return self.complete_select_vm(text, line, begidx, endidx)
+
+    def do_clone_vm(self, args):
+        """Clones a VM.
+Usage: clone_vm <original_vm_name> <new_vm_name>"""
+        arg_list = args.split()
+        if len(arg_list) != 2:
+            print("Usage: clone_vm <original_vm_name> <new_vm_name>")
+            return
+
+        original_vm_name, new_vm_name = arg_list
+
+        original_vm_domain = None
+        original_vm_server_name = None
+        conn = None
+
+        for server_name, connection in self.active_connections.items():
+            try:
+                domain = connection.lookupByName(original_vm_name)
+                original_vm_domain = domain
+                original_vm_server_name = server_name
+                conn = connection
+                break
+            except libvirt.libvirtError as e:
+                if e.get_error_code() == libvirt.VIR_ERR_NO_DOMAIN:
+                    continue
+                else:
+                    print(f"A libvirt error occurred on server {server_name}: {e}")
+                    return
+
+        if not original_vm_domain:
+            print(f"Error: VM '{original_vm_name}' not found on any connected server.")
+            return
+
+        print(f"Found VM '{original_vm_name}' on server '{original_vm_server_name}'.")
+
+        try:
+            conn.lookupByName(new_vm_name)
+            print(f"Error: A VM with the name '{new_vm_name}' already exists on server '{original_vm_server_name}'.")
+            return
+        except libvirt.libvirtError as e:
+            if e.get_error_code() != libvirt.VIR_ERR_NO_DOMAIN:
+                print(f"An error occurred while checking for existing VM '{new_vm_name}': {e}")
+                return
+
+        try:
+            print(f"Cloning '{original_vm_name}' to '{new_vm_name}' on server '{original_vm_server_name}'...")
+
+            def log_to_console(message):
+                print(f"  -> {message.strip()}")
+
+            clone_vm(original_vm_domain, new_vm_name, log_callback=log_to_console)
+            print(f"\nSuccessfully cloned '{original_vm_name}' to '{new_vm_name}'.")
+
+        except libvirt.libvirtError as e:
+            print(f"\nError cloning VM: {e}")
+        except Exception as e:
+            print(f"\nAn unexpected error occurred during cloning: {e}")
+
+    def complete_clone_vm(self, text, line, begidx, endidx):
+        """Auto-completion for the original VM to clone."""
+        words = line.split()
+        # Only complete the first argument (original_vm_name)
+        if len(words) > 2 or (len(words) == 2 and not line.endswith(' ')):
+            return []
+
         return self.complete_select_vm(text, line, begidx, endidx)
 
     def do_list_unused_volumes(self, args):
