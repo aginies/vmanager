@@ -2,6 +2,8 @@ body {
     background-color: #073642;
     color: #eee8d5;
     font-family: Arial, sans-serif;
+    position: relative;
+    overflow-x: hidden;
 }
 
 header {
@@ -105,4 +107,43 @@ a:hover {
 }
 #next {
     right: 20px;
+}
+
+/* Animations for stars and snowflakes */
+.star, .snowflake {
+    position: fixed;
+    pointer-events: none;
+    z-index: 9999;
+    top: 0;
+    left: 0;
+    will-change: transform; /* Performance hint for browser */
+}
+
+.star {
+    width: 2px;
+    height: 2px;
+    background-color: white;
+    border-radius: 50%;
+    box-shadow: 0 0 6px #fff, 0 0 10px #fff, 0 0 15px #0ff;
+    animation: twinkle 2s infinite ease-in-out alternate;
+}
+
+@keyframes twinkle {
+    from { opacity: 0.1; }
+    to { opacity: 0.9; }
+}
+
+.snowflake {
+    color: #fff;
+    text-shadow: 0 0 5px #000;
+    font-size: 20px;
+    animation: fall linear infinite;
+    top: -20px;
+}
+
+@keyframes fall {
+    100% {
+        transform: translateY(105vh) rotate(360deg);
+        opacity: 0;
+    }
 }

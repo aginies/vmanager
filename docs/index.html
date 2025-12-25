@@ -83,5 +83,37 @@
         <h2 id="license">License</h2>
         <p>License: <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL3</a></p>
     </div>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const container = document.body;
+        const starCount = 100;
+        const snowflakeCount = 40;
+
+        // Create stars
+        for (let i = 0; i < starCount; i++) {
+            const star = document.createElement('div');
+            star.classList.add('star');
+            star.style.top = `${Math.random() * 100}%`;
+            star.style.left = `${Math.random() * 100}%`;
+            star.style.animationDelay = `${Math.random() * 3}s`;
+            star.style.animationDuration = `${Math.random() * 2 + 1.5}s`;
+            container.appendChild(star);
+        }
+
+        // Create snowflakes
+        const snowflakeContent = ['❄️', '❅', '❆'];
+        for (let i = 0; i < snowflakeCount; i++) {
+            const snowflake = document.createElement('div');
+            snowflake.classList.add('snowflake');
+            snowflake.textContent = snowflakeContent[Math.floor(Math.random() * snowflakeContent.length)];
+            snowflake.style.left = `${Math.random() * 100}vw`;
+            snowflake.style.animationDuration = `${Math.random() * 8 + 7}s`;
+            snowflake.style.animationDelay = `${Math.random() * 10}s`;
+            snowflake.style.fontSize = `${Math.random() * 15 + 10}px`;
+            snowflake.style.opacity = Math.random() * 0.7 + 0.3;
+            container.appendChild(snowflake);
+        }
+    });
+    </script>
 </body>
 </html>
