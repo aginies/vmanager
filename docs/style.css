@@ -23,7 +23,7 @@
 }
 
 html.theme-christmas {
-  --bg-color: #1a4f1a; /* Forest Green */
+  --bg-color: #073642; /* Use original solarized background */
   --text-color: #f5f5f5;
   --link-hover-color: #ffd700; /* Gold */
   --border-color: #c41e3a; /* Christmas Red */
@@ -38,6 +38,22 @@ html.theme-ufo {
   --link-hover-color: #ff00ff; /* Magenta Warp */
   --border-color: #00ffff; /* Cyan Grid */
   --lightbox-bg-color: rgba(0, 255, 0, 0.8);
+}
+
+html.theme-matrix {
+  --bg-color: #000000;
+  --text-color: #00ff00;
+  --link-hover-color: #ffffff;
+  --border-color: #008F11;
+  --lightbox-bg-color: rgba(0, 80, 0, 0.8);
+}
+
+html.theme-retro {
+  --bg-color: #000000;
+  --text-color: #ffffff;
+  --link-hover-color: #ffff00;
+  --border-color: #ff0000;
+  --lightbox-bg-color: rgba(50, 0, 0, 0.8);
 }
 
 body {
@@ -225,3 +241,45 @@ a:hover {
     from { transform: rotate(-8deg); }
     to { transform: rotate(8deg); }
 }
+
+/* Matrix Theme Animations */
+.matrix-stream {
+    position: fixed;
+    pointer-events: none;
+    z-index: 9999;
+    font-family: 'Courier New', Courier, monospace;
+    color: #00ff00;
+    text-shadow: 0 0 5px #00ff00; /* Reduced glow */
+    opacity: 0.7; /* Added transparency */
+    writing-mode: vertical-rl;
+    text-orientation: upright;
+    white-space: nowrap;
+    user-select: none;
+    animation: matrix-fall 5s ease-in infinite; /* Changed to ease-in */
+}
+
+@keyframes matrix-fall {
+    from { top: -550px; } /* Start safely off-screen */
+    to { top: 100vh; }    /* Move past the bottom of the screen */
+}
+
+.matrix-leader {
+    color: #ddffdd; /* Less intense white */
+    text-shadow: 0 0 3px #fff, 0 0 10px #fff; /* Reduced glow */
+}
+
+@keyframes matrix-fall {
+    from { transform: translateY(-100vh); }
+    to { transform: translateY(100vh); }
+}
+
+/* Retro Arcade Theme Animations */
+.invader-fleet {
+    position: fixed;
+    pointer-events: none;
+    z-index: 9999;
+    width: 240px; /* 8 invaders * 30px */
+}
+
+/* Retro Arcade Game Elements */
+/* Removed Arkanoid specific styles */

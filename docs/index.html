@@ -93,10 +93,50 @@
             createSnowflakesAndStars();
         } else if (theme.includes('ufo')) {
             createUFOs();
+        } else if (theme.includes('matrix')) {
+            createMatrixRain();
         }
 
-        // --- Animation Functions ---
+        function createMatrixRain() {
+            const container = document.body;
+            const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789アァカサタナハマヤャラワガザダバパイィキシチニヒミリヰギジヂビピウゥクスツヌフムユュルグズブヅプエェケセテネヘメレヱゲゼデベペオォコソトノホモヨョロヲゴゾドボポヴッン';
+            const streamSpacing = 10; // Increased density by reducing spacing
 
+            // Define content area boundaries
+            const mainContentWidth = 800;
+            const contentLeftEdge = (window.innerWidth - mainContentWidth) / 2;
+            const contentRightEdge = contentLeftEdge + mainContentWidth;
+
+            for (let i = 0; i * streamSpacing < window.innerWidth; i++) {
+                const x = i * streamSpacing;
+
+                // Skip the central content area
+                if (x > contentLeftEdge && x < contentRightEdge) {
+                    continue;
+                }
+
+                const stream = document.createElement('div');
+                stream.classList.add('matrix-stream');
+                
+                let streamContent = '';
+                const streamLength = Math.floor(Math.random() * 30) + 25; // Increased length: 25 to 55 chars long
+                for(let j = 0; j < streamLength; j++) {
+                    streamContent += chars[Math.floor(Math.random() * chars.length)];
+                }
+                
+                const firstChar = streamContent.charAt(0);
+                const restChars = streamContent.substring(1);
+                stream.innerHTML = `<span class="matrix-leader">${firstChar}</span>${restChars}`;
+
+                stream.style.left = `${x}px`;
+                stream.style.top = '-550px';
+                stream.style.animationDuration = `${Math.random() * 8 + 8}s`; // Slower speed: 8-16 seconds
+                stream.style.animationDelay = `${Math.random() * 15}s`;
+                
+                container.appendChild(stream);
+            }
+        }
+        
         function createSnowflakesAndStars() {
             const starCount = 100;
             const snowflakeCount = 40;
