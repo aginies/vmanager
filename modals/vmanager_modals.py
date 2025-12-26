@@ -2,6 +2,7 @@
 Vmanager modals
 """
 from textual.app import ComposeResult
+from textual.message import Message
 from textual.containers import ScrollableContainer, Horizontal, Vertical
 from textual.widgets import (
         Button, Input, Label,
@@ -11,8 +12,15 @@ from textual.widgets import (
 from modals.base_modals import BaseModal
 
 
-class FilterModal(BaseModal[dict | None]):
+class FilterModal(BaseModal[None]):
     """Modal screen for selecting a filter."""
+
+    class FilterChanged(Message):
+        """Posted when the filter settings are applied."""
+        def __init__(self, status: str, search: str) -> None:
+            super().__init__()
+            self.status = status
+            self.search = search
 
     def __init__(self, current_search: str = "", current_status: str = "default") -> None:
         super().__init__()
@@ -36,7 +44,7 @@ class FilterModal(BaseModal[dict | None]):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "cancel-btn":
-            self.dismiss(None)
+            self.app.pop_screen()
         elif event.button.id == "apply-btn":
             search_text = self.query_one("#search-input", Input).value
             radioset = self.query_one(RadioSet)
@@ -44,8 +52,22 @@ class FilterModal(BaseModal[dict | None]):
             status = "default"
             if status_button:
                 status = status_button.id.replace("status_", "")
+            
+            self.post_message(self.FilterChanged(status=status, search=search_text))
+            self.app.pop_screen()
 
-            self.dismiss({'status': status, 'search': search_text})
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Handles Enter key press in the search input."""
+        # This implicitly acts as an "Apply" button press
+        search_text = self.query_one("#search-input", Input).value
+        radioset = self.query_one(RadioSet)
+        status_button = radioset.pressed_button
+        status = "default"
+        if status_button:
+            status = status_button.id.replace("status_", "")
+        
+        self.post_message(self.FilterChanged(status=status, search=search_text))
+        self.app.pop_screen()
 
 class CreateVMModal(BaseModal[dict | None]):
     """Modal screen for creating a new VM."""

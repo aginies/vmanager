@@ -300,24 +300,24 @@ class VMManagerTUI(App):
     @on(Button.Pressed, "#filter_button")
     def action_filter_view(self) -> None:
         """Filter the VM list."""
-        self.push_screen(FilterModal(current_search=self.search_text, current_status=self.sort_by), self.handle_filter_result)
+        self.push_screen(FilterModal(current_search=self.search_text, current_status=self.sort_by))
 
-    def handle_filter_result(self, result: dict | None) -> None:
-        """Handle the result from the filter modal."""
-        if result:
-            new_status = result.get('status', 'default')
-            new_search = result.get('search', '')
+    @on(FilterModal.FilterChanged)
+    def on_filter_changed(self, message: FilterModal.FilterChanged) -> None:
+        """Handle the FilterChanged message from the filter modal."""
+        new_status = message.status
+        new_search = message.search
 
-            logging.info(f"Filter changed to status={new_status}, search='{new_search}'")
+        logging.info(f"Filter changed to status={new_status}, search='{new_search}'")
 
-            status_changed = self.sort_by != new_status
-            search_changed = self.search_text != new_search
+        status_changed = self.sort_by != new_status
+        search_changed = self.search_text != new_search
 
-            if status_changed or search_changed:
-                self.sort_by = new_status
-                self.search_text = new_search
-                self.current_page = 0
-                self.refresh_vm_list()
+        if status_changed or search_changed:
+            self.sort_by = new_status
+            self.search_text = new_search
+            self.current_page = 0
+            self.refresh_vm_list()
 
     def on_server_management(self, result: list | str | None) -> None:
         """Callback for ServerManagementModal."""
