@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html class="theme-christmas">
+<html class="theme-pong">
 <head>
     <title>Rainbow V Manager</title>
     <meta charset="utf-8">
@@ -93,10 +93,101 @@
             createSnowflakesAndStars();
         } else if (theme.includes('ufo')) {
             createUFOs();
-        } else if (theme.includes('matrix')) {
-            createMatrixRain();
+        } else if (theme.includes('pong')) {
+            createPongGame();
         }
 
+        // --- Animation Functions ---
+
+        function createPongGame() {
+            const container = document.body;
+            let playerPaddle, aiPaddle, ball;
+            let ballState = { x: 0, y: 0, dx: 8, dy: 5 };
+
+            function init() {
+                // Create elements
+                playerPaddle = document.createElement('div');
+                playerPaddle.classList.add('paddle');
+                playerPaddle.style.left = '20px';
+
+                aiPaddle = document.createElement('div');
+                aiPaddle.classList.add('paddle');
+                aiPaddle.style.right = '20px';
+
+                ball = document.createElement('div');
+                ball.classList.add('ball');
+                
+                container.append(playerPaddle, aiPaddle, ball);
+
+                // Event Listeners
+                document.addEventListener('mousemove', movePlayerPaddle);
+                
+                resetBall();
+                requestAnimationFrame(updateGame);
+            }
+
+            function movePlayerPaddle(e) {
+                const paddleHeight = playerPaddle.offsetHeight;
+                let newY = e.clientY - paddleHeight / 2;
+                if (newY < 0) newY = 0;
+                if (newY > window.innerHeight - paddleHeight) newY = window.innerHeight - paddleHeight;
+                playerPaddle.style.top = `${newY}px`;
+            }
+
+            function resetBall() {
+                ballState.x = window.innerWidth / 2;
+                ballState.y = window.innerHeight / 2;
+                // Set initial horizontal speed and random direction
+                ballState.dx = (Math.random() > 0.5 ? 1 : -1) * 6; // Initial speed 6, random direction
+                ballState.dy = (Math.random() - 0.5) * 5;
+            }
+
+            function updateGame() {
+                // Move ball
+                ballState.x += ballState.dx;
+                ballState.y += ballState.dy;
+
+                ball.style.left = `${ballState.x}px`;
+                ball.style.top = `${ballState.y}px`;
+
+                // Ball collision: Top/Bottom walls
+                if (ballState.y <= 0 || ballState.y >= window.innerHeight - ball.offsetHeight) {
+                    ballState.dy *= -1;
+                }
+
+                // Ball collision: Paddles
+                const ballRect = ball.getBoundingClientRect();
+                const playerRect = playerPaddle.getBoundingClientRect();
+                const aiRect = aiPaddle.getBoundingClientRect();
+
+                if (ballRect.left <= playerRect.right && ballRect.top > playerRect.top && ballRect.bottom < playerRect.bottom) {
+                    ballState.dx *= -1.1; // Speed up on hit
+                }
+                if (ballRect.right >= aiRect.left && ballRect.top > aiRect.top && ballRect.bottom < aiRect.bottom) {
+                    ballState.dx *= -1.1; // Speed up on hit
+                }
+
+                // Ball collision: Left/Right walls
+                if (ballState.x <= 0 || ballState.x >= window.innerWidth) {
+                    resetBall();
+                }
+
+                // AI Paddle Movement
+                const aiCenter = aiPaddle.offsetTop + aiPaddle.offsetHeight / 2;
+                const ballCenter = ballState.y + ball.offsetHeight / 2;
+                const speed = 4; // AI speed
+                if (aiCenter < ballCenter - 10) {
+                    aiPaddle.style.top = `${aiPaddle.offsetTop + speed}px`;
+                } else if (aiCenter > ballCenter + 10) {
+                    aiPaddle.style.top = `${aiPaddle.offsetTop - speed}px`;
+                }
+
+                requestAnimationFrame(updateGame);
+            }
+            
+            init();
+        }
+        
         function createMatrixRain() {
             const container = document.body;
             const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789アァカサタナハマヤャラワガザダバパイィキシチニヒミリヰギジヂビピウゥクスツヌフムユュルグズブヅプエェケセテネヘメレヱゲゼデベペオォコソトノホモヨョロヲゴゾドボポヴッン';

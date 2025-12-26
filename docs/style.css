@@ -281,5 +281,22 @@ a:hover {
     width: 240px; /* 8 invaders * 30px */
 }
 
-/* Retro Arcade Game Elements */
-/* Removed Arkanoid specific styles */
+/* Pong Game Elements */
+.paddle {
+    position: fixed;
+    width: 15px;
+    height: 100px;
+    background-color: #fff;
+    box-shadow: 0 0 8px #fff;
+    z-index: 10000;
+}
+
+.ball {
+    position: fixed;
+    width: 15px;
+    height: 15px;
+    background-color: #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 8px #fff, 0 0 12px #fff;
+    z-index: 9999;
+}
