@@ -14,7 +14,7 @@ I worked in the past on some other Virtu related project like [pvirsh](https://g
 
 ## Warning
 
-Born during a **SUSE hackweek**, this project is a work-in-progress—packed with potential bugs, but still missing features and tests. Devel is also co-piloted by some AI agent for extra efficiency.
+Born during a **SUSE hackweek**, this project is a work-in-progress—packed with potential bugs, and it still missing some features and it is not fully tested. Devel is also co-piloted by some AI agent for extra efficiency.
 
 ## Features
 
@@ -34,6 +34,7 @@ Born during a **SUSE hackweek**, this project is a work-in-progress—packed wit
 - [textual](https://pypi.org/project/textual/)
 - [pyaml](https://pypi.org/project/pyaml/)
 - [virt-viewer](https://gitlab.com/virt-viewer/virt-viewer)
+Optionnal:
 - [novnc](https://novnc.com/noVNC/)
 - [websockify](https://pypi.org/project/websockify/)
 
