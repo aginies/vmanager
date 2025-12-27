@@ -30,6 +30,7 @@ from modals.server_modals import ServerManagementModal
 from modals.vmanager_modals import (
         FilterModal, CreateVMModal,
         )
+from modals.config_modal import ConfigModal
 from modals.bulk_modals import BulkActionModal
 from modals.utils_modals import ProgressModal
 from modals.server_prefs_modals import ServerPrefModal
@@ -56,6 +57,7 @@ class VMManagerTUI(App):
         ("ctrl+v", "virsh_shell", "Virsh"),
         ("f", "filter_view", "Filter"),
         ("p", "server_preferences", "ServerPrefs"),
+        ("c", "config", "Config"),
         ("m", "manage_server", "ServList"),
         ("s", "select_server", "SelServers"),
         ("ctrl+a", "toggle_select_all", "Sel/Des All"),
@@ -125,6 +127,7 @@ class VMManagerTUI(App):
             yield Button("Select Servers", id="select_server_button", classes="Buttonpage")
             yield Button("Servers List", id="manage_servers_button", classes="Buttonpage")
             yield Button("Server Prefs", id="server_preferences_button", classes="Buttonpage")
+            yield Button("Config", id="config_button", classes="Buttonpage")
             yield Button("Filter VM", id="filter_button", classes="Buttonpage")
             yield Button("Log", id="view_log_button", classes="Buttonpage")
             #yield Button("Virsh Shell", id="virsh_shell_button", classes="Buttonpage")
@@ -315,6 +318,23 @@ class VMManagerTUI(App):
             self.search_text = new_search
             self.current_page = 0
             self.refresh_vm_list()
+
+    def action_config(self) -> None:
+        """Open the configuration modal."""
+        self.push_screen(ConfigModal(self.config), self.handle_config_result)
+
+    def handle_config_result(self, result: dict | None) -> None:
+        """Handle the result from the ConfigModal."""
+        if result:
+            self.config = result
+            # Potentially re-initiate connections or refresh UI if needed
+            self.show_success_message("Configuration updated.")
+            self.refresh_vm_list()
+
+    @on(Button.Pressed, "#config_button")
+    def on_config_button_pressed(self, event: Button.Pressed) -> None:
+        """Callback for the config button."""
+        self.action_config()
 
     def on_server_management(self, result: list | str | None) -> None:
         """Callback for ServerManagementModal."""

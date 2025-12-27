@@ -29,6 +29,10 @@ def get_config_paths():
         Path('/etc') / 'vmanager' / 'config.yaml'
     ]
 
+def get_user_config_path():
+    """Returns the path to the user's config file."""
+    return get_config_paths()[0]
+
 def load_config():
     """
     Loads the configuration from the first found config file.
