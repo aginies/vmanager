@@ -231,9 +231,10 @@ class VMManagerTUI(App):
 
     def on_resize(self, event):
         """Handle terminal resize events."""
-        if hasattr(self, 'resize_timer'):
-            self.resize_timer.stop()
-        self.resize_timer = self.set_timer(0.5, self._update_layout_for_size)
+#        if hasattr(self, 'resize_timer'):
+#            self.resize_timer.stop()
+#        self.resize_timer = self.set_timer(0.5, self._update_layout_for_size)
+        self.set_timer(1.5, self._update_layout_for_size)
 
     def on_unload(self) -> None:
         """Called when the app is about to be unloaded."""
@@ -663,6 +664,10 @@ class VMManagerTUI(App):
     def refresh_vm_list(self) -> None:
         """Refreshes the list of VMs by running the fetch-and-display logic in a worker."""
         vms_container = self.query_one("#vms-container")
+        # Stop all timers on existing cards to prevent race conditions during refresh
+        for card in vms_container.children:
+            if isinstance(card, VMCard) and card.timer:
+                card.timer.stop()
         vms_container.remove_children()
         # TODO: Add a LoadingIndicator here
         self.run_worker(self.list_vms_worker, name="list_vms", thread=True)
