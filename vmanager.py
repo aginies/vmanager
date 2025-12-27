@@ -41,7 +41,7 @@ from modals.server_prefs_modals import ServerPrefModal
 from modals.vmanager_vmdetails_modals import VMDetailModal
 from modals.vmanager_virsh_modals import VirshShellScreen
 from modals.vmanager_select_server_modals import SelectServerModal, SelectOneServerModal
-from connection_manager import ConnectionManager
+from vm_service import VMService
 from webconsole_manager import WebConsoleManager
 from vm_actions import start_vm, delete_vm, stop_vm, pause_vm, force_off_vm#, stop_vm
 
@@ -107,7 +107,7 @@ class VMManagerTUI(App):
 
     def __init__(self):
         super().__init__()
-        self.connection_manager = ConnectionManager()
+        self.vm_service = VMService()
         self.webconsole_manager = WebConsoleManager(self)
         self.server_color_map = {}
         self._color_index = 0
@@ -242,12 +242,12 @@ class VMManagerTUI(App):
     def on_unload(self) -> None:
         """Called when the app is about to be unloaded."""
         self.webconsole_manager.terminate_all()
-        self.connection_manager.disconnect_all()
+        self.vm_service.disconnect_all()
 
     def _get_active_connections(self):
         """Generator that yields active libvirt connection objects."""
         for uri in self.active_uris:
-            conn = self.connection_manager.connect(uri)
+            conn = self.vm_service.connect(uri)
             if conn:
                 yield conn
             else:
@@ -255,7 +255,7 @@ class VMManagerTUI(App):
 
     def connect_libvirt(self, uri: str) -> None:
         """Connects to libvirt and runs slow checks in a worker."""
-        conn = self.connection_manager.connect(uri)
+        conn = self.vm_service.connect(uri)
         if conn is None:
             self.show_error_message(f"Failed to connect to {uri}")
         else:
@@ -278,7 +278,7 @@ class VMManagerTUI(App):
     @on(Button.Pressed, "#select_server_button")
     def action_select_server(self) -> None:
         """Select servers to connect to."""
-        self.push_screen(SelectServerModal(self.servers, self.active_uris, self.connection_manager), self.handle_select_server_result)
+        self.push_screen(SelectServerModal(self.servers, self.active_uris, self.vm_service), self.handle_select_server_result)
 
     def handle_select_server_result(self, selected_uris: list[str] | None) -> None:
         """Handle the result from the SelectServer screen."""
@@ -290,7 +290,7 @@ class VMManagerTUI(App):
         # Disconnect from servers that are no longer selected
         uris_to_disconnect = [uri for uri in self.active_uris if uri not in selected_uris]
         for uri in uris_to_disconnect:
-            self.connection_manager.disconnect(uri)
+            self.vm_service.disconnect(uri)
 
         self.active_uris = selected_uris
         self.current_page = 0
@@ -411,7 +411,7 @@ class VMManagerTUI(App):
         conn_for_domain = None
 
         for uri in self.active_uris:
-            conn = self.connection_manager.connect(uri)
+            conn = self.vm_service.connect(uri)
             if not conn:
                 continue
             try:
@@ -496,7 +496,7 @@ class VMManagerTUI(App):
         if not result:
             return
 
-        conn = self.connection_manager.connect(self.active_uris[0])
+        conn = self.vm_service.connect(self.active_uris[0])
         if not conn:
             self.show_error_message("Not connected to libvirt. Cannot create VM.")
             return
@@ -586,7 +586,7 @@ class VMManagerTUI(App):
                 vm_name = "Unknown VM"
 
                 for uri in self.active_uris:
-                    conn = self.connection_manager.connect(uri)
+                    conn = self.vm_service.connect(uri)
                     if not conn:
                         continue
                     try:
@@ -701,49 +701,18 @@ class VMManagerTUI(App):
         self.run_worker(self.list_vms_worker, name="list_vms", thread=True)
 
     def list_vms_worker(self):
-        """Worker to fetch, filter, and display VMs."""
-        domains_with_conn = []
-        total_vms = 0
-        server_names = []
-
-        active_connections = list(self._get_active_connections())
-
-        for conn in active_connections:
-            try:
-                domains = conn.listAllDomains(0) or []
-                total_vms += len(domains)
-                for domain in domains:
-                    domains_with_conn.append((domain, conn))
-
-                uri = conn.getURI()
-                found = False
-                for server in self.servers:
-                    if server['uri'] == uri:
-                        server_names.append(server['name'])
-                        found = True
-                        break
-                if not found:
-                    server_names.append(uri)
-            except libvirt.libvirtError:
-                self.call_from_thread(self.show_error_message, f"Connection lost to {conn.getURI()}")
-
-        total_vms_unfiltered = len(domains_with_conn)
-        domains_to_display = domains_with_conn
-
-        if self.sort_by != "default":
-            if self.sort_by == "running":
-                domains_to_display = [(d, c) for d, c in domains_to_display if d.info()[0] == libvirt.VIR_DOMAIN_RUNNING]
-            elif self.sort_by == "paused":
-                domains_to_display = [(d, c) for d, c in domains_to_display if d.info()[0] == libvirt.VIR_DOMAIN_PAUSED]
-            elif self.sort_by == "stopped":
-                domains_to_display = [(d, c) for d, c in domains_to_display if d.info()[0] not in [libvirt.VIR_DOMAIN_RUNNING, libvirt.VIR_DOMAIN_PAUSED]]
-            elif self.sort_by == "selected":
-                domains_to_display = [(d, c) for d, c in domains_to_display if d.UUIDString() in self.selected_vm_uuids]
-
-        if self.search_text:
-            domains_to_display = [(d, c) for d, c in domains_to_display if self.search_text.lower() in d.name().lower()]
-
-        total_filtered_vms = len(domains_to_display)
+        """Worker to fetch, filter, and display VMs using the VMService."""
+        try:
+            domains_to_display, total_vms, total_filtered_vms, server_names = self.vm_service.get_vms(
+                self.active_uris,
+                self.servers,
+                self.sort_by,
+                self.search_text,
+                self.selected_vm_uuids
+            )
+        except Exception as e:
+            self.call_from_thread(self.show_error_message, f"Error fetching VM data: {e}")
+            return
 
         if self.current_page > 0 and self.current_page * self.VMS_PER_PAGE >= total_filtered_vms:
             self.current_page = 0
@@ -791,7 +760,7 @@ class VMManagerTUI(App):
                 vms_container.mount(card)
 
             self.sub_title = f"Servers: {', '.join(server_names)} | Total VMs: {total_vms}"
-            self.update_pagination_controls(total_filtered_vms, total_vms_unfiltered)
+            self.update_pagination_controls(total_filtered_vms, total_vms_unfiltered=len(domains_to_display)) # Bugfix: total_vms_unfiltered was wrong
 
         self.call_from_thread(update_ui)
 
