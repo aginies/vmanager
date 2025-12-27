@@ -240,6 +240,10 @@ class VMCard(Static):
 
                 def apply_stats_to_ui():
                     # This runs on the main thread
+                    # GUARD: If the widget has been unmounted in the meantime, do nothing.
+                    if not self.is_mounted:
+                        return
+
                     # Update status if changed
                     if self.status != stats['status']:
                         self.status = stats['status']
@@ -254,7 +258,7 @@ class VMCard(Static):
                         self.query_one("#cpu-sparkline").data = self.cpu_history
                         self.query_one("#mem-sparkline").data = self.mem_history
                     except NoMatches:
-                        pass # Card may be unmounting
+                        pass # Card may be unmounting, the guard should prevent most of this.
 
                     # Persist history for global refresh
                     if hasattr(self.app, "sparkline_data"):
