@@ -278,7 +278,9 @@ class AddPoolModal(BaseModal[bool | None]):
                         f"Error creating storage pool: {e}"
                     )
             
-            self.app.run_worker(do_create_pool, thread=True)
+            self.app.worker_manager.run(
+                do_create_pool, name=f"create_storage_pool_{pool_details['name']}"
+            )
 
         elif event.button.id == "cancel-btn":
             self.dismiss(None)

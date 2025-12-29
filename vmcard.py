@@ -195,9 +195,16 @@ class VMCard(Static):
         self.styles.border = ("solid", new_color)
 
     def on_unmount(self) -> None:
-        """Stop the timer when the widget is removed."""
+        """Stop the timer and cancel any running stat workers when the widget is removed."""
         if self.timer:
             self.timer.stop()
+        if self.vm:
+            try:
+                uuid = self.vm.UUIDString()
+                self.app.worker_manager.cancel(f"update_stats_{uuid}")
+            except libvirt.libvirtError:
+                # VM may be gone, which is why we are unmounting.
+                pass
 
     def watch_is_selected(self, old_value: bool, new_value: bool) -> None:
         """Called when is_selected changes to update the checkbox."""
@@ -217,6 +224,14 @@ class VMCard(Static):
         if not self.vm:
             return
 
+        try:
+            uuid = self.vm.UUIDString()
+        except libvirt.libvirtError:
+            # VM is gone, stop the timer if it's still running.
+            if self.timer:
+                self.timer.stop()
+            return
+
         def update_worker():
             # This runs in a background thread
             try:
@@ -226,12 +241,14 @@ class VMCard(Static):
                 if not stats:
                     # If VM was previously running, update its state to reflect it's stopped.
                     if self.status != "Stopped":
+
                         def update_to_stopped():
                             self.status = "Stopped"
                             self._update_status_styling()
                             self.update_button_layout()
                             self.query_one("#cpu-sparkline-container").display = False
                             self.query_one("#mem-sparkline-container").display = False
+
                         self.app.call_from_thread(update_to_stopped)
                     return
 
@@ -248,8 +265,10 @@ class VMCard(Static):
                         self.update_button_layout()
 
                     # Update sparklines by modifying the central data store
-                    uuid = self.vm.UUIDString()
-                    if hasattr(self.app, "sparkline_data") and uuid in self.app.sparkline_data:
+                    if (
+                        hasattr(self.app, "sparkline_data")
+                        and uuid in self.app.sparkline_data
+                    ):
                         sparkline_storage = self.app.sparkline_data[uuid]
 
                         cpu_history = sparkline_storage["cpu"]
@@ -277,13 +296,18 @@ class VMCard(Static):
                     if self.timer:
                         self.timer.stop()
                 else:
-                    logging.warning(f"Libvirt error during background stat update for {self.name}: {e}")
+                    logging.warning(
+                        f"Libvirt error during background stat update for {self.name}: {e}"
+                    )
             except Exception as e:
-                logging.error(f"Unexpected error in update_stats worker for {self.name}: {e}", exc_info=True)
+                logging.error(
+                    f"Unexpected error in update_stats worker for {self.name}: {e}",
+                    exc_info=True,
+                )
 
         # Always check webc status on the main thread before starting the worker
         self._update_webc_status()
-        self.app.run_worker(update_worker, thread=True, name=f"update_stats_{self.name}")
+        self.app.worker_manager.run(update_worker, name=f"update_stats_{uuid}")
 
     def update_button_layout(self):
         """Update the button layout based on current VM status."""
@@ -513,7 +537,7 @@ class VMCard(Static):
                     "An unexpected error occurred while trying to connect."
                 )
 
-        self.app.run_worker(do_connect, thread=True)
+        self.app.worker_manager.run(do_connect, name=f"virt_viewer_{self.name}")
 
     def _handle_web_console_button(self, event: Button.Pressed) -> None:
         """Handles the web console button press by opening a config dialog."""
@@ -522,7 +546,9 @@ class VMCard(Static):
         try:
             uuid = self.vm.UUIDString()
             if self.app.webconsole_manager.is_running(uuid):
-                self.app.run_worker(worker, name=f"show_console_{self.vm.name()}", thread=True)
+                self.app.worker_manager.run(
+                    worker, name=f"show_console_{self.vm.name()}"
+                )
                 return
         except libvirt.libvirtError as e:
             if e.get_error_code() == libvirt.VIR_ERR_NO_DOMAIN:
@@ -531,16 +557,14 @@ class VMCard(Static):
             self.app.show_error_message(f"Error checking web console status for {self.name}: {e}")
             return
 
-        parsed_uri = urlparse(self.conn.getURI())
-        is_remote = parsed_uri.hostname not in (None, 'localhost', '127.0.0.1') and parsed_uri.scheme == 'qemu+ssh'
+        is_remote = self.app.webconsole_manager.is_remote_connection(self.conn.getURI())
 
         if is_remote:
             def handle_dialog_result(should_start: bool) -> None:
                 if should_start:
-                    self.app.run_worker(worker,
-                                        name=f"start_console_{self.vm.name()}",
-                                        thread=True
-                                        )
+                    self.app.worker_manager.run(
+                        worker, name=f"start_console_{self.vm.name()}"
+                    )
 
             self.app.push_screen(
                 WebConsoleConfigDialog(is_remote=is_remote),
@@ -553,10 +577,7 @@ class VMCard(Static):
             if config.get('REMOTE_WEBCONSOLE') is not False:
                 config['REMOTE_WEBCONSOLE'] = False
                 save_config(config)
-            self.app.run_worker(worker,
-                                name=f"start_console_{self.vm.name()}",
-                                thread=True
-                                )
+            self.app.worker_manager.run(worker, name=f"start_console_{self.vm.name()}")
 
     def _handle_snapshot_take_button(self, event: Button.Pressed) -> None:
         """Handles the snapshot take button press."""
@@ -736,7 +757,7 @@ class VMCard(Static):
 
                 app.call_from_thread(progress_modal.dismiss)
 
-            app.run_worker(do_clone, thread=True)
+            app.worker_manager.run(do_clone, name=f"clone_{self.name}")
 
         app.push_screen(AdvancedCloneDialog(), handle_clone_results)
 

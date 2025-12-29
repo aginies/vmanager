@@ -332,7 +332,9 @@ class AddEditNetworkModal(BaseModal[None]):
                         f"Error {'updating' if self.is_edit else 'creating'} network: {e}"
                     )
 
-            self.app.run_worker(do_create_or_update_network, thread=True)
+            self.app.worker_manager.run(
+                do_create_or_update_network, name=f"update_network_{name}"
+            )
 
 class NetworkXMLModal(BaseModal[None]):
     """Modal screen to show detailed network information."""

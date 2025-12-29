@@ -26,6 +26,18 @@ class WebConsoleManager:
         self.config = load_config()
         self.processes = {}  # Replaces app.websockify_processes
 
+    @staticmethod
+    def is_remote_connection(uri: str) -> bool:
+        """Determines if the connection URI is for a remote qemu+ssh host."""
+        if not uri:
+            return False
+        parsed_uri = urlparse(uri)
+        return (
+            parsed_uri.hostname not in (None, "localhost", "127.0.0.1")
+            and parsed_uri.scheme == "qemu+ssh"
+        )
+
+
     def is_running(self, uuid: str) -> bool:
         """Check if a web console process is running for a given VM UUID."""
         if uuid in self.processes:
@@ -68,8 +80,7 @@ class WebConsoleManager:
                 self.app.call_from_thread(self.app.show_error_message, "Could not determine VNC port for the VM.")
                 return
 
-            parsed_uri = urlparse(conn.getURI())
-            is_remote_ssh = parsed_uri.hostname not in (None, 'localhost', '127.0.0.1') and parsed_uri.scheme == 'qemu+ssh'
+            is_remote_ssh = WebConsoleManager.is_remote_connection(conn.getURI())
 
             if is_remote_ssh and self.config.get('REMOTE_WEBCONSOLE', False):
                 self._launch_remote_websockify(uuid, vm_name, conn, int(vnc_port), graphics_info)
@@ -219,8 +230,7 @@ class WebConsoleManager:
 
     def _setup_ssh_tunnel(self, uuid: str, conn, vm_name: str, vnc_port: int, graphics_info: dict) -> tuple[str | None, int | None, dict]:
         """Sets up an SSH tunnel for remote connections if needed."""
-        parsed_uri = urlparse(conn.getURI())
-        is_remote_ssh = parsed_uri.hostname not in (None, 'localhost', '127.0.0.1') and parsed_uri.scheme == 'qemu+ssh'
+        is_remote_ssh = WebConsoleManager.is_remote_connection(conn.getURI())
 
         vnc_target_host = graphics_info.get('listen', '127.0.0.1')
         if vnc_target_host in ['0.0.0.0', '::']:

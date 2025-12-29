@@ -81,7 +81,9 @@ class SelectServerModal(BaseModal[None]):
                     if uri not in self.active_uris:
                         self.active_uris.append(uri)
 
-            self.app.run_worker(connect_and_update, thread=True)
+            self.app.worker_manager.run(
+                connect_and_update, name=f"connect_server_{uri}"
+            )
         else:  # If checkbox is unchecked
             # Disconnect from the server
             self.connection_manager.disconnect(uri)
