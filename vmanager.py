@@ -34,9 +34,9 @@ from modals.config_modal import ConfigModal
 from modals.bulk_modals import BulkActionModal
 from modals.utils_modals import ProgressModal
 from modals.server_prefs_modals import ServerPrefModal
-from modals.vmanager_vmdetails_modals import VMDetailModal
-from modals.vmanager_virsh_modals import VirshShellScreen
-from modals.vmanager_select_server_modals import SelectServerModal, SelectOneServerModal
+from modals.vmdetails_modals import VMDetailModal
+from modals.virsh_modals import VirshShellScreen
+from modals.select_server_modals import SelectServerModal, SelectOneServerModal
 from vm_service import VMService
 from webconsole_manager import WebConsoleManager
 from vm_actions import start_vm, delete_vm, stop_vm, pause_vm, force_off_vm#, stop_vm

@@ -44,10 +44,10 @@ from libvirt_utils import (
         get_cpu_models, get_domain_capabilities_xml, get_video_domain_capabilities
         )
 from modals.utils_modals import ConfirmationDialog
-from modals.vmanager_modals import (
-        AddEditVirtIOFSModal,
+from modals.cpu_mem_pc_modals import (
         EditCpuModal, EditMemoryModal, SelectMachineTypeModal
         )
+from modals.virtiofs_modals import AddEditVirtIOFSModal
 from modals.disk_pool_modals import (
           SelectPoolModal, AddDiskModal,
           SelectDiskModal, EditDiskModal

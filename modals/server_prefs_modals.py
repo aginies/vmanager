@@ -32,7 +32,7 @@ from modals.disk_pool_modals import (
         MoveVolumeModal,
         )
 from modals.utils_modals import ConfirmationDialog, ProgressModal
-from modals.vmanager_xml_modals import XMLDisplayModal
+from modals.xml_modals import XMLDisplayModal
 
 
 class ServerPrefModal(BaseModal[None]):

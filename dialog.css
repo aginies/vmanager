@@ -347,7 +347,7 @@ PasswordModal #dialog-buttons Button {
     margin-left: 1;
 }
 
-/* --- HowTo SSH Modal --- */
+/* --- HowTo SSH / Config Modal --- */
 ConfigModal #config-dialog,
 HowToSSHModal {
     align: center middle;

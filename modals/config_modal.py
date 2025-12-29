@@ -2,12 +2,12 @@
 Modal for user configuration
 """
 from textual.app import ComposeResult
-from textual.containers import Vertical, Horizontal, ScrollableContainer, Grid
+from textual.containers import Vertical, Horizontal, ScrollableContainer
 from textual import on
 from textual.widgets import Label, Button, Input, Checkbox, Static
 
-from modals.base_modals import BaseModal
 from config import save_config, get_user_config_path
+from modals.base_modals import BaseModal
 
 class ConfigModal(BaseModal[None]):
     """Modal screen for configuring the application."""
@@ -17,7 +17,7 @@ class ConfigModal(BaseModal[None]):
         self.config = config
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="config-dialog"):
+        with ScrollableContainer(id="config-dialog"):
             yield Label("Application Configuration", id="config-title")
             yield Static(f"Editing: {get_user_config_path()}", classes="config-path-label")
             with ScrollableContainer():
@@ -99,7 +99,7 @@ class ConfigModal(BaseModal[None]):
                 self.config["WC_PORT_RANGE_END"] = int(self.query_one("#wc-port-end-input", Input).value)
                 self.config["VNC_QUALITY"] = int(self.query_one("#vnc-quality-input", Input).value)
                 self.config["VNC_COMPRESSION"] = int(self.query_one("#vnc-compression-input", Input).value)
-                
+
                 save_config(self.config)
                 self.app.show_success_message("Configuration saved successfully.")
                 self.dismiss(self.config)

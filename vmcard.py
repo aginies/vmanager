@@ -23,7 +23,7 @@ from textual.css.query import NoMatches
 from vm_queries import get_status
 from vm_actions import clone_vm, delete_vm, rename_vm, start_vm
 
-from modals.vmanager_xml_modals import XMLDisplayModal
+from modals.xml_modals import XMLDisplayModal
 from modals.utils_modals import ConfirmationDialog, LoadingModal, ProgressModal
 from modals.migration_modals import MigrationModal
 from vmcard_dialog import (
