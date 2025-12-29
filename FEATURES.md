@@ -192,6 +192,7 @@ Rainbow V Manager is a Textual-based TUI (Terminal User Interface) application f
 - Error handling and logging
 - Responsive UI that adapts to terminal size
 - Command-line mode support (--cmd flag)
+- Configurable caching for VM metadata with a time-to-live (TTL) to reduce `libvirt` calls and improve performance.
 
 ## User Experience
 - Visual feedback through notifications

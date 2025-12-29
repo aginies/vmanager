@@ -93,6 +93,7 @@ The default configuration is provided in `config.py`, and user configurations me
 - **VNC_QUALITY**: VNC quality setting (0-10, default: 0)
 - **VNC_COMPRESSION**: VNC compression level (default: `9`)
 - **AUTOCONNECT_ON_STARTUP**: Automatically connect to the first configured server on application startup (default: `False`)
+- **CACHE_TTL**: Time-to-live for VM metadata cache in seconds. Reduces `libvirt` calls. (default: `1`)
 - **network_models**: List of allowed network models (default: `['virtio', 'e1000', 'e1000e', 'rtl8139', 'ne2k_pci', 'pcnet']`)
 - **sound_models**: List of allowed sound models (default: `['none', 'ich6', 'ich9', 'ac97', 'sb16', 'usb']`)
 - **servers**: List of libvirt server connections (default: `[{'name': 'Localhost', 'uri': 'qemu:///system'}]`)
