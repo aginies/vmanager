@@ -127,11 +127,11 @@ class VMManagerTUI(App):
             yield Button("Select Servers", id="select_server_button", classes="Buttonpage")
             yield Button("Servers List", id="manage_servers_button", classes="Buttonpage")
             yield Button("Server Prefs", id="server_preferences_button", classes="Buttonpage")
-            yield Button("Config", id="config_button", classes="Buttonpage")
             yield Button("Filter VM", id="filter_button", classes="Buttonpage")
             yield Button("Log", id="view_log_button", classes="Buttonpage")
             #yield Button("Virsh Shell", id="virsh_shell_button", classes="Buttonpage")
             yield Button("Bulk CMD", id="bulk_selected_vms", classes="Buttonpage")
+            yield Button("Config", id="config_button", classes="Buttonpage")
             yield Link("About", url="https://aginies.github.io/vmanager/")
 
         with Horizontal(id="pagination-controls") as pc:
