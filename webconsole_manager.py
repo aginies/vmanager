@@ -63,7 +63,9 @@ class WebConsoleManager:
             stopper_worker = partial(self.stop_console, uuid, vm_name)
             def on_dialog_dismiss(result):
                 if result == "stop":
-                    self.app.run_worker(stopper_worker, thread=True)
+                    self.app.worker_manager.run(
+                        stopper_worker, name=f"stop_console_{uuid}"
+                    )
             self.app.call_from_thread(self.app.push_screen, WebConsoleDialog(url), on_dialog_dismiss)
             return
 
@@ -130,7 +132,12 @@ class WebConsoleManager:
                     logging.info(f"Web console client connected for {vm_name}. Scheduling service stop in 2 seconds.")
 
                     stopper_worker = partial(self.stop_console, uuid, vm_name)
-                    self.app.call_later(2, lambda: self.app.run_worker(stopper_worker, thread=True))
+                    self.app.call_later(
+                        2,
+                        lambda: self.app.worker_manager.run(
+                            stopper_worker, name=f"stop_console_{uuid}"
+                        ),
+                    )
                     break
         except Exception as e:
             logging.error(f"Error monitoring websockify for {vm_name}: {e}")
@@ -206,9 +213,13 @@ class WebConsoleManager:
 
         proc = subprocess.Popen(ssh_command_list, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, encoding='utf-8')
 
-        self.app.run_worker(
-            self._monitor_and_kill_service, uuid, vm_name, proc,
-            name=f"monitor_{vm_name}", thread=True, group="webconsole_monitors"
+        monitor_callable = partial(
+            self._monitor_and_kill_service, uuid, vm_name, proc
+        )
+        self.app.worker_manager.run(
+            monitor_callable,
+            name=f"monitor_{vm_name}",
+            group="webconsole_monitors",
         )
 
         quality = self.config.get('VNC_QUALITY', 0)
@@ -220,7 +231,9 @@ class WebConsoleManager:
         stopper_worker = partial(self.stop_console, uuid, vm_name)
         def on_dialog_dismiss(result):
             if result == "stop":
-                self.app.run_worker(stopper_worker, thread=True)
+                self.app.worker_manager.run(
+                    stopper_worker, name=f"stop_console_{uuid}"
+                )
 
         self.app.call_from_thread(
             self.app.push_screen,
@@ -307,7 +320,9 @@ class WebConsoleManager:
             stopper_worker = partial(self.stop_console, uuid, vm_name)
             def on_dialog_dismiss(result):
                 if result == "stop":
-                    self.app.run_worker(stopper_worker, thread=True)
+                    self.app.worker_manager.run(
+                        stopper_worker, name=f"stop_console_{uuid}"
+                    )
 
             self.app.call_from_thread(
                 self.app.push_screen,
