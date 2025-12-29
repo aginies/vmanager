@@ -762,5 +762,9 @@ Usage: list_pool"""
         print("\nExiting vmanager.")
         return True
 
-if __name__ == '__main__':
+def main():
+    """Entry point for vmanager command-line interface."""
     VManagerCMD().cmdloop()
+
+if __name__ == '__main__':
+    main()
