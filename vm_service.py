@@ -3,6 +3,7 @@ VM Service Layer
 Handles all libvirt interactions and data processing.
 """
 import libvirt
+import time
 from connection_manager import ConnectionManager
 from constants import VmStatus
 
@@ -12,6 +13,118 @@ class VMService:
     def __init__(self):
         self.connection_manager = ConnectionManager()
         self._cpu_time_cache = {} # Cache for calculating CPU usage {uuid: (last_time, last_timestamp)}
+        self._domain_cache: dict[str, libvirt.virDomain] = {}
+        self._uuid_to_conn_cache: dict[str, libvirt.virConnect] = {}
+        self._cache_timestamp: float = 0.0
+        self._cache_ttl: int = 5  # seconds
+
+        self._vm_data_cache: dict[str, dict] = {}  # {uuid: {'info': (data), 'info_ts': ts, 'xml': 'data', 'xml_ts': ts}}
+        self._info_cache_ttl: int = 5  # seconds
+        self._xml_cache_ttl: int = 600  # 10 minutes
+
+    def invalidate_domain_cache(self):
+        """Invalidates the domain cache."""
+        self._domain_cache.clear()
+        self._uuid_to_conn_cache.clear()
+        self._cache_timestamp = 0.0
+
+    def _update_domain_cache(self, active_uris: list[str], force: bool = False):
+        """Updates the domain and connection cache."""
+        if not force and self._domain_cache and (time.time() - self._cache_timestamp < self._cache_ttl):
+            return
+
+        self.invalidate_domain_cache()
+        if force:
+            self._vm_data_cache.clear()
+        active_connections = [self.connect(uri) for uri in active_uris if self.connect(uri)]
+        for conn in active_connections:
+            try:
+                domains = conn.listAllDomains(0) or []
+                for domain in domains:
+                    uuid = domain.UUIDString()
+                    self._domain_cache[uuid] = domain
+                    self._uuid_to_conn_cache[uuid] = conn
+            except libvirt.libvirtError:
+                pass  # Or log error
+        self._cache_timestamp = time.time()
+
+    def _get_domain_info_and_xml(self, domain: libvirt.virDomain) -> tuple[tuple, str]:
+        """Gets info and XML from cache or fetches them, fetching both if both are missing."""
+        uuid = domain.UUIDString()
+        now = time.time()
+        
+        # Ensure cache entry exists
+        self._vm_data_cache.setdefault(uuid, {})
+        vm_cache = self._vm_data_cache[uuid]
+
+        info = vm_cache.get('info')
+        info_ts = vm_cache.get('info_ts', 0)
+        if info and now - info_ts >= self._info_cache_ttl:
+            info = None
+
+        xml = vm_cache.get('xml')
+        xml_ts = vm_cache.get('xml_ts', 0)
+        if xml and now - xml_ts >= self._xml_cache_ttl:
+            xml = None
+
+        if info is None and xml is None:
+            info = domain.info()
+            xml = domain.XMLDesc(0)
+            vm_cache['info'] = info
+            vm_cache['info_ts'] = now
+            vm_cache['xml'] = xml
+            vm_cache['xml_ts'] = now
+        elif info is None:
+            info = domain.info()
+            vm_cache['info'] = info
+            vm_cache['info_ts'] = now
+        elif xml is None:
+            xml = domain.XMLDesc(0)
+            vm_cache['xml'] = xml
+            vm_cache['xml_ts'] = now
+
+        return info, xml
+
+    def _get_domain_info(self, domain: libvirt.virDomain) -> tuple | None:
+        """Gets domain info from cache or fetches it."""
+        uuid = domain.UUIDString()
+        now = time.time()
+
+        self._vm_data_cache.setdefault(uuid, {})
+        vm_cache = self._vm_data_cache[uuid]
+
+        info = vm_cache.get('info')
+        info_ts = vm_cache.get('info_ts', 0)
+
+        if info is None or (now - info_ts >= self._info_cache_ttl):
+            try:
+                info = domain.info()
+                vm_cache['info'] = info
+                vm_cache['info_ts'] = now
+            except libvirt.libvirtError:
+                return None
+        return info
+
+    def _get_domain_xml(self, domain: libvirt.virDomain) -> str | None:
+        """Gets domain XML from cache or fetches it."""
+        uuid = domain.UUIDString()
+        now = time.time()
+
+        self._vm_data_cache.setdefault(uuid, {})
+        vm_cache = self._vm_data_cache[uuid]
+
+        xml = vm_cache.get('xml')
+        xml_ts = vm_cache.get('xml_ts', 0)
+
+        if xml is None or (now - xml_ts >= self._xml_cache_ttl):
+            try:
+                xml = domain.XMLDesc(0)
+                vm_cache['xml'] = xml
+                vm_cache['xml_ts'] = now
+            except libvirt.libvirtError:
+                return None
+        return xml
+
 
     def get_vm_runtime_stats(self, domain: libvirt.virDomain) -> dict | None:
         """Gets live statistics for a given, active VM domain."""
@@ -38,7 +151,9 @@ class VMService:
                 time_diff = now - last_cpu_time_ts
                 cpu_diff = current_cpu_time - last_cpu_time
                 if time_diff > 0:
-                    num_cpus = domain.info()[3]
+                    info = self._get_domain_info(domain)
+                    if not info: return None
+                    num_cpus = info[3]
                     # nanoseconds to seconds, then divide by number of cpus
                     cpu_percent = (cpu_diff / (time_diff * 1_000_000_000)) * 100
                     cpu_percent = cpu_percent / num_cpus if num_cpus > 0 else 0
@@ -50,7 +165,9 @@ class VMService:
             mem_stats = domain.memoryStats()
             mem_percent = 0.0
             if 'rss' in mem_stats:
-                total_mem_kb = domain.info()[1]
+                info = self._get_domain_info(domain)
+                if not info: return None
+                total_mem_kb = info[1]
                 if total_mem_kb > 0:
                     rss_kb = mem_stats['rss']
                     mem_percent = (rss_kb / total_mem_kb) * 100
@@ -97,21 +214,11 @@ class VMService:
         successful_vms = []
         failed_vms = []
 
-        for i, vm_uuid in enumerate(vm_uuids):
-            domain = None
-            vm_name = "Unknown VM"
+        found_domains = self.find_domains_by_uuids(active_uris, vm_uuids)
 
-            # Find the domain on any active connection
-            for uri in active_uris:
-                conn = self.connect(uri)
-                if not conn:
-                    continue
-                try:
-                    domain = conn.lookupByUUIDString(vm_uuid)
-                    vm_name = domain.name()
-                    break
-                except libvirt.libvirtError:
-                    continue
+        for i, vm_uuid in enumerate(vm_uuids):
+            domain = found_domains.get(vm_uuid)
+            vm_name = domain.name() if domain else "Unknown VM"
             
             progress_callback("progress", name=vm_name, current=i + 1, total=total_vms)
 
@@ -158,17 +265,37 @@ class VMService:
         """Gets all URIs currently held by the connection manager."""
         return self.connection_manager.get_all_uris()
 
+    def find_domains_by_uuids(self, active_uris: list[str], vm_uuids: list[str]) -> dict[str, libvirt.virDomain]:
+        """Finds and returns a dictionary of domain objects from a list of UUIDs."""
+        self._update_domain_cache(active_uris)
+        
+        found_domains = {}
+        missing_uuids = []
+
+        for uuid in vm_uuids:
+            domain = self._domain_cache.get(uuid)
+            if domain:
+                try:
+                    domain.info() # Check if domain is still valid
+                    found_domains[uuid] = domain
+                except libvirt.libvirtError:
+                    missing_uuids.append(uuid)
+            else:
+                missing_uuids.append(uuid)
+
+        if missing_uuids:
+            self._update_domain_cache(active_uris, force=True)
+            for uuid in missing_uuids:
+                domain = self._domain_cache.get(uuid)
+                if domain:
+                    found_domains[uuid] = domain
+        
+        return found_domains
+
     def find_domain_by_uuid(self, active_uris: list[str], vm_uuid: str) -> libvirt.virDomain | None:
         """Finds and returns a domain object from a UUID across active connections."""
-        for uri in active_uris:
-            conn = self.connect(uri)
-            if conn:
-                try:
-                    domain = conn.lookupByUUIDString(vm_uuid)
-                    return domain
-                except libvirt.libvirtError:
-                    continue
-        return None
+        domains = self.find_domains_by_uuids(active_uris, [vm_uuid])
+        return domains.get(vm_uuid)
 
     def start_vm(self, domain: libvirt.virDomain) -> None:
         """Performs pre-flight checks and starts the VM."""
@@ -205,8 +332,12 @@ class VMService:
     def delete_vm(self, domain: libvirt.virDomain, delete_storage: bool) -> None:
         """Deletes the VM."""
         from vm_actions import delete_vm as delete_action
-
+        
+        uuid = domain.UUIDString()
         delete_action(domain, delete_storage=delete_storage)
+        if uuid in self._vm_data_cache:
+            del self._vm_data_cache[uuid]
+
 
     def resume_vm(self, domain: libvirt.virDomain) -> None:
         """Resumes the VM."""
@@ -221,26 +352,34 @@ class VMService:
             get_boot_info, get_vm_video_model, get_vm_cpu_model
         )
 
-        domain = None
-        conn_for_domain = None
+        domain = self.find_domain_by_uuid(active_uris, vm_uuid)
+        if not domain:
+            return None
 
-        for uri in active_uris:
-            conn = self.connect(uri)
-            if not conn:
-                continue
-            try:
-                domain = conn.lookupByUUIDString(vm_uuid)
-                conn_for_domain = conn
-                break
-            except libvirt.libvirtError:
-                continue
-
-        if not domain or not conn_for_domain:
+        conn_for_domain = self._uuid_to_conn_cache.get(vm_uuid)
+        # Fallback to be safe, though this shouldn't be hit if cache is consistent
+        if not conn_for_domain:
+            for uri in active_uris:
+                conn = self.connect(uri)
+                if not conn:
+                    continue
+                try:
+                    # Check if this connection owns the domain
+                    if conn.lookupByUUIDString(vm_uuid).UUID() == domain.UUID():
+                         conn_for_domain = conn
+                         break
+                except libvirt.libvirtError:
+                    continue
+        
+        if not conn_for_domain:
+            # This would indicate a cache inconsistency or a race condition
             return None
 
         try:
-            info = domain.info()
-            xml_content = domain.XMLDesc(0)
+            info, xml_content = self._get_domain_info_and_xml(domain)
+            if info is None or xml_content is None:
+                # If we can't get essential info, we can't proceed.
+                return None
             vm_info = {
                 'name': domain.name(),
                 'uuid': domain.UUIDString(),
@@ -268,19 +407,19 @@ class VMService:
 
     def get_vms(self, active_uris: list[str], servers: list[dict], sort_by: str, search_text: str, selected_vm_uuids: list[str]) -> tuple:
         """Fetch, filter, and return VM data without creating UI components."""
+        self._update_domain_cache(active_uris)
+
         domains_with_conn = []
-        total_vms = 0
+        for uuid, domain in self._domain_cache.items():
+            conn = self._uuid_to_conn_cache.get(uuid)
+            if conn:
+                domains_with_conn.append((domain, conn))
+
+        total_vms = len(domains_with_conn)
         server_names = []
-
         active_connections = [self.connect(uri) for uri in active_uris if self.connect(uri)]
-
         for conn in active_connections:
             try:
-                domains = conn.listAllDomains(0) or []
-                total_vms += len(domains)
-                for domain in domains:
-                    domains_with_conn.append((domain, conn))
-
                 uri = conn.getURI()
                 found = False
                 for server in servers:
@@ -291,23 +430,30 @@ class VMService:
                 if not found:
                     server_names.append(uri)
             except libvirt.libvirtError:
-                # In a more advanced implementation, this could return an error message
-                # for the UI to display.
                 pass
 
         total_vms_unfiltered = len(domains_with_conn)
         domains_to_display = domains_with_conn
 
         if sort_by != VmStatus.DEFAULT:
-            if sort_by == VmStatus.RUNNING:
-                domains_to_display = [(d, c) for d, c in domains_to_display if d.info()[0] == libvirt.VIR_DOMAIN_RUNNING]
-            elif sort_by == VmStatus.PAUSED:
-                domains_to_display = [(d, c) for d, c in domains_to_display if d.info()[0] == libvirt.VIR_DOMAIN_PAUSED]
-            elif sort_by == VmStatus.STOPPED:
-                domains_to_display = [(d, c) for d, c in domains_to_display if d.info()[0] not in [libvirt.VIR_DOMAIN_RUNNING, libvirt.VIR_DOMAIN_PAUSED]]
-            elif sort_by == VmStatus.SELECTED:
+            if sort_by == VmStatus.SELECTED:
                 domains_to_display = [(d, c) for d, c in domains_to_display if d.UUIDString() in selected_vm_uuids]
+            else:
+                domains_to_display_filtered = []
+                for d, c in domains_to_display:
+                    info = self._get_domain_info(d)
+                    if not info:
+                        continue  # Skip if domain info can't be fetched
 
+                    status = info[0]
+                    if sort_by == VmStatus.RUNNING and status == libvirt.VIR_DOMAIN_RUNNING:
+                        domains_to_display_filtered.append((d, c))
+                    elif sort_by == VmStatus.PAUSED and status == libvirt.VIR_DOMAIN_PAUSED:
+                        domains_to_display_filtered.append((d, c))
+                    elif sort_by == VmStatus.STOPPED and status not in [libvirt.VIR_DOMAIN_RUNNING, libvirt.VIR_DOMAIN_PAUSED]:
+                        domains_to_display_filtered.append((d, c))
+                domains_to_display = domains_to_display_filtered
+        
         if search_text:
             domains_to_display = [(d, c) for d, c in domains_to_display if search_text.lower() in d.name().lower()]
 
