@@ -930,7 +930,8 @@ class VMManagerTUI(App):
         """Quit the application."""
         self.exit()
 
-if __name__ == "__main__":
+def main():
+    """Entry point for vmanager TUI application."""
     parser = argparse.ArgumentParser(description="A Textual application to manage VMs.")
     parser.add_argument("--cmd", action="store_true", help="Run in command-line interpreter mode.")
     args = parser.parse_args()
@@ -948,3 +949,6 @@ if __name__ == "__main__":
             sys.exit(1)
         app = VMManagerTUI()
         app.run()
+
+if __name__ == "__main__":
+    main()
