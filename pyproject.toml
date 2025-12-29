@@ -60,17 +60,16 @@ Changelog = "https://github.com/aginies/vmanager/releases"
 
 [project.scripts]
 vmanager = "vmanager:main"
-vmanager-cmd = "vmanager_cmd:main"
+vmanager-cmd = "vmanager.vmanager_cmd:main"
 
 [tool.setuptools]
-include-package-data = true
+package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["modals"]
+where = ["src"]
 
 [tool.setuptools.package-data]
-"*" = ["*.css", "*.md"]
+vmanager = ["*.css", "*.md"]
 
 [tool.black]
 line-length = 100
