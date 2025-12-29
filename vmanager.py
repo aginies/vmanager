@@ -5,20 +5,14 @@ import os
 import sys
 import logging
 import argparse
-import libvirt
 from typing import Any, Callable
+import libvirt
 
 from textual.app import App, ComposeResult, on
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
 from textual.widgets import (
-    Button,
-    Footer,
-    Header,
-    Label,
-    Link,
-    ProgressBar,
-    Static,
+    Button, Footer, Header, Label, Link, Static,
 )
 from textual.worker import Worker, WorkerState
 
@@ -33,7 +27,6 @@ from modals.log_modal import LogModal
 from modals.server_modals import ServerManagementModal
 from modals.server_prefs_modals import ServerPrefModal
 from modals.select_server_modals import SelectOneServerModal, SelectServerModal
-from modals.utils_modals import ProgressModal
 from modals.vmanager_modals import (
     CreateVMModal,
     FilterModal,
@@ -46,7 +39,6 @@ from utils import (
     check_websockify,
     generate_webconsole_keys_if_needed,
 )
-from vm_actions import force_off_vm, pause_vm, start_vm, stop_vm  # , stop_vm
 from vm_queries import (
     check_for_spice_vms,
     get_status,
@@ -124,8 +116,6 @@ class WorkerManager:
         for worker in list(self.workers.values()):
             worker.cancel()
         self.workers.clear()
-
-
 
 class VMManagerTUI(App):
     """A Textual application to manage VMs."""
@@ -698,11 +688,6 @@ class VMManagerTUI(App):
         # Clear selection immediately and set bulk operation flag
         self.selected_vm_uuids.clear()
         self.bulk_operation_in_progress = True
-        #self.refresh_vm_list()  # Refresh to update selection borders
-
-        self.push_screen(
-            ProgressModal(title=f"Bulk {action_type.capitalize()}: Pending...")
-        )
 
         # Perform the action in a worker to avoid blocking the UI
         self.worker_manager.run(
@@ -715,29 +700,9 @@ class VMManagerTUI(App):
     def _perform_bulk_action_worker(self, action_type: str, vm_uuids: list[str], delete_storage_flag: bool = False) -> None:
         """Worker function to orchestrate a bulk action using the VMService."""
         
-        def progress_callback(event_type: str, *args, **kwargs):
-            """A single, robust callback to handle all progress updates from the service."""
-            try:
-                modal = self.query_one(ProgressModal)
-                if event_type == "setup":
-                    bar = modal.query_one(ProgressBar)
-                    bar.total = kwargs.get("total", 0)
-                    bar.progress = 0
-                elif event_type in ("log", "log_error"):
-                    # This defensively handles both message=".." and an extra positional arg.
-                    message = kwargs.get("message", args[0] if args else "")
-                    log_prefix = "[red]ERROR:[/] " if event_type == "log_error" else ""
-                    self.call_from_thread(modal.add_log, f"{log_prefix}{message}")
-                elif event_type == "progress":
-                    bar = modal.query_one(ProgressBar)
-                    self.call_from_thread(bar.advance, 1)
-                    title = modal.query_one("#progress-title", Label)
-                    self.call_from_thread(
-                        title.update,
-                        f"Action '{action_type}' on '{kwargs.get('name')}' ({kwargs.get('current')}/{kwargs.get('total')})"
-                    )
-            except Exception as e:
-                logging.error(f"Failed to update progress UI: {e}")
+        # Define a dummy progress callback
+        def dummy_progress_callback(event_type: str, *args, **kwargs):
+            pass
 
         try:
             successful_vms, failed_vms = self.vm_service.perform_bulk_action(
@@ -745,45 +710,26 @@ class VMManagerTUI(App):
                 vm_uuids,
                 action_type,
                 delete_storage_flag,
-                progress_callback
+                dummy_progress_callback  # Pass the dummy callback
             )
 
-            summary = f"\n[bold]Bulk action '{action_type}' complete.[/bold]\n"
-            summary += f"  - [green]Successful:[/] {len(successful_vms)}\n"
-            summary += f"  - [red]Failed:[/]     {len(failed_vms)}"
-            progress_callback("log", message=summary)
+            summary = f"Bulk action '{action_type}' complete. Successful: {len(successful_vms)}, Failed: {len(failed_vms)}"
+            logging.info(summary) 
 
             if successful_vms:
-                logging.info(f"Bulk action '{action_type}' successful for: {', '.join(successful_vms)}")
+                self.call_from_thread(self.show_success_message, f"Bulk action '{action_type}' successful for {len(successful_vms)} VMs.")
             if failed_vms:
-                logging.error(f"Bulk action '{action_type}' failed for: {', '.join(failed_vms)}")
+                self.call_from_thread(self.show_error_message, f"Bulk action '{action_type}' failed for {len(failed_vms)} VMs.")
         
         except Exception as e:
-            # Catch exceptions from the service call itself
             logging.error(f"An unexpected error occurred during bulk action service call: {e}", exc_info=True)
-            progress_callback("log_error", message=f"A fatal error occurred: {e}")
+            self.call_from_thread(self.show_error_message, f"A fatal error occurred during bulk action: {e}")
 
         finally:
-            # Finalize the modal UI
-            def update_title_and_button():
-                try:
-                    modal = self.query_one(ProgressModal)
-                    title = modal.query_one("#progress-title", Label)
-                    title.update("Bulk Action Finished")
-                    button = Button("Close", variant="primary", id="close-progress-modal")
-                    modal.mount(button)
-                    @modal.on(Button.Pressed, "#close-progress-modal")
-                    def close_modal():
-                        self.pop_screen()
-                        self.refresh_vm_list()
-                        self.bulk_operation_in_progress = False
-                except Exception as e:
-                    logging.error(f"Error finalizing progress modal: {e}")
-                    self.pop_screen()
-                    self.refresh_vm_list()
-                    self.bulk_operation_in_progress = False
+            # Ensure these are called on the main thread
+            self.call_from_thread(self.refresh_vm_list)
+            self.call_from_thread(setattr, self, 'bulk_operation_in_progress', False) # Reset flag
 
-            self.call_from_thread(update_title_and_button)
 
     def change_connection(self, uri: str) -> None:
         """Change the active connection to a single server and refresh."""
