@@ -7,7 +7,7 @@ import libvirt
 from config import load_config
 from libvirt_utils import find_all_vm
 from vm_actions import start_vm, delete_vm, stop_vm, pause_vm, force_off_vm, clone_vm
-from connection_manager import ConnectionManager
+from vm_service import VMService
 from storage_manager import list_unused_volumes, list_storage_pools
 
 class VManagerCMD(cmd.Cmd):
@@ -20,7 +20,7 @@ class VManagerCMD(cmd.Cmd):
         self.config = load_config()
         self.servers = self.config.get('servers', [])
         self.server_names = [s['name'] for s in self.servers]
-        self.connection_manager = ConnectionManager()
+        self.vm_service = VMService()
         self.active_connections = {}
         self.selected_vms = {}
 
@@ -102,7 +102,7 @@ Usage: connect <server_name_1> [<server_name_2> ...] | all"""
 
             try:
                 print(f"Connecting to {server_name} at {server_info['uri']}...")
-                conn = self.connection_manager.connect(server_info['uri'])
+                conn = self.vm_service.connect(server_info['uri'])
                 if conn:
                     self.active_connections[server_name] = conn
                     print(f"Successfully connected to '{server_name}'.")
@@ -137,7 +137,7 @@ Usage: disconnect [<server_name_1> <server_name_2> ...] | all"""
                 try:
                     conn = self.active_connections[server_name]
                     uri = conn.getURI()
-                    self.connection_manager.disconnect(uri)
+                    self.vm_service.disconnect(uri)
                     del self.active_connections[server_name]
                     if server_name in self.selected_vms:
                         del self.selected_vms[server_name]
@@ -758,7 +758,7 @@ Usage: list_pool"""
     def do_quit(self, arg):
         """Exit the vmanager shell."""
         # Disconnect all connections when quitting
-        self.connection_manager.disconnect_all()
+        self.vm_service.disconnect_all()
         print("\nExiting vmanager.")
         return True
 
