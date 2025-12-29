@@ -39,6 +39,15 @@ class ConfigModal(BaseModal[None]):
                     tooltip="Time-to-live for VM metadata cache in seconds. Reduces libvirt calls."
                 )
 
+                # Logging settings
+                yield Label("Logging", classes="config-section-label")
+                yield Label("Log File Path:")
+                yield Input(
+                    value=self.config.get("LOG_FILE_PATH", ""),
+                    id="log-file-path-input",
+                    tooltip="Full path to the application log file"
+                )
+
                 # Web console settings
                 yield Label("Web Console (novnc)", classes="config-section-label")
                 yield Checkbox(
@@ -110,6 +119,7 @@ class ConfigModal(BaseModal[None]):
                 self.config["VNC_QUALITY"] = int(self.query_one("#vnc-quality-input", Input).value)
                 self.config["VNC_COMPRESSION"] = int(self.query_one("#vnc-compression-input", Input).value)
                 self.config["CACHE_TTL"] = int(self.query_one("#cache-ttl-input", Input).value)
+                self.config["LOG_FILE_PATH"] = self.query_one("#log-file-path-input", Input).value
 
                 save_config(self.config)
                 self.app.show_success_message("Configuration saved successfully.")

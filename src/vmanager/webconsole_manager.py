@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 
 import libvirt
 
-from config import load_config
+from config import load_config, get_log_path
 from utils import find_free_port
 from vm_queries import get_vm_graphics_info
 from vmcard_dialog import WebConsoleDialog
@@ -305,7 +305,7 @@ class WebConsoleManager:
         key_file = config_dir / 'key.pem'
         url_scheme = "http"
 
-        log_file_path = "vm_manager.log"
+        log_file_path = get_log_path()
         with open(log_file_path, 'a') as log_file_handle:
             if cert_file.exists() and key_file.exists():
                 websockify_cmd.extend(["--cert", str(cert_file), "--key", str(key_file)])

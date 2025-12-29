@@ -16,7 +16,7 @@ from textual.widgets import (
 )
 from textual.worker import Worker, WorkerState
 
-from config import load_config, save_config
+from config import load_config, save_config, get_log_path
 from constants import VmAction, VmStatus
 from events import VmActionRequest, VMNameClicked, VMSelectionChanged
 from libvirt_error_handler import register_error_handler
@@ -50,7 +50,7 @@ from webconsole_manager import WebConsoleManager
 
 # Configure logging
 logging.basicConfig(
-    filename="vm_manager.log",
+    filename=get_log_path(),
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
@@ -471,11 +471,12 @@ class VMManagerTUI(App):
     @on(Button.Pressed, "#view_log_button")
     def action_view_log(self) -> None:
         """View the application log file."""
+        log_path = get_log_path()
         try:
-            with open("vm_manager.log", "r") as f:
+            with open(log_path, "r") as f:
                 log_content = f.read()
         except FileNotFoundError:
-            log_content = "Log file (vm_manager.log) not found."
+            log_content = f"Log file ({log_path}) not found."
         except Exception as e:
             log_content = f"Error reading log file: {e}"
         self.push_screen(LogModal(log_content))

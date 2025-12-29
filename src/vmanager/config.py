@@ -21,7 +21,19 @@ DEFAULT_CONFIG = {
     'servers': [
         {'name': 'Localhost', 'uri': 'qemu:///system'},
     ],
+    'LOG_FILE_PATH': str(Path.home() / ".local" / "vmanager" / "vm_manager.log"),
 }
+
+def get_log_path() -> Path:
+    """
+    Returns the path to the log file as specified in the configuration,
+    ensuring its parent directory exists.
+    """
+    config = load_config()
+    log_file_path_str = config.get('LOG_FILE_PATH', DEFAULT_CONFIG['LOG_FILE_PATH'])
+    log_path = Path(log_file_path_str)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    return log_path
 
 def get_config_paths():
     """Returns the potential paths for the config file."""

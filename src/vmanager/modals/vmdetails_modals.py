@@ -33,6 +33,7 @@ from vm_actions import (
         add_network_interface, remove_network_interface, set_boot_info, set_vm_rng, set_vm_tpm,
         check_for_other_spice_devices, remove_spice_devices
 )
+from config import get_log_path
 from network_manager import (
     list_networks,
 )
@@ -56,7 +57,7 @@ from modals.network_modals import AddEditNetworkInterfaceModal
 
 # Configure logging
 logging.basicConfig(
-    filename='vm_manager.log',
+    filename=get_log_path(),
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
