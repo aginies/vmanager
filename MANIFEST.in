@@ -1,8 +1,7 @@
-include *.css
+include src/vmanager/*.css
+recursive-include src/vmanager/modals *.py
 include README.md
-include requirements.txt
 include FEATURES.md
-recursive-include modals *.py
-recursive-include docs *
+include requirements.txt
 global-exclude __pycache__
 global-exclude *.py[co]
