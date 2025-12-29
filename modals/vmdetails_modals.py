@@ -86,13 +86,31 @@ class VMDetailModal(ModalScreen):
         self.all_bootable_devices = [] # Initialize the new reactive list
         self.sev_caps = {'sev': False, 'sev-es': False}
         self.uefi_path_map = {}
-        #self.graphics_info = vm_info.get('graphics', {})
-        self.graphics_info = get_vm_graphics_info(self.domain.XMLDesc(0))
-        self.vm_info['sound_model'] = get_vm_sound_model(self.domain.XMLDesc(0))
-        self.vm_info['rng_model'] = get_vm_rng_info(self.domain.XMLDesc(0))
-        self.rng_info = get_vm_rng_info(self.domain.XMLDesc(0))
+        self.xml_desc = self.domain.XMLDesc(0)
+        self.graphics_info = get_vm_graphics_info(self.xml_desc)
+        self.vm_info['sound_model'] = get_vm_sound_model(self.xml_desc)
+        self.rng_info = get_vm_rng_info(self.xml_desc)
         # Initialize TPM info
-        self.tpm_info = get_vm_tpm_info(self.domain.XMLDesc(0))
+        self.tpm_info = get_vm_tpm_info(self.xml_desc)
+
+    @property
+    def is_vm_stopped(self) -> bool:
+        """Check if the VM is currently stopped.
+
+        Returns:
+            bool: True if VM status is 'Stopped', False otherwise
+        """
+        return self.vm_info.get("status") == "Stopped"
+
+    @property
+    def is_vm_active(self) -> bool:
+        """Check if the VM domain is currently active/running.
+
+        Returns:
+            bool: True if VM is active, False otherwise
+        """
+        return self.domain.isActive()
+
 
 
     def on_mount(self) -> None:
@@ -138,6 +156,7 @@ class VMDetailModal(ModalScreen):
         # Initialize Graphics tab values
         self._update_graphics_ui()
         self._update_tpm_ui()
+        self.vm_info['disks'] = get_vm_disks_info(self.conn, self.xml_desc)
         self._populate_disks_table()
         self._populate_networks_table()
 
@@ -150,9 +169,7 @@ class VMDetailModal(ModalScreen):
             disks_table.add_column("Discard Mode", key="discard_mode")
             disks_table.add_column("Status", key="status")
 
-        # Get the latest disk info directly from the VM's XML
-        disks_info = get_vm_disks_info(self.conn, self.domain.XMLDesc(0))
-        self.vm_info['disks'] = disks_info # Keep self.vm_info updated for consistency with other parts of the modal
+        disks_info = self.vm_info.get('disks', [])
 
         for disk in disks_info:
             path = disk.get('path', 'N/A')
@@ -405,19 +422,18 @@ class VMDetailModal(ModalScreen):
 
     def _update_graphics_ui(self) -> None:
         """Updates the UI elements for the Graphics tab based on self.graphics_info."""
-        is_stopped = self.vm_info.get("status") == "Stopped"
 
         try:
             graphics_type_select = self.query_one("#graphics-type-select", Select)
             graphics_type_select.value = self.graphics_info['type']
-            graphics_type_select.disabled = not is_stopped
+            graphics_type_select.disabled = not self.is_vm_stopped
         except Exception:
             pass
 
         try:
             listen_type_select = self.query_one("#graphics-listen-type-select", Select)
             listen_type_select.value = self.graphics_info['listen_type']
-            listen_type_select.disabled = not is_stopped
+            listen_type_select.disabled = not self.is_vm_stopped
         except Exception:
             pass
 
@@ -427,13 +443,13 @@ class VMDetailModal(ModalScreen):
                  address_radioset.disabled = True
             elif self.graphics_info['address'] == '127.0.0.1':
                 address_radioset.set_pressed("graphics-address-localhost")
-                address_radioset.disabled = not is_stopped
+                address_radioset.disabled = not self.is_vm_stopped
             elif self.graphics_info['address'] == '0.0.0.0':
                 address_radioset.set_pressed("graphics-address-all")
-                address_radioset.disabled = not is_stopped
+                address_radioset.disabled = not self.is_vm_stopped
             else:
                 address_radioset.set_pressed("graphics-address-default")
-                address_radioset.disabled = not is_stopped
+                address_radioset.disabled = not self.is_vm_stopped
             
         except Exception:
             pass
@@ -441,33 +457,33 @@ class VMDetailModal(ModalScreen):
         try:
             port_input = self.query_one("#graphics-port-input", Input)
             port_input.value = str(self.graphics_info['port']) if self.graphics_info['port'] else ""
-            port_input.disabled = not is_stopped or self.graphics_info['autoport']
+            port_input.disabled = not self.is_vm_stopped or self.graphics_info['autoport']
         except Exception:
             pass
 
         try:
             autoport_checkbox = self.query_one("#graphics-autoport-checkbox", Checkbox)
             autoport_checkbox.value = self.graphics_info['autoport']
-            autoport_checkbox.disabled = not is_stopped
+            autoport_checkbox.disabled = not self.is_vm_stopped
         except Exception:
             pass
 
         try:
             password_enable_checkbox = self.query_one("#graphics-password-enable-checkbox", Checkbox)
             password_enable_checkbox.value = self.graphics_info['password_enabled']
-            password_enable_checkbox.disabled = not is_stopped
+            password_enable_checkbox.disabled = not self.is_vm_stopped
         except Exception:
             pass
 
         try:
             password_input = self.query_one("#graphics-password-input", Input)
             password_input.value = self.graphics_info['password'] if self.graphics_info['password_enabled'] else ""
-            password_input.disabled = not is_stopped or not self.graphics_info['password_enabled']
+            password_input.disabled = not self.is_vm_stopped or not self.graphics_info['password_enabled']
         except Exception:
             pass
 
         try:
-            self.query_one("#graphics-apply-btn", Button).disabled = not is_stopped
+            self.query_one("#graphics-apply-btn", Button).disabled = not self.is_vm_stopped
         except Exception:
             pass
 
@@ -714,7 +730,7 @@ class VMDetailModal(ModalScreen):
 
     @on(Button.Pressed, "#graphics-apply-btn")
     def on_graphics_apply_button_pressed(self, event: Button.Pressed) -> None:
-        if self.vm_info.get("status") != "Stopped":
+        if not self.is_vm_stopped:
             self.app.show_error_message("VM must be stopped to apply graphics settings.")
             return
 
@@ -786,7 +802,7 @@ class VMDetailModal(ModalScreen):
 
     @on(Button.Pressed, "#apply-rng-btn")
     def on_rng_apply_button_pressed(self, event: Button.Pressed) -> None:
-        if self.vm_info.get("status") != "Stopped":
+        if not self.is_vm_stopped:
             self.app.show_error_message("VM must be stopped to apply RNG settings.")
             return
 
@@ -819,7 +835,7 @@ class VMDetailModal(ModalScreen):
 
     @on(Button.Pressed, "#apply-tpm-btn")
     def on_tpm_apply_button_pressed(self, event: Button.Pressed) -> None:
-        if self.vm_info.get("status") != "Stopped":
+        if not self.is_vm_stopped:
             self.app.show_error_message("VM must be stopped to apply TPM settings.")
             return
 
@@ -851,8 +867,7 @@ class VMDetailModal(ModalScreen):
 
     @on(ListView.Highlighted, "#available-devices-list")
     def on_available_devices_list_highlighted(self, event: ListView.Highlighted) -> None:
-        is_stopped = self.vm_info.get("status") == "Stopped"
-        if not is_stopped:
+        if not self.is_vm_stopped:
             return
 
         if event.item:
@@ -862,8 +877,7 @@ class VMDetailModal(ModalScreen):
 
     @on(ListView.Highlighted, "#boot-order-list")
     def on_boot_order_list_highlighted(self, event: ListView.Highlighted) -> None:
-        is_stopped = self.vm_info.get("status") == "Stopped"
-        if not is_stopped: # Buttons should remain disabled if VM is not stopped
+        if not self.is_vm_stopped: # Buttons should remain disabled if VM is not stopped
             return
 
         boot_list = self.query_one("#boot-order-list", ListView)
@@ -894,7 +908,6 @@ class VMDetailModal(ModalScreen):
             yield Button("Toggle Tab Content", id="toggle-detail-button", classes="toggle-detail-button")
             with TabbedContent(id="detail-vm"):
                 with TabPane("CPU", id="detail-cpu-tab"):
-                    is_stopped = self.vm_info.get("status") == "Stopped"
                     with Vertical(classes="info-details"):
                         yield Label(f"CPU: {self.vm_info.get('cpu', 'N/A')}", id="cpu-label", classes="tabd")
                         yield Button("Edit", id="edit-cpu", classes="edit-detail-btn")
@@ -920,20 +933,17 @@ class VMDetailModal(ModalScreen):
                             cpu_model_options,
                             value=current_cpu_model,
                             id="cpu-model-select",
-                            disabled=not is_stopped,
+                            disabled=not self.is_vm_stopped,
                             classes="cpu-model-select"
                         )
                 with TabPane("Mem", id="detail-mem-tab", ):
                     with Vertical(classes="info-details"):
                         yield Label(f"Memory: {self.vm_info.get('memory', 'N/A')} MB", id="memory-label", classes="tabd")
                         yield Button("Edit", id="edit-memory", classes="edit-detail-btn")
-                        is_stopped = self.vm_info.get("status") == "Stopped"
-                        yield Checkbox("Shared Memory", value=self.vm_info.get('shared_memory', False), id="shared-memory-checkbox", classes="shared-memory", disabled=not is_stopped)
+                        yield Checkbox("Shared Memory", value=self.vm_info.get('shared_memory', False), id="shared-memory-checkbox", classes="shared-memory", disabled=not self.is_vm_stopped)
                 with TabPane("Firmware", id="detail-firmware-tab"):
                     with Vertical(classes="info-details"):
-                        is_stopped = self.vm_info.get("status") == "Stopped"
                         firmware_info = self.vm_info.get('firmware', {'type': 'BIOS'})
-
                         firmware_type = firmware_info.get('type', 'BIOS')
                         firmware_path = firmware_info.get('path')
 
@@ -946,39 +956,38 @@ class VMDetailModal(ModalScreen):
                                 "Secure Boot",
                                 value=firmware_info.get('secure_boot', False),
                                 id="secure-boot-checkbox",
-                                disabled=not is_stopped,
+                                disabled=not self.is_vm_stopped,
                             )
-                            yield Checkbox("AMD-SEV", id="sev-checkbox", disabled=not is_stopped)
-                            yield Checkbox("AMD-SEV-ES", id="sev-es-checkbox", disabled=not is_stopped)
+                            yield Checkbox("AMD-SEV", id="sev-checkbox", disabled=not self.is_vm_stopped)
+                            yield Checkbox("AMD-SEV-ES", id="sev-es-checkbox", disabled=not self.is_vm_stopped)
 
                             yield Select(
                                 [], # Will be populated in on_mount
                                 id="uefi-file-select",
-                                disabled=not is_stopped,
+                                disabled=not self.is_vm_stopped,
                                 allow_blank=True,
                             )
 
                         if "machine_type" in self.vm_info:
                             yield Label(f"Machine Type: {self.vm_info['machine_type']}", id="machine-type-label", classes="tabd")
-                            yield Button("Edit", id="edit-machine-type", classes="edit-detail-btn", disabled=not is_stopped)
+                            yield Button("Edit", id="edit-machine-type", classes="edit-detail-btn", disabled=not self.is_vm_stopped)
 
                 with TabPane("Boot", id="detail-boot-tab"):
-                    is_stopped = self.vm_info.get("status") == "Stopped"
                     with Vertical(classes="info-details"):
-                        yield Checkbox("Enable boot menu", id="boot-menu-enable", disabled=not is_stopped)
+                        yield Checkbox("Enable boot menu", id="boot-menu-enable", disabled=not self.is_vm_stopped)
                         with Horizontal(classes="boot-manager"):
                             with Vertical(classes="boot-list-container"):
                                 yield Label("Boot Order")
                                 yield ListView(id="boot-order-list")
                             with Vertical(classes="boot-buttons"):
-                                yield Button("<", id="boot-add", disabled=not is_stopped)
-                                yield Button(">", id="boot-remove", disabled=not is_stopped)
-                                yield Button("Up", id="boot-up", disabled=not is_stopped)
-                                yield Button("Down", id="boot-down", disabled=not is_stopped)
+                                yield Button("<", id="boot-add", disabled=not self.is_vm_stopped)
+                                yield Button(">", id="boot-remove", disabled=not self.is_vm_stopped)
+                                yield Button("Up", id="boot-up", disabled=not self.is_vm_stopped)
+                                yield Button("Down", id="boot-down", disabled=not self.is_vm_stopped)
                             with Vertical(classes="boot-list-container"):
                                 yield Label("Available Devices")
                                 yield ListView(id="available-devices-list")
-                    yield Button("Save Boot Order", id="save-boot-order", disabled=not is_stopped, variant="primary")
+                    yield Button("Save Boot Order", id="save-boot-order", disabled=not self.is_vm_stopped, variant="primary")
 
                 with TabPane("Disks", id="detail-disk-tab"):
                     with ScrollableContainer(classes="info-details"):
@@ -1049,7 +1058,6 @@ class VMDetailModal(ModalScreen):
                 with TabPane("Video", id="detail-video-tab"):
                     with Vertical(classes="info-details"):
                         current_model = self.vm_info.get('video_model') or "default"
-                        is_stopped = self.vm_info.get("status") == "Stopped"
 
                         video_models = []
                         try:
@@ -1088,15 +1096,14 @@ class VMDetailModal(ModalScreen):
                             video_model_options,
                             value=current_model if current_model in video_models else "default",
                             id="video-model-select",
-                            disabled=not is_stopped,
+                            disabled=not self.is_vm_stopped,
                             allow_blank=False,
                         )
 
                 with TabPane("Sound", id="detail-sound-tab"):
                     with Vertical(classes="info-details"):
                         current_sound_model = self.vm_info.get('sound_model') or "none"
-                        is_stopped = self.vm_info.get("status") == "Stopped"
-
+                
                         sound_models = self.app.config.get('sound_models', [])
                         if not sound_models:
                             sound_models = ["none", "ich6", "ich9", "ac97", "sb16", "usb"]
@@ -1108,29 +1115,28 @@ class VMDetailModal(ModalScreen):
                             sound_model_options,
                             value=current_sound_model if current_sound_model in sound_models else "none",
                             id="sound-model-select",
-                            disabled=not is_stopped,
+                            disabled=not self.is_vm_stopped,
                             allow_blank=False,
                         )
 
                 with TabPane("Graphics", id="detail-graphics-tab"):
-                    is_stopped = self.vm_info.get("status") == "Stopped"
                     with ScrollableContainer(): #classes="info-details"):
                         yield Label("Type:")
                         yield Select(
                             [("VNC", "vnc"), ("Spice", "spice"), ("None", "")],
                             value=self.graphics_info['type'],
                             id="graphics-type-select",
-                            disabled=not is_stopped
+                            disabled=not self.is_vm_stopped
                         )
                         yield Label("Listen Type:")
                         yield Select(
                             [("Address", "address"), ("None", "none")],
                             value=self.graphics_info['listen_type'],
                             id="graphics-listen-type-select",
-                            disabled=not is_stopped
+                            disabled=not self.is_vm_stopped
                         )
                         yield Label("Address:")
-                        with RadioSet(id="graphics-address-radioset", disabled=not is_stopped or self.graphics_info['listen_type'] != 'address'):
+                        with RadioSet(id="graphics-address-radioset", disabled=not self.is_vm_stopped or self.graphics_info['listen_type'] != 'address'):
                             yield RadioButton("Hypervisor default", id="graphics-address-default", value=self.graphics_info['address'] not in ['127.0.0.1', '0.0.0.0'])
                             yield RadioButton("Localhost only", id="graphics-address-localhost", value=self.graphics_info['address'] == '127.0.0.1')
                             yield RadioButton("All interfaces", id="graphics-address-all", value=self.graphics_info['address'] == '0.0.0.0')
@@ -1138,31 +1144,30 @@ class VMDetailModal(ModalScreen):
                             "Auto Port",
                             value=self.graphics_info['autoport'],
                             id="graphics-autoport-checkbox",
-                            disabled=not is_stopped
+                            disabled=not self.is_vm_stopped
                         )
                         yield Input(
                             placeholder="Port (e.g., 5900)",
                             value=str(self.graphics_info['port']) if self.graphics_info['port'] else "",
                             id="graphics-port-input",
                             type="integer",
-                            disabled=not is_stopped or self.graphics_info['autoport']
+                            disabled=not self.is_vm_stopped or self.graphics_info['autoport']
                         )
                         yield Checkbox(
                             "Enable Password",
                             value=self.graphics_info['password_enabled'],
                             id="graphics-password-enable-checkbox",
-                            disabled=not is_stopped
+                            disabled=not self.is_vm_stopped
                         )
                         yield Input(
                             placeholder="Password",
                             value=self.graphics_info['password'] if self.graphics_info['password_enabled'] else "",
                             id="graphics-password-input",
                             password=True, # Hide password input
-                            disabled=not is_stopped or not self.graphics_info['password_enabled']
+                            disabled=not self.is_vm_stopped or not self.graphics_info['password_enabled']
                         )
-                        yield Button("Apply Graphics Settings", id="graphics-apply-btn", variant="primary", disabled=not is_stopped)
+                        yield Button("Apply Graphics Settings", id="graphics-apply-btn", variant="primary", disabled=not self.is_vm_stopped)
                 with TabPane("TPM", id="detail-tpm-tab"):
-                    is_stopped = self.vm_info.get("status") == "Stopped"
                     tpm_model = self.tpm_info[0].get('model') if self.tpm_info else 'none'
                     tpm_type = self.tpm_info[0].get('type') if self.tpm_info else 'emulated'
                     tpm_device_path = self.tpm_info[0].get('device_path', '') if self.tpm_info else ''
@@ -1175,7 +1180,7 @@ class VMDetailModal(ModalScreen):
                             [("None", "none"), ("tpm-crb", "tpm-crb"), ("tpm-tis", "tpm-tis")],
                             value=tpm_model,
                             id="tpm-model-select",
-                            disabled=not is_stopped,
+                            disabled=not self.is_vm_stopped,
                             allow_blank=False,
                         )
                         yield Label("TPM Type:")
@@ -1183,31 +1188,31 @@ class VMDetailModal(ModalScreen):
                             [("Emulated", "emulated"), ("Passthrough", "passthrough")],
                             value=tpm_type,
                             id="tpm-type-select",
-                            disabled=not is_stopped,
+                            disabled=not self.is_vm_stopped,
                             allow_blank=False,
                         )
                         yield Label("Device Path (for passthrough):")
                         yield Input(
                             value=tpm_device_path,
                             id="tpm-device-path-input",
-                            disabled=not is_stopped or tpm_type != 'passthrough',
+                            disabled=not self.is_vm_stopped or tpm_type != 'passthrough',
                             placeholder="/dev/tpm0"
                         )
                         yield Label("Backend Type (for passthrough):")
                         yield Input(
                             value=tpm_backend_type,
                             id="tpm-backend-type-input",
-                            disabled=not is_stopped or tpm_type != 'passthrough',
+                            disabled=not self.is_vm_stopped or tpm_type != 'passthrough',
                             placeholder="emulator or passthrough"
                         )
                         yield Label("Backend Path (for passthrough):")
                         yield Input(
                             value=tpm_backend_path,
                             id="tpm-backend-path-input",
-                            disabled=not is_stopped or tpm_type != 'passthrough',
+                            disabled=not self.is_vm_stopped or tpm_type != 'passthrough',
                             placeholder="/dev/tpmrm0"
                         )
-                        yield Button("Apply TPM Settings", id="apply-tpm-btn", variant="primary", disabled=not is_stopped)
+                        yield Button("Apply TPM Settings", id="apply-tpm-btn", variant="primary", disabled=not self.is_vm_stopped)
 
 
             with TabbedContent(id="detail2-vm"):
@@ -1241,13 +1246,12 @@ class VMDetailModal(ModalScreen):
 
     def _update_tpm_ui(self) -> None:
         """Updates the UI elements for the TPM tab based on self.tpm_info."""
-        is_stopped = self.vm_info.get("status") == "Stopped"
 
         # TPM Model
         try:
             tpm_model_select = self.query_one("#tpm-model-select", Select)
             tpm_model_select.value = self.tpm_info[0].get('model', 'none') if self.tpm_info else 'none'
-            tpm_model_select.disabled = not is_stopped
+            tpm_model_select.disabled = not self.is_vm_stopped
         except Exception:
             pass
 
@@ -1255,7 +1259,7 @@ class VMDetailModal(ModalScreen):
         try:
             tpm_type_select = self.query_one("#tpm-type-select", Select)
             tpm_type_select.value = self.tpm_info[0].get('type', 'emulated') if self.tpm_info else 'emulated'
-            tpm_type_select.disabled = not is_stopped
+            tpm_type_select.disabled = not self.is_vm_stopped
         except Exception:
             pass
 
@@ -1263,7 +1267,7 @@ class VMDetailModal(ModalScreen):
         try:
             device_path_input = self.query_one("#tpm-device-path-input", Input)
             device_path_input.value = self.tpm_info[0].get('device_path', '') if self.tpm_info else ''
-            device_path_input.disabled = not is_stopped or (self.tpm_info[0].get('type') != 'passthrough' if self.tpm_info else True)
+            device_path_input.disabled = not self.is_vm_stopped or (self.tpm_info[0].get('type') != 'passthrough' if self.tpm_info else True)
         except Exception:
             pass
 
@@ -1271,7 +1275,7 @@ class VMDetailModal(ModalScreen):
         try:
             backend_type_input = self.query_one("#tpm-backend-type-input", Input)
             backend_type_input.value = self.tpm_info[0].get('backend_type', '') if self.tpm_info else ''
-            backend_type_input.disabled = not is_stopped or (self.tpm_info[0].get('type') != 'passthrough' if self.tpm_info else True)
+            backend_type_input.disabled = not self.is_vm_stopped or (self.tpm_info[0].get('type') != 'passthrough' if self.tpm_info else True)
         except Exception:
             pass
 
@@ -1279,13 +1283,13 @@ class VMDetailModal(ModalScreen):
         try:
             backend_path_input = self.query_one("#tpm-backend-path-input", Input)
             backend_path_input.value = self.tpm_info[0].get('backend_path', '') if self.tpm_info else ''
-            backend_path_input.disabled = not is_stopped or (self.tpm_info[0].get('type') != 'passthrough' if self.tpm_info else True)
+            backend_path_input.disabled = not self.is_vm_stopped or (self.tpm_info[0].get('type') != 'passthrough' if self.tpm_info else True)
         except Exception:
             pass
 
         # Apply button
         try:
-            self.query_one("#apply-tpm-btn", Button).disabled = not is_stopped
+            self.query_one("#apply-tpm-btn", Button).disabled = not self.is_vm_stopped
         except Exception:
             pass
 
@@ -1363,7 +1367,7 @@ class VMDetailModal(ModalScreen):
                 if result:
                     try:
                         # VM must be stopped to add virtiofs
-                        if self.domain.isActive():
+                        if self.is_vm_active:
                             self.app.show_error_message("VM must be stopped to add VirtIO-FS mount.")
                             return
                         add_virtiofs(
@@ -1405,7 +1409,7 @@ class VMDetailModal(ModalScreen):
                             def on_confirm_edit(confirmed: bool) -> None:
                                 if confirmed:
                                     try:
-                                        if self.domain.isActive():
+                                        if self.is_vm_active:
                                             self.app.show_error_message("VM must be stopped to modify network interfaces.")
                                             return
 
@@ -1473,7 +1477,7 @@ class VMDetailModal(ModalScreen):
                     if result:
                         try:
                             # VM must be stopped to modify virtiofs
-                            if self.domain.isActive():
+                            if self.is_vm_active:
                                 self.app.show_error_message("VM must be stopped to modify VirtIO-FS mount.")
                                 return
 
@@ -1517,7 +1521,7 @@ class VMDetailModal(ModalScreen):
                     if confirmed:
                         try:
                             # VM must be stopped to delete virtiofs
-                            if self.domain.isActive():
+                            if self.is_vm_active:
                                 self.app.show_error_message("VM must be stopped to delete VirtIO-FS mount.")
                                 return
 
@@ -1700,8 +1704,7 @@ class VMDetailModal(ModalScreen):
                 return
 
             selected_disk = disks_info[highlighted_index]
-            is_stopped = self.vm_info.get("status") == "Stopped"
-
+    
             def edit_disk_callback(result):
                 if result:
                     new_cache_mode = result.get('cache')
@@ -1713,7 +1716,7 @@ class VMDetailModal(ModalScreen):
 
                     try:
                         # VM must be stopped to edit disk properties
-                        if not is_stopped:
+                        if not self.is_vm_stopped:
                             self.app.show_error_message("VM must be stopped to edit disk properties.")
                             return
 
@@ -1736,7 +1739,7 @@ class VMDetailModal(ModalScreen):
             self.app.push_screen(
                 EditDiskModal(
                     disk_info=selected_disk, # Pass the entire selected_disk dictionary
-                    is_stopped=is_stopped # Pass the is_stopped boolean
+                    is_stopped=self.is_vm_stopped # Pass the is_stopped boolean
                 ),
                 edit_disk_callback
             )
