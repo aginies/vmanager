@@ -20,6 +20,8 @@ from textual.message import Message
 from textual import on
 from textual.events import Click
 from textual.css.query import NoMatches
+
+from events import VMNameClicked, VMSelectionChanged, VmActionRequest
 from vm_queries import get_status
 from vm_actions import clone_vm, delete_vm, rename_vm, start_vm
 
@@ -35,30 +37,6 @@ from config import load_config, save_config
 
 # Load configuration once at module level
 _config = load_config()
-
-class VMNameClicked(Message):
-    """Posted when a VM's name is clicked."""
-
-    def __init__(self, vm_name: str, vm_uuid: str) -> None:
-        super().__init__()
-        self.vm_name = vm_name
-        self.vm_uuid = vm_uuid
-
-class VMSelectionChanged(Message):
-    """Posted when a VM's selection state changes."""
-
-    def __init__(self, vm_uuid: str, is_selected: bool) -> None:
-        super().__init__()
-        self.vm_uuid = vm_uuid
-        self.is_selected = is_selected
-
-class VmActionRequest(Message):
-    """Posted when a user requests an action on a VM (start, stop, etc.)."""
-    def __init__(self, vm_uuid: str, action: str, delete_storage: bool = False) -> None:
-        super().__init__()
-        self.vm_uuid = vm_uuid
-        self.action = action
-        self.delete_storage = delete_storage
 
 class VMCard(Static):
     """

@@ -24,6 +24,7 @@ from textual.worker import Worker, WorkerState
 
 from config import load_config, save_config
 from constants import VmAction, VmStatus
+from events import VmActionRequest, VMNameClicked, VMSelectionChanged
 from libvirt_error_handler import register_error_handler
 from libvirt_utils import _get_vm_names_from_uuids
 from modals.bulk_modals import BulkActionModal
@@ -52,7 +53,7 @@ from vm_queries import (
     get_vm_graphics_info,
 )
 from vm_service import VMService
-from vmcard import VMCard, VmActionRequest, VMNameClicked, VMSelectionChanged
+from vmcard import VMCard
 from webconsole_manager import WebConsoleManager
 
 # Configure logging
