@@ -159,7 +159,7 @@ ChangeNetworkDialog #network-select {
 /* XML Display Modal */
 XMLDisplayModal #xml-display-dialog {
     width: 80%;
-    height: 80%;
+    height: 95%;
     padding: 1;
     border: round $primary;
     background: $surface;
