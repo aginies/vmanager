@@ -76,6 +76,7 @@ A Textual-based TUI (Terminal User Interface) application for managing QEMU/KVM 
 - Edit disk properties (cache mode and discard mode)
 - Disk status indicators (enabled/disabled)
 - Set disk cache and discard modes
+- Display disk bus information
 
 ### Network Configuration
 - View network interfaces with MAC addresses and IP addresses
@@ -135,6 +136,12 @@ A Textual-based TUI (Terminal User Interface) application for managing QEMU/KVM 
 ### USB Host Configuration
 - Add/Remove USB host devices
 - Configure vendor ID, product ID, and address
+
+### PCI Passthrough Configuration
+- View available PCI host devices
+- Attach PCI devices to VM (experimental)
+- Detach PCI devices from VM (experimental)
+- PCI device status indicators (attached/disconnected)
 
 ### Serial Configuration
 - Add/Remove serial devices
@@ -222,4 +229,3 @@ In addition to the main TUI application, `vmanager` also provides a command-line
 *   **Interactive VM Deletion**: Delete VMs with interactive confirmation, including an option to also remove associated storage volumes.
 *   **Storage Management**: List storage pools and identify unused storage volumes across all connected servers.
 *   **Tab Autocompletion**: Enjoy context-aware autocompletion for server names, VM names, and storage pool names, enhancing usability and speed.
-
