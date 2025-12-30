@@ -3,6 +3,7 @@ VM Service Layer
 Handles all libvirt interactions and data processing.
 """
 import time
+import xml.etree.ElementTree as ET
 import libvirt
 from connection_manager import ConnectionManager
 from constants import VmStatus
@@ -13,6 +14,7 @@ class VMService:
     def __init__(self):
         self.connection_manager = ConnectionManager()
         self._cpu_time_cache = {} # Cache for calculating CPU usage {uuid: (last_time, last_timestamp)}
+        self._io_stats_cache = {} # Cache for calculating Disk/Net I/O {uuid: {'ts': ts, 'disk_read': bytes, ...}}
         self._domain_cache: dict[str, libvirt.virDomain] = {}
         self._uuid_to_conn_cache: dict[str, libvirt.virConnect] = {}
         self._cache_timestamp: float = 0.0
@@ -34,6 +36,8 @@ class VMService:
             del self._vm_data_cache[uuid]
         if uuid in self._cpu_time_cache:
             del self._cpu_time_cache[uuid]
+        if uuid in self._io_stats_cache:
+            del self._io_stats_cache[uuid]
 
     def _update_domain_cache(self, active_uris: list[str], force: bool = False):
         """Updates the domain and connection cache."""
@@ -181,6 +185,85 @@ class VMService:
 
             stats['mem_percent'] = mem_percent
 
+            # Disk and Network I/O
+            disk_read_bytes = 0
+            disk_write_bytes = 0
+            net_rx_bytes = 0
+            net_tx_bytes = 0
+
+            # Get XML to find devices
+            xml_content = self._get_domain_xml(domain)
+            if xml_content:
+                try:
+                    root = ET.fromstring(xml_content)
+
+                    # Disks
+                    for disk in root.findall(".//devices/disk"):
+                        target = disk.find("target")
+                        if target is not None:
+                            dev = target.get("dev")
+                            if dev:
+                                try:
+                                    # blockStats returns (rd_req, rd_bytes, wr_req, wr_bytes, errs)
+                                    b_stats = domain.blockStats(dev)
+                                    disk_read_bytes += b_stats[1]
+                                    disk_write_bytes += b_stats[3]
+                                except libvirt.libvirtError:
+                                    pass
+
+                    # Networks
+                    for interface in root.findall(".//devices/interface"):
+                        target = interface.find("target")
+                        if target is not None:
+                            dev = target.get("dev")
+                            if dev:
+                                try:
+                                    # interfaceStats returns (rx_bytes, rx_packets, rx_errs, rx_drop, tx_bytes, tx_packets, tx_errs, tx_drop)
+                                    i_stats = domain.interfaceStats(dev)
+                                    net_rx_bytes += i_stats[0]
+                                    net_tx_bytes += i_stats[4]
+                                except libvirt.libvirtError:
+                                    pass
+                except ET.ParseError:
+                    pass
+
+            # Calculate I/O Rates
+            disk_read_rate = 0.0
+            disk_write_rate = 0.0
+            net_rx_rate = 0.0
+            net_tx_rate = 0.0
+
+            if uuid in self._io_stats_cache:
+                last_stats = self._io_stats_cache[uuid]
+                last_ts = last_stats['ts']
+                time_diff = now - last_ts
+
+                if time_diff > 0:
+                    # Prevent negative rates if counters reset
+                    d_read = disk_read_bytes - last_stats['disk_read']
+                    d_write = disk_write_bytes - last_stats['disk_write']
+                    n_rx = net_rx_bytes - last_stats['net_rx']
+                    n_tx = net_tx_bytes - last_stats['net_tx']
+
+                    disk_read_rate = d_read / time_diff if d_read >= 0 else 0
+                    disk_write_rate = d_write / time_diff if d_write >= 0 else 0
+                    net_rx_rate = n_rx / time_diff if n_rx >= 0 else 0
+                    net_tx_rate = n_tx / time_diff if n_tx >= 0 else 0
+
+            # Store cache
+            self._io_stats_cache[uuid] = {
+                'ts': now,
+                'disk_read': disk_read_bytes,
+                'disk_write': disk_write_bytes,
+                'net_rx': net_rx_bytes,
+                'net_tx': net_tx_bytes
+            }
+
+            stats['disk_read_kbps'] = disk_read_rate / 1024
+            stats['disk_write_kbps'] = disk_write_rate / 1024
+            stats['net_rx_kbps'] = net_rx_rate / 1024
+            stats['net_tx_kbps'] = net_tx_rate / 1024
+
             return stats
 
         except libvirt.libvirtError as e:
@@ -188,6 +271,8 @@ class VMService:
                 # If domain disappears, remove it from cache
                 if uuid in self._cpu_time_cache:
                     del self._cpu_time_cache[uuid]
+                if uuid in self._io_stats_cache:
+                    del self._io_stats_cache[uuid]
             return None
 
     def connect(self, uri: str) -> libvirt.virConnect | None:

@@ -43,17 +43,17 @@ VMCard {
 .sparkline-label {
     width: 10;
     text-align: left;
-    padding-right: 1;
-    padding-left: 1;
+    padding-right: 0;
+    padding-left: 0;
 }
 
 
 #cpu-sparkline,
 #mem-sparkline {
     background: $panel;
-    width: 26;
-    margin-right: 2;
-    padding-right: 2;
+    width: 25;
+    margin-right: 1;
+    padding-right: 1;
 }
 
 #cpu-sparkline {

@@ -4,10 +4,7 @@ VMcard Interface
 import subprocess
 import logging
 import traceback
-from datetime import datetime
 from functools import partial
-from urllib.parse import urlparse
-import xml.etree.ElementTree as ET
 import libvirt
 
 from textual.widgets import (
@@ -16,24 +13,21 @@ from textual.widgets import (
         )
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
-from textual.message import Message
 from textual import on
 from textual.events import Click
 from textual.css.query import NoMatches
 
 from events import VMNameClicked, VMSelectionChanged, VmActionRequest
-from vm_queries import get_status
-from vm_actions import clone_vm, delete_vm, rename_vm, start_vm
+from vm_actions import clone_vm, rename_vm
 
 from modals.xml_modals import XMLDisplayModal
-from modals.utils_modals import ConfirmationDialog, LoadingModal, ProgressModal
+from modals.utils_modals import ConfirmationDialog, ProgressModal
 from modals.migration_modals import MigrationModal
 from vmcard_dialog import (
         DeleteVMConfirmationDialog, WebConsoleConfigDialog,
         AdvancedCloneDialog, RenameVMDialog, SelectSnapshotDialog, SnapshotNameDialog
         )
 from utils import extract_server_name_from_uri
-from config import load_config
 
 class VMCard(Static):
     """
@@ -50,11 +44,16 @@ class VMCard(Static):
     graphics_type = reactive("vnc")
     server_border_color = reactive("green")
     is_selected = reactive(False)
+    stats_view_mode = reactive("resources") # "resources" or "io"
+
+    # To store the latest raw stat values for display
+    latest_disk_read = reactive(0.0)
+    latest_disk_write = reactive(0.0)
+    latest_net_rx = reactive(0.0)
+    latest_net_tx = reactive(0.0)
 
     def __init__(self, is_selected: bool = False) -> None:
         super().__init__()
-        self.last_cpu_time = 0
-        self.last_cpu_time_ts = 0
         self.is_selected = is_selected
         self.timer = None
 
@@ -100,7 +99,6 @@ class VMCard(Static):
 
     def compose(self):
         with Vertical(id="info-container"):
-            classes = ""
             with Horizontal(id="vm-header-row"):
                 yield Checkbox("", id="vm-select-checkbox", classes="vm-select-checkbox", value=self.is_selected)
                 with Vertical(): # New Vertical container for name and status
@@ -111,15 +109,13 @@ class VMCard(Static):
                         yield Static(self.name, id="vmname", classes="vmname")
                     status_class = self.status.lower()
                     yield Static(f"Status: {self.status}{self.webc_status_indicator}", id="status", classes=status_class)
+            
             with Horizontal(id="cpu-sparkline-container", classes="sparkline-container"):
-                cpu_spark = Static(f"{self.cpu} VCPU", id="cpu-mem-info", classes="sparkline-label")
-                yield cpu_spark
-                yield Sparkline([], id="cpu-sparkline")
+                yield Static("", id="top-sparkline-label", classes="sparkline-label")
+                yield Sparkline([], id="top-sparkline")
             with Horizontal(id="mem-sparkline-container", classes="sparkline-container"):
-                mem_gb = round(self.memory / 1024, 1)
-                mem_spark = Static(f"{mem_gb} Gb", id="cpu-mem-info", classes="sparkline-label")
-                yield mem_spark
-                yield Sparkline([], id="mem-sparkline")
+                yield Static("", id="bottom-sparkline-label", classes="sparkline-label")
+                yield Sparkline([], id="bottom-sparkline")
 
             with TabbedContent(id="button-container"):
                 with TabPane("Manage", id="manage-tab"):
@@ -139,17 +135,9 @@ class VMCard(Static):
                         with Vertical():
                             yield Button("Snapshot", id="snapshot_take", variant="primary")
                         with Vertical():
-                            yield Button(
-                                "Restore Snapshot",
-                                id="snapshot_restore",
-                                variant="primary",
-                                )
+                            yield Button("Restore Snapshot", id="snapshot_restore", variant="primary")
                             yield Static(classes="button-separator")
-                            yield Button(
-                               "Del Snapshot",
-                               id="snapshot_delete",
-                               variant="error",
-                               )
+                            yield Button("Del Snapshot", id="snapshot_delete", variant="error")
                 with TabPane("Special", id="special-tab"):
                     with Horizontal():
                         with Vertical():
@@ -170,22 +158,59 @@ class VMCard(Static):
             self.styles.border = ("solid", self.server_border_color)
         self.update_button_layout()
         self._update_status_styling()
-        self._update_webc_status()  # Call on mount
+        self._update_webc_status()
+        self.update_sparkline_display()
 
-        # Load existing history from the app's central store
-        if self.vm and hasattr(self.app, "sparkline_data"):
+        if self.vm:
             try:
                 uuid = self.vm.UUIDString()
                 if uuid in self.app.sparkline_data:
-                    cpu_sparkline = self.query_one("#cpu-sparkline", Sparkline)
-                    mem_sparkline = self.query_one("#mem-sparkline", Sparkline)
-                    cpu_sparkline.data = self.app.sparkline_data[uuid]["cpu"]
-                    mem_sparkline.data = self.app.sparkline_data[uuid]["mem"]
+                    self.update_sparkline_display()
             except (libvirt.libvirtError, NoMatches):
-                pass  # Ignore if vm is gone or widgets not ready
+                pass
 
         self.update_stats()
         self.timer = self.set_interval(5, self.update_stats)
+
+    def watch_stats_view_mode(self, old_mode: str, new_mode: str) -> None:
+        """Update sparklines when view mode changes."""
+        self.update_sparkline_display()
+
+    def update_sparkline_display(self) -> None:
+        """Updates the labels and data of the sparklines based on the current view mode."""
+        try:
+            top_label = self.query_one("#top-sparkline-label", Static)
+            bottom_label = self.query_one("#bottom-sparkline-label", Static)
+            top_sparkline = self.query_one("#top-sparkline", Sparkline)
+            bottom_sparkline = self.query_one("#bottom-sparkline", Sparkline)
+        except NoMatches:
+            return
+
+        uuid = self.vm.UUIDString() if self.vm else None
+        if not uuid or not hasattr(self.app, 'sparkline_data') or uuid not in self.app.sparkline_data:
+             # Set default labels if no data is available
+            top_label.update(f"{self.cpu} VCPU" if self.stats_view_mode == "resources" else "Disk R/W 0.00/0.00 MB/s")
+            mem_gb = round(self.memory / 1024, 1)
+            bottom_label.update(f"{mem_gb} Gb" if self.stats_view_mode == "resources" else "Net Rx/Tx 0.00/0.00 MB/s")
+            return
+
+        sparkline_storage = self.app.sparkline_data[uuid]
+
+        if self.stats_view_mode == "resources":
+            top_label.update(f"{self.cpu} VCPU")
+            mem_gb = round(self.memory / 1024, 1)
+            bottom_label.update(f"{mem_gb} Gb")
+            top_sparkline.data = list(sparkline_storage.get("cpu", []))
+            bottom_sparkline.data = list(sparkline_storage.get("mem", []))
+        else: # io mode
+            disk_read_mb = self.latest_disk_read / 1024
+            disk_write_mb = self.latest_disk_write / 1024
+            net_rx_mb = self.latest_net_rx / 1024
+            net_tx_mb = self.latest_net_tx / 1024
+            top_label.update(f"Disk R/W {disk_read_mb:.2f}/{disk_write_mb:.2f} MB/s")
+            bottom_label.update(f"Net Rx/Tx {net_rx_mb:.2f}/{net_tx_mb:.2f} MB/s")
+            top_sparkline.data = list(sparkline_storage.get("disk", []))
+            bottom_sparkline.data = list(sparkline_storage.get("net", []))
 
     def watch_status(self, old_value: str, new_value: str) -> None:
         """Called when status changes."""
@@ -210,7 +235,6 @@ class VMCard(Static):
                 uuid = self.vm.UUIDString()
                 self.app.worker_manager.cancel(f"update_stats_{uuid}")
             except libvirt.libvirtError:
-                # VM may be gone, which is why we are unmounting.
                 pass
 
     def watch_is_selected(self, old_value: bool, new_value: bool) -> None:
@@ -219,7 +243,7 @@ class VMCard(Static):
             checkbox = self.query_one("#vm-select-checkbox", Checkbox)
             checkbox.value = new_value
         except NoMatches:
-            pass # Widget not yet composed, ignore
+            pass
 
         if new_value:
             self.styles.border = ("panel", "white")
@@ -227,88 +251,71 @@ class VMCard(Static):
             self.styles.border = ("solid", self.server_border_color)
 
     def update_stats(self) -> None:
-        """Schedules a worker to update CPU and memory statistics for the VM."""
+        """Schedules a worker to update statistics for the VM."""
         if not self.vm:
             return
 
         try:
             uuid = self.vm.UUIDString()
         except libvirt.libvirtError:
-            # VM is gone, stop the timer if it's still running.
             if self.timer:
                 self.timer.stop()
             return
 
         def update_worker():
-            # This runs in a background thread
             try:
                 stats = self.app.vm_service.get_vm_runtime_stats(self.vm)
-
-                # This will be None if the domain is gone or inactive
                 if not stats:
-                    # If VM was previously running, update its state to reflect it's stopped.
                     if self.status != "Stopped":
-
-                        def update_to_stopped():
-                            self.status = "Stopped"
-
-                        self.app.call_from_thread(update_to_stopped)
+                        self.app.call_from_thread(setattr, self, 'status', "Stopped")
                     return
 
                 def apply_stats_to_ui():
-                    # This runs on the main thread
-                    # GUARD: If the widget has been unmounted in the meantime, do nothing.
                     if not self.is_mounted:
                         return
-
-                    # Update status if changed
                     if self.status != stats["status"]:
                         self.status = stats["status"]
 
-                    # Update sparklines by modifying the central data store
-                    if (
-                        hasattr(self.app, "sparkline_data")
-                        and uuid in self.app.sparkline_data
-                    ):
-                        sparkline_storage = self.app.sparkline_data[uuid]
+                    self.latest_disk_read = stats.get('disk_read_kbps', 0)
+                    self.latest_disk_write = stats.get('disk_write_kbps', 0)
+                    self.latest_net_rx = stats.get('net_rx_kbps', 0)
+                    self.latest_net_tx = stats.get('net_tx_kbps', 0)
 
-                        cpu_history = sparkline_storage["cpu"]
-                        cpu_history.append(stats["cpu_percent"])
-                        if len(cpu_history) > 20:
-                            cpu_history.pop(0)
+                    if hasattr(self.app, "sparkline_data") and uuid in self.app.sparkline_data:
+                        storage = self.app.sparkline_data[uuid]
 
-                        mem_history = sparkline_storage["mem"]
-                        mem_history.append(stats["mem_percent"])
-                        if len(mem_history) > 20:
-                            mem_history.pop(0)
+                        def update_history(key, value):
+                            history = storage.get(key, [])
+                            history.append(value)
+                            if len(history) > 20:
+                                history.pop(0)
+                            storage[key] = history
 
-                        try:
-                            self.query_one("#cpu-sparkline").data = list(cpu_history)
-                            self.query_one("#mem-sparkline").data = list(mem_history)
-                        except NoMatches:
-                            # Card may be unmounting
-                            pass
+                        update_history("cpu", stats["cpu_percent"])
+                        update_history("mem", stats["mem_percent"])
+                        update_history("disk", self.latest_disk_read + self.latest_disk_write)
+                        update_history("net", self.latest_net_rx + self.latest_net_tx)
+
+                        self.update_sparkline_display()
 
                 self.app.call_from_thread(apply_stats_to_ui)
 
             except libvirt.libvirtError as e:
-                # Handle cases where the VM disappears during the operation
-                if e.get_error_code() == libvirt.VIR_ERR_NO_DOMAIN:
-                    if self.timer:
-                        self.timer.stop()
+                if e.get_error_code() == libvirt.VIR_ERR_NO_DOMAIN and self.timer:
+                    self.timer.stop()
                 else:
-                    logging.warning(
-                        f"Libvirt error during background stat update for {self.name}: {e}"
-                    )
+                    logging.warning(f"Libvirt error during stat update for {self.name}: {e}")
             except Exception as e:
-                logging.error(
-                    f"Unexpected error in update_stats worker for {self.name}: {e}",
-                    exc_info=True,
-                )
+                logging.error(f"Unexpected error in update_stats worker for {self.name}: {e}", exc_info=True)
 
-        # Always check webc status on the main thread before starting the worker
         self._update_webc_status()
         self.app.worker_manager.run(update_worker, name=f"update_stats_{uuid}")
+
+    @on(Click, "#top-sparkline, #bottom-sparkline")
+    def toggle_stats_view(self) -> None:
+        """Toggle between resource and I/O stat views."""
+        if self.status == "Running":
+             self.stats_view_mode = "io" if self.stats_view_mode == "resources" else "resources"
 
     def update_button_layout(self):
         """Update the button layout based on current VM status."""
@@ -331,8 +338,6 @@ class VMCard(Static):
             mem_sparkline_container = self.query_one("#mem-sparkline-container")
             xml_button = self.query_one("#xml", Button)
         except NoMatches:
-            # If any essential button isn't found, it means the card is likely being torn down.
-            # Just return and avoid further updates.
             return
 
         is_stopped = self.status == "Stopped"
@@ -348,15 +353,12 @@ class VMCard(Static):
                 return
             logging.warning(f"Could not get snapshot count for {self.name}: {e}")
 
-        # Update Snapshot TabPane title
         try:
             tabbed_content = self.query_one(TabbedContent)
-            if not tabbed_content.is_mounted:
-                return
-            snapshot_tab_pane = tabbed_content.get_pane("snapshot-tab")
-            # Only update the title if the widget is still mounted to prevent crashes
-            if snapshot_tab_pane and self.is_mounted:
-                snapshot_tab_pane.title = self._get_snapshot_tab_title()
+            if tabbed_content.is_mounted:
+                snapshot_tab_pane = tabbed_content.get_pane("snapshot-tab")
+                if snapshot_tab_pane and self.is_mounted:
+                    snapshot_tab_pane.title = self._get_snapshot_tab_title()
         except NoMatches:
             pass
 
@@ -373,16 +375,16 @@ class VMCard(Static):
         web_console_button.display = (is_running or is_paused) and self.graphics_type == "vnc" and self.app.websockify_available and self.app.novnc_available
         restore_button.display = has_snapshots
         snapshot_delete_button.display = has_snapshots
-        info_button.display = True # Always show info button
+        info_button.display = True
 
         cpu_sparkline_container.display = not is_stopped
         mem_sparkline_container.display = not is_stopped
 
         if is_stopped:
             xml_button.label = "Edit XML"
+            self.stats_view_mode = "resources" # Reset to default when stopped
         else:
             xml_button.label = "View XML"
-
 
     def _update_status_styling(self):
         try:
@@ -390,7 +392,7 @@ class VMCard(Static):
             status_widget.remove_class("stopped", "running", "paused")
             status_widget.add_class(self.status.lower())
         except NoMatches:
-            pass # Widget not found, likely torn down or not yet composed.
+            pass
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
@@ -427,7 +429,6 @@ class VMCard(Static):
         if self.vm.isActive():
             self.post_message(VmActionRequest(self.vm.UUIDString(), VmAction.STOP))
 
-
     def _handle_stop_button(self, event: Button.Pressed) -> None:
         """Handles the stop button press."""
         from constants import VmAction
@@ -436,7 +437,6 @@ class VMCard(Static):
         def on_confirm(confirmed: bool) -> None:
             if not confirmed:
                 return
-
             if self.vm.isActive():
                 self.post_message(VmActionRequest(self.vm.UUIDString(), VmAction.FORCE_OFF))
 
@@ -572,8 +572,6 @@ class VMCard(Static):
                 handle_dialog_result
             )
         else:
-            # Local connection, so webconsole must be local.
-            # No need to show config dialog.
             self.app.worker_manager.run(worker, name=f"start_console_{self.vm.name()}")
 
     def _handle_snapshot_take_button(self, event: Button.Pressed) -> None:
@@ -648,7 +646,6 @@ class VMCard(Static):
             confirmed, delete_storage = result
             if not confirmed:
                 return
-
             self.post_message(VmActionRequest(self.vm.UUIDString(), VmAction.DELETE, delete_storage=delete_storage))
 
         self.app.push_screen(
@@ -665,7 +662,7 @@ class VMCard(Static):
 
             base_name = result["base_name"]
             count = result["count"]
-            suffix = result["suffix"] # Retrieve the suffix
+            suffix = result["suffix"]
 
             progress_modal = ProgressModal(title=f"Cloning {self.name}...")
             app.push_screen(progress_modal)
@@ -675,8 +672,6 @@ class VMCard(Static):
 
             def do_clone() -> None:
                 log_callback(f"Attempting to clone VM: {self.name}")
-
-                # Validate that new VM names do not already exist
                 existing_vm_names = set()
                 try:
                     all_domains = self.conn.listAllDomains(0)
@@ -690,15 +685,11 @@ class VMCard(Static):
 
                 proposed_names = []
                 for i in range(1, count + 1):
-                    if count > 1:
-                        new_name = f"{base_name}{suffix}{i}"
-                    else:
-                        new_name = base_name
+                    new_name = f"{base_name}{suffix}{i}" if count > 1 else base_name
                     proposed_names.append(new_name)
                 log_callback(f"INFO: Proposed Name(s): {proposed_names}")
 
                 conflicting_names = [name for name in proposed_names if name in existing_vm_names]
-
                 if conflicting_names:
                     msg = f"The following VM names already exist: {', '.join(conflicting_names)}. Aborting cloning."
                     log_callback(f"ERROR: {msg}")
@@ -706,24 +697,13 @@ class VMCard(Static):
                     app.call_from_thread(progress_modal.dismiss)
                     return
                 else:
-                    msg = "No Conflicting Name"
-                    log_callback(f"INFO: {msg}")
+                    log_callback("INFO: No Conflicting Name")
 
-                success_clones = []
-                failed_clones = []
-
-                # Set the total of the progress bar
-                def set_progress_total():
-                    pb = progress_modal.query_one("#progress-bar")
-                    pb.total = count
-                app.call_from_thread(set_progress_total)
+                success_clones, failed_clones = [], []
+                app.call_from_thread(lambda: progress_modal.query_one("#progress-bar")._set_total(count))
 
                 for i in range(1, count + 1):
-                    if count > 1:
-                        new_name = f"{base_name}{suffix}{i}"
-                    else:
-                        new_name = base_name
-
+                    new_name = f"{base_name}{suffix}{i}" if count > 1 else base_name
                     try:
                         log_callback(f"Cloning '{self.name}' to '{new_name}'...")
                         clone_vm(self.vm, new_name, log_callback=log_callback)
@@ -733,13 +713,8 @@ class VMCard(Static):
                         failed_clones.append(new_name)
                         log_callback(f"ERROR: Error cloning VM {self.name} to {new_name}: {e}")
                     finally:
-                        # Advance the progress bar
-                        def advance_progress_bar():
-                            pb = progress_modal.query_one("#progress-bar")
-                            pb.advance(1)
-                        app.call_from_thread(advance_progress_bar)
+                        app.call_from_thread(lambda: progress_modal.query_one("#progress-bar").advance(1))
 
-                # Show summary messages
                 if success_clones:
                     msg = f"Successfully cloned to: {', '.join(success_clones)}"
                     app.call_from_thread(app.show_success_message, msg)
@@ -751,7 +726,6 @@ class VMCard(Static):
 
                 if success_clones:
                     app.call_from_thread(app.refresh_vm_list)
-
                 app.call_from_thread(progress_modal.dismiss)
 
             app.worker_manager.run(do_clone, name=f"clone_{self.name}")
@@ -807,12 +781,9 @@ class VMCard(Static):
 
     def _handle_migration_button(self, event: Button.Pressed) -> None:
         """Handles the migration button press."""
-        # Get selected VM UUIDs from the central app state
         selected_vm_uuids = self.app.selected_vm_uuids
-
         selected_vms = []
         if selected_vm_uuids:
-            # Convert UUIDs to libvirt.virDomain objects
             for uuid in selected_vm_uuids:
                 found_domain = None
                 for uri in self.app.active_uris:
@@ -827,9 +798,7 @@ class VMCard(Static):
                             continue
                 if not found_domain:
                     self.app.show_error_message(f"Selected VM with UUID {uuid} not found on any active server.")
-                    # Decide if we continue with other VMs or abort. For now, continue.
-        
-        # If no VMs are selected via checkboxes, default to the current VM (the one the button was clicked on).
+
         if not selected_vms:
             selected_vms = [self.vm]
 
@@ -843,20 +812,13 @@ class VMCard(Static):
         active_vms = [vm for vm in selected_vms if vm.isActive()]
         is_live = len(active_vms) > 0
         if is_live and len(active_vms) < len(selected_vms):
-            self.app.show_error_message("Cannot migrate running/paused and stopped VMs at the same time. Please select VMs with the same state.")
+            self.app.show_error_message("Cannot migrate running/paused and stopped VMs at the same time.")
             return
 
-        # Get all active connections from the connection manager
         active_uris = self.app.vm_service.get_all_uris()
-        all_connections = {}
-        for uri in active_uris:
-            conn = self.app.vm_service.get_connection(uri)
-            if conn: # Ensure connection is valid
-                all_connections[uri] = conn
+        all_connections = {uri: self.app.vm_service.get_connection(uri) for uri in active_uris if self.app.vm_service.get_connection(uri)}
 
         source_uri = selected_vms[0].connect().getURI()
-
-        # Migration from localhost is not supported as it requires a full remote URI.
         if source_uri == "qemu:///system":
             self.app.show_error_message(
                 "Migration from localhost (qemu:///system) is not supported.\n"
@@ -866,16 +828,14 @@ class VMCard(Static):
 
         dest_uris = [uri for uri in active_uris if uri != source_uri]
         if not dest_uris:
-            self.app.show_error_message("No destination servers available (all active servers are either the source, or there are no active servers).")
+            self.app.show_error_message("No destination servers available.")
             return
 
         def on_confirm(confirmed: bool) -> None:
-            if not confirmed:
-                return
-            self.app.push_screen(MigrationModal(vms=selected_vms, is_live=is_live, connections=all_connections))
+            if confirmed:
+                self.app.push_screen(MigrationModal(vms=selected_vms, is_live=is_live, connections=all_connections))
 
         self.app.push_screen(ConfirmationDialog("Experimental Features! not yet fully tested!"), on_confirm)
-        #self.app.push_screen(MigrationModal(vms=selected_vms, is_live=is_live, connections=all_connections))
 
     @on(Checkbox.Changed, "#vm-select-checkbox")
     def on_vm_select_checkbox_changed(self, event: Checkbox.Changed) -> None:
@@ -883,12 +843,12 @@ class VMCard(Static):
         self.is_selected = event.value
         self.post_message(VMSelectionChanged(vm_uuid=self.vm.UUIDString(), is_selected=event.value))
 
-    @on(Click, "#cpu-mem-info")
-    def on_click_cpu_mem_info(self) -> None:
-        """Handle clicks on the CPU/Memory info part of the VM card."""
-        self.post_message(VMNameClicked(vm_name=self.name, vm_uuid=self.vm.UUIDString()))
-
     @on(Click, "#vmname")
     def on_click_vmname(self) -> None:
         """Handle clicks on the VM name part of the VM card."""
+        self.post_message(VMNameClicked(vm_name=self.name, vm_uuid=self.vm.UUIDString()))
+
+    @on(Click, "#cpu-mem-info")
+    def on_click_cpu_mem_info(self) -> None:
+        """Handle clicks on the CPU/Memory info part of the VM card."""
         self.post_message(VMNameClicked(vm_name=self.name, vm_uuid=self.vm.UUIDString()))

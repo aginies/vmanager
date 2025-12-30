@@ -791,7 +791,7 @@ class VMManagerTUI(App):
                     # Create new card
                     info = domain.info()
                     if uuid not in self.sparkline_data:
-                        self.sparkline_data[uuid] = {"cpu": [], "mem": []}
+                        self.sparkline_data[uuid] = {"cpu": [], "mem": [], "disk": [], "net": []}
 
                     vm_card = VMCard(is_selected=is_vm_selected)
                     vm_card.name = domain.name()
