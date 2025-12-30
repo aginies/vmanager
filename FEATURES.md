@@ -1,7 +1,7 @@
-# Rainbow V Manager - Features
+# Virtui Manager - Features
 
 ## Overview
-Rainbow V Manager is a Textual-based TUI (Terminal User Interface) application for managing QEMU/KVM virtual machines using the libvirt Python API. It provides a comprehensive interface for VM management with features that go beyond basic management.
+A Textual-based TUI (Terminal User Interface) application for managing QEMU/KVM virtual machines using the libvirt Python API. It provides a comprehensive interface for VM management with features that go beyond basic management.
 
 ## Main Interface Features
 
@@ -13,8 +13,8 @@ Rainbow V Manager is a Textual-based TUI (Terminal User Interface) application f
 ### VM Grid Display
 - VMs displayed in a responsive grid layout (up to 5x3 = 15 VM)
 - Color-coded status indicators (Running, Paused, Stopped)
-- CPU and memory usage sparklines for running VMs
-- Pagination controls for large VM lists (now defaults to page 1 if current page becomes empty after deletion)
+- CPU, Memory, Disk, Net usage sparklines for running VMs
+- Pagination controls for large VM lists
 
 ### VM Management Actions
 - Start, Shutdown, Force Off (destroy), Pause, Resume
@@ -29,7 +29,7 @@ Rainbow V Manager is a Textual-based TUI (Terminal User Interface) application f
   - To enable running the web console on the remote server, set `REMOTE_WEBCONSOLE: True` in your `config.yaml`.
   - When `REMOTE_WEBCONSOLE` is enabled, `websockify` and `novnc` assets must be installed on the remote server at the paths specified in `config.yaml` (default: `/usr/bin/websockify` and `/usr/share/novnc/`).
   - For secure (HTTPS) remote web console access, `cert.pem` and `key.pem` files must also be present on the remote server in `~/.config/virtui-manager/`.
-- Bulk actions on selected VMs (start, stop, force off, pause, delete): Now include a progress bar for long-running operations.
+- Bulk actions on selected VMs (start, stop, force off, pause, delete)
 - VM Migration (Live and Offline)
 
 ### Advanced Features
@@ -174,12 +174,13 @@ Rainbow V Manager is a Textual-based TUI (Terminal User Interface) application f
 - `m` - Servers List
 - `s` - Select Servers
 - `ctrl+a` - Select/Deselect All VMs on current page
+- `c` - User Application Configuration
 - `q` - Quit
 
 ### Visual Elements
 - Color-coded server identification
 - Status indicators with color coding (Running, Paused, Stopped)
-- Sparkline graphs for CPU and memory usage
+- Sparkline graphs for CPU, Memory, Disk, Network usage
 - Responsive layout that adapts to terminal size
 - Tabbed interface for organized information display
 - Selection indicators for multiple VMs
@@ -200,7 +201,7 @@ Rainbow V Manager is a Textual-based TUI (Terminal User Interface) application f
 - Loading indicators for long-running operations
 - Detailed error messages
 - Command-line mode for advanced users
-- Bulk operations with improved progress indication
+- Bulk operations
 - Real-time VM status updates
 
 ## Extra Command-Line Tool (vmanager_cmd.py)
