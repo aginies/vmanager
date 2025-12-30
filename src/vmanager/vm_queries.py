@@ -2,6 +2,7 @@
 Module for retrieving information about virtual machines.
 """
 import xml.etree.ElementTree as ET
+import logging
 import libvirt
 from libvirt_utils import _get_disabled_disks_elem, VIRTUI_MANAGER_NS
 from vm_cache import get_from_cache, set_in_cache
@@ -951,3 +952,32 @@ def get_serial_devices(xml_content: str) -> list[dict]:
     except ET.ParseError as e:
         logging.error(f"Error parsing XML for serial devices: {e}")
     return devices
+
+def get_attached_pci_devices(xml_content: str) -> list[dict]:
+    """
+    Parses the VM XML description and returns a list of attached PCI devices (hostdev).
+    """
+    attached_pci_devices = []
+    try:
+        root = ET.fromstring(xml_content)
+        # Find all hostdev devices with a PCI address
+        for hostdev_elem in root.findall(".//devices/hostdev[@type='pci']"):
+            source_elem = hostdev_elem.find('source')
+            if source_elem is not None:
+                address_elem = source_elem.find('address')
+                if address_elem is not None:
+                    domain = address_elem.get('domain')
+                    bus = address_elem.get('bus')
+                    slot = address_elem.get('slot')
+                    function = address_elem.get('function')
+                    if all([domain, bus, slot, function]):
+                        pci_address = f"{int(domain, 16):04x}:{int(bus, 16):02x}:{int(slot, 16):02x}.{int(function, 16):01x}"
+                        attached_pci_devices.append({
+                            'pci_address': pci_address,
+                            'source_xml': ET.tostring(hostdev_elem, encoding='unicode')
+                        })
+    except ET.ParseError as e:
+        logging.error(f"Error parsing XML for attached PCI devices: {e}")
+    except Exception as e:
+        logging.error(f"Unexpected error getting attached PCI devices: {e}")
+    return attached_pci_devices
