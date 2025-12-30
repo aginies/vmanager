@@ -28,6 +28,10 @@ from vmcard_dialog import (
         AdvancedCloneDialog, RenameVMDialog, SelectSnapshotDialog, SnapshotNameDialog
         )
 from utils import extract_server_name_from_uri
+from constants import (
+    ButtonLabels, ButtonIds, TabTitles, StatusText, 
+    SparklineLabels, ErrorMessages, DialogMessages, VmStatus
+)
 
 class VMCard(Static):
     """
@@ -67,7 +71,7 @@ class VMCard(Static):
                     return f"Snapshots({num_snapshots})"
             except libvirt.libvirtError:
                 pass # Domain might be transient or invalid
-        return "Snapshot"
+        return TabTitles.SNAPSHOT
 
     def _update_webc_status(self) -> None:
         """Updates the web console status indicator."""
@@ -118,37 +122,37 @@ class VMCard(Static):
                 yield Sparkline([], id="bottom-sparkline")
 
             with TabbedContent(id="button-container"):
-                with TabPane("Manage", id="manage-tab"):
+                with TabPane(TabTitles.MANAGE, id="manage-tab"):
                     with Horizontal():
                         with Vertical():
-                            yield Button("Start", id="start", variant="success")
-                            yield Button("Shutdown", id="shutdown", variant="primary")
-                            yield Button("Force Off", id="stop", variant="error")
-                            yield Button("Pause", id="pause", variant="primary")
-                            yield Button("Resume", id="resume", variant="success")
+                            yield Button(ButtonLabels.START, id=ButtonIds.START, variant="success")
+                            yield Button(ButtonLabels.SHUTDOWN, id=ButtonIds.SHUTDOWN, variant="primary")
+                            yield Button(ButtonLabels.FORCE_OFF, id=ButtonIds.STOP, variant="error")
+                            yield Button(ButtonLabels.PAUSE, id=ButtonIds.PAUSE, variant="primary")
+                            yield Button(ButtonLabels.RESUME, id=ButtonIds.RESUME, variant="success")
                         with Vertical():
-                            yield Button("Configure", id="configure-button", variant="primary")
-                            yield Button("Web Console", id="web_console", variant="default")
-                            yield Button("Connect", id="connect", variant="default")
+                            yield Button(ButtonLabels.CONFIGURE, id=ButtonIds.CONFIGURE_BUTTON, variant="primary")
+                            yield Button(ButtonLabels.WEB_CONSOLE, id=ButtonIds.WEB_CONSOLE, variant="default")
+                            yield Button(ButtonLabels.CONNECT, id=ButtonIds.CONNECT, variant="default")
                 with TabPane(self._get_snapshot_tab_title(), id="snapshot-tab"):
                     with Horizontal():
                         with Vertical():
-                            yield Button("Snapshot", id="snapshot_take", variant="primary")
+                            yield Button(ButtonLabels.SNAPSHOT, id=ButtonIds.SNAPSHOT_TAKE, variant="primary")
                         with Vertical():
-                            yield Button("Restore Snapshot", id="snapshot_restore", variant="primary")
+                            yield Button(ButtonLabels.RESTORE_SNAPSHOT, id=ButtonIds.SNAPSHOT_RESTORE, variant="primary")
                             yield Static(classes="button-separator")
-                            yield Button("Del Snapshot", id="snapshot_delete", variant="error")
-                with TabPane("Special", id="special-tab"):
+                            yield Button(ButtonLabels.DELETE_SNAPSHOT, id=ButtonIds.SNAPSHOT_DELETE, variant="error")
+                with TabPane(TabTitles.SPECIAL, id="special-tab"):
                     with Horizontal():
                         with Vertical():
-                            yield Button("Delete", id="delete", variant="success", classes="delete-button")
+                            yield Button(ButtonLabels.DELETE, id=ButtonIds.DELETE, variant="success", classes="delete-button")
                             yield Static(classes="button-separator")
-                            yield Button("Clone", id="clone", classes="clone-button")
-                            yield Button("! Migration !", id="migration", variant="primary", classes="migration-button")
+                            yield Button(ButtonLabels.CLONE, id=ButtonIds.CLONE, classes="clone-button")
+                            yield Button(ButtonLabels.MIGRATION, id=ButtonIds.MIGRATION, variant="primary", classes="migration-button")
                         with Vertical():
-                            yield Button("View XML", id="xml")
+                            yield Button(ButtonLabels.VIEW_XML, id=ButtonIds.XML)
                             yield Static(classes="button-separator")
-                            yield Button( "Rename", id="rename-button", variant="primary", classes="rename-button")
+                            yield Button(ButtonLabels.RENAME, id=ButtonIds.RENAME_BUTTON, variant="primary", classes="rename-button")
 
     def on_mount(self) -> None:
         self.styles.background = "#323232"
@@ -189,17 +193,21 @@ class VMCard(Static):
         uuid = self.vm.UUIDString() if self.vm else None
         if not uuid or not hasattr(self.app, 'sparkline_data') or uuid not in self.app.sparkline_data:
              # Set default labels if no data is available
-            top_label.update(f"{self.cpu} VCPU" if self.stats_view_mode == "resources" else "Disk R/W 0.00/0.00 MB/s")
-            mem_gb = round(self.memory / 1024, 1)
-            bottom_label.update(f"{mem_gb} Gb" if self.stats_view_mode == "resources" else "Net Rx/Tx 0.00/0.00 MB/s")
+            if self.stats_view_mode == "resources":
+                top_label.update(SparklineLabels.VCPU.format(cpu=self.cpu))
+                mem_gb = round(self.memory / 1024, 1)
+                bottom_label.update(SparklineLabels.MEMORY_GB.format(mem=mem_gb))
+            else:
+                top_label.update(SparklineLabels.DISK_RW.format(read=0.00, write=0.00))
+                bottom_label.update(SparklineLabels.NET_RX_TX.format(rx=0.00, tx=0.00))
             return
 
         sparkline_storage = self.app.sparkline_data[uuid]
 
         if self.stats_view_mode == "resources":
-            top_label.update(f"{self.cpu} VCPU")
+            top_label.update(SparklineLabels.VCPU.format(cpu=self.cpu))
             mem_gb = round(self.memory / 1024, 1)
-            bottom_label.update(f"{mem_gb} Gb")
+            bottom_label.update(SparklineLabels.MEMORY_GB.format(mem=mem_gb))
             top_sparkline.data = list(sparkline_storage.get("cpu", []))
             bottom_sparkline.data = list(sparkline_storage.get("mem", []))
         else: # io mode
@@ -207,8 +215,8 @@ class VMCard(Static):
             disk_write_mb = self.latest_disk_write / 1024
             net_rx_mb = self.latest_net_rx / 1024
             net_tx_mb = self.latest_net_tx / 1024
-            top_label.update(f"Disk R/W {disk_read_mb:.2f}/{disk_write_mb:.2f} MB/s")
-            bottom_label.update(f"Net Rx/Tx {net_rx_mb:.2f}/{net_tx_mb:.2f} MB/s")
+            top_label.update(SparklineLabels.DISK_RW.format(read=disk_read_mb, write=disk_write_mb))
+            bottom_label.update(SparklineLabels.NET_RX_TX.format(rx=net_rx_mb, tx=net_tx_mb))
             top_sparkline.data = list(sparkline_storage.get("disk", []))
             bottom_sparkline.data = list(sparkline_storage.get("net", []))
 
@@ -266,8 +274,8 @@ class VMCard(Static):
             try:
                 stats = self.app.vm_service.get_vm_runtime_stats(self.vm)
                 if not stats:
-                    if self.status != "Stopped":
-                        self.app.call_from_thread(setattr, self, 'status', "Stopped")
+                    if self.status != StatusText.STOPPED:
+                        self.app.call_from_thread(setattr, self, 'status', StatusText.STOPPED)
                     return
 
                 def apply_stats_to_ui():
@@ -314,35 +322,35 @@ class VMCard(Static):
     @on(Click, "#top-sparkline, #bottom-sparkline")
     def toggle_stats_view(self) -> None:
         """Toggle between resource and I/O stat views."""
-        if self.status == "Running":
+        if self.status == StatusText.RUNNING:
              self.stats_view_mode = "io" if self.stats_view_mode == "resources" else "resources"
 
     def update_button_layout(self):
         """Update the button layout based on current VM status."""
         try:
-            start_button = self.query_one("#start", Button)
-            shutdown_button = self.query_one("#shutdown", Button)
-            stop_button = self.query_one("#stop", Button)
-            pause_button = self.query_one("#pause", Button)
-            resume_button = self.query_one("#resume", Button)
-            delete_button = self.query_one("#delete", Button)
-            connect_button = self.query_one("#connect", Button)
-            web_console_button = self.query_one("#web_console", Button)
-            restore_button = self.query_one("#snapshot_restore", Button)
-            snapshot_delete_button = self.query_one("#snapshot_delete", Button)
-            info_button = self.query_one("#configure-button", Button)
-            clone_button = self.query_one("#clone", Button)
-            migration_button = self.query_one("#migration", Button)
-            rename_button = self.query_one("#rename-button", Button)
+            start_button = self.query_one(f"#{ButtonIds.START}", Button)
+            shutdown_button = self.query_one(f"#{ButtonIds.SHUTDOWN}", Button)
+            stop_button = self.query_one(f"#{ButtonIds.STOP}", Button)
+            pause_button = self.query_one(f"#{ButtonIds.PAUSE}", Button)
+            resume_button = self.query_one(f"#{ButtonIds.RESUME}", Button)
+            delete_button = self.query_one(f"#{ButtonIds.DELETE}", Button)
+            connect_button = self.query_one(f"#{ButtonIds.CONNECT}", Button)
+            web_console_button = self.query_one(f"#{ButtonIds.WEB_CONSOLE}", Button)
+            restore_button = self.query_one(f"#{ButtonIds.SNAPSHOT_RESTORE}", Button)
+            snapshot_delete_button = self.query_one(f"#{ButtonIds.SNAPSHOT_DELETE}", Button)
+            info_button = self.query_one(f"#{ButtonIds.CONFIGURE_BUTTON}", Button)
+            clone_button = self.query_one(f"#{ButtonIds.CLONE}", Button)
+            migration_button = self.query_one(f"#{ButtonIds.MIGRATION}", Button)
+            rename_button = self.query_one(f"#{ButtonIds.RENAME_BUTTON}", Button)
             cpu_sparkline_container = self.query_one("#cpu-sparkline-container")
             mem_sparkline_container = self.query_one("#mem-sparkline-container")
-            xml_button = self.query_one("#xml", Button)
+            xml_button = self.query_one(f"#{ButtonIds.XML}", Button)
         except NoMatches:
             return
 
-        is_stopped = self.status == "Stopped"
-        is_running = self.status == "Running"
-        is_paused = self.status == "Paused"
+        is_stopped = self.status == StatusText.STOPPED
+        is_running = self.status == StatusText.RUNNING
+        is_paused = self.status == StatusText.PAUSED
         has_snapshots = False
         try:
             if self.vm:
@@ -397,26 +405,26 @@ class VMCard(Static):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
         from constants import VmAction
-        if event.button.id == "start":
+        if event.button.id == ButtonIds.START:
             self.post_message(VmActionRequest(self.vm.UUIDString(), VmAction.START))
             return
 
         button_handlers = {
-            "shutdown": self._handle_shutdown_button,
-            "stop": self._handle_stop_button,
-            "pause": self._handle_pause_button,
-            "resume": self._handle_resume_button,
-            "xml": self._handle_xml_button,
-            "connect": self._handle_connect_button,
-            "web_console": self._handle_web_console_button,
-            "snapshot_take": self._handle_snapshot_take_button,
-            "snapshot_restore": self._handle_snapshot_restore_button,
-            "snapshot_delete": self._handle_snapshot_delete_button,
-            "delete": self._handle_delete_button,
-            "clone": self._handle_clone_button,
-            "migration": self._handle_migration_button,
-            "rename-button": self._handle_rename_button,
-            "configure-button": self._handle_configure_button,
+            ButtonIds.SHUTDOWN: self._handle_shutdown_button,
+            ButtonIds.STOP: self._handle_stop_button,
+            ButtonIds.PAUSE: self._handle_pause_button,
+            ButtonIds.RESUME: self._handle_resume_button,
+            ButtonIds.XML: self._handle_xml_button,
+            ButtonIds.CONNECT: self._handle_connect_button,
+            ButtonIds.WEB_CONSOLE: self._handle_web_console_button,
+            ButtonIds.SNAPSHOT_TAKE: self._handle_snapshot_take_button,
+            ButtonIds.SNAPSHOT_RESTORE: self._handle_snapshot_restore_button,
+            ButtonIds.SNAPSHOT_DELETE: self._handle_snapshot_delete_button,
+            ButtonIds.DELETE: self._handle_delete_button,
+            ButtonIds.CLONE: self._handle_clone_button,
+            ButtonIds.MIGRATION: self._handle_migration_button,
+            ButtonIds.RENAME_BUTTON: self._handle_rename_button,
+            ButtonIds.CONFIGURE_BUTTON: self._handle_configure_button,
         }
         handler = button_handlers.get(event.button.id)
         if handler:
@@ -440,7 +448,7 @@ class VMCard(Static):
             if self.vm.isActive():
                 self.post_message(VmActionRequest(self.vm.UUIDString(), VmAction.FORCE_OFF))
 
-        message = f"This is a hard stop, like unplugging the power cord.\nAre you sure you want to stop '{self.name}'?"
+        message = f"{ErrorMessages.HARD_STOP_WARNING}\nAre you sure you want to stop '{self.name}'?"
         self.app.push_screen(ConfirmationDialog(message), on_confirm)
 
     def _handle_pause_button(self, event: Button.Pressed) -> None:
@@ -460,7 +468,7 @@ class VMCard(Static):
         """Handles the xml button press."""
         try:
             original_xml = self.vm.XMLDesc(0)
-            is_stopped = self.status == "Stopped"
+            is_stopped = self.status == StatusText.STOPPED
 
             def handle_xml_modal_result(modified_xml: str | None):
                 if modified_xml and is_stopped:
@@ -511,7 +519,7 @@ class VMCard(Static):
                     if "cannot open display" in error_message:
                         self.app.call_from_thread(
                             self.app.show_error_message, 
-                            "Could not open display. Ensure you are in a graphical session."
+                            ErrorMessages.CANNOT_OPEN_DISPLAY
                         )
                     else:
                         self.app.call_from_thread(
@@ -524,7 +532,7 @@ class VMCard(Static):
             except FileNotFoundError:
                 self.app.call_from_thread(
                     self.app.show_error_message,
-                    "virt-viewer command not found. Please ensure it is installed."
+                    ErrorMessages.VIRT_VIEWER_NOT_FOUND
                 )
             except libvirt.libvirtError as e:
                 self.app.call_from_thread(
@@ -632,7 +640,7 @@ class VMCard(Static):
                             self.app.show_error_message(f"Error on VM {self.name} during 'snapshot delete': {e}")
 
                 self.app.push_screen(
-                    ConfirmationDialog(f"Are you sure you want to delete snapshot '{snapshot_name}'?"), on_confirm
+                    ConfirmationDialog(DialogMessages.DELETE_SNAPSHOT_CONFIRMATION.format(name=snapshot_name)), on_confirm
                 )
 
         self.app.push_screen(SelectSnapshotDialog(snapshots, "Select snapshot to delete"), delete_snapshot)
@@ -761,7 +769,7 @@ class VMCard(Static):
                         self.app.show_success_message("VM rename cancelled.")
 
                 self.app.push_screen(
-                    ConfirmationDialog(f"VM has {num_snapshots} snapshot(s). To rename, they must be deleted.\nDelete snapshots and continue?"),
+                    ConfirmationDialog(DialogMessages.DELETE_SNAPSHOTS_AND_RENAME.format(count=num_snapshots)),
                     on_confirm_delete
                 )
             else:
@@ -821,21 +829,20 @@ class VMCard(Static):
         source_uri = selected_vms[0].connect().getURI()
         if source_uri == "qemu:///system":
             self.app.show_error_message(
-                "Migration from localhost (qemu:///system) is not supported.\n"
-                "A full remote URI (e.g., qemu+ssh://user@host/system) is required."
+                ErrorMessages.MIGRATION_LOCALHOST_NOT_SUPPORTED
             )
             return
 
         dest_uris = [uri for uri in active_uris if uri != source_uri]
         if not dest_uris:
-            self.app.show_error_message("No destination servers available.")
+            self.app.show_error_message(ErrorMessages.NO_DESTINATION_SERVERS)
             return
 
         def on_confirm(confirmed: bool) -> None:
             if confirmed:
                 self.app.push_screen(MigrationModal(vms=selected_vms, is_live=is_live, connections=all_connections))
 
-        self.app.push_screen(ConfirmationDialog("Experimental Features! not yet fully tested!"), on_confirm)
+        self.app.push_screen(ConfirmationDialog(DialogMessages.MIGRATION_EXPERIMENTAL), on_confirm)
 
     @on(Checkbox.Changed, "#vm-select-checkbox")
     def on_vm_select_checkbox_changed(self, event: Checkbox.Changed) -> None:
