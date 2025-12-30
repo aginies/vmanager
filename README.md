@@ -1,4 +1,4 @@
-# Rainbow V Manager
+# Virtui V Manager
 
 A Textual-based TUI (Terminal User Interface) application for managing QEMU/KVM virtual machines using the libvirt python API.
 
@@ -43,7 +43,7 @@ Optionnal:
 ### Clone this repository
 
 ```bash
-git clone https://github.com/aginies/vmanager.git
+git clone https://github.com/aginies/virtui-manager.git
 ```
 
 ```bash
