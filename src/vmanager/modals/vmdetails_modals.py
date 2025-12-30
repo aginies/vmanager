@@ -24,7 +24,7 @@ from vm_queries import (
     get_supported_machine_types, get_vm_graphics_info,
     get_all_vm_nvram_usage, get_all_vm_disk_usage, get_vm_sound_model,
     get_vm_network_ip, get_vm_rng_info, get_vm_tpm_info,
-    get_attached_usb_devices, get_serial_devices
+    get_attached_usb_devices, get_serial_devices, get_vm_input_info
     )
 from vm_actions import (
         add_disk, remove_disk, set_vcpu, set_memory, set_machine_type, enable_disk,
@@ -33,7 +33,8 @@ from vm_actions import (
         set_vm_graphics, set_disk_properties, set_vm_sound_model,
         add_network_interface, remove_network_interface, set_boot_info, set_vm_rng, set_vm_tpm,
         check_for_other_spice_devices, remove_spice_devices, attach_usb_device,
-        detach_usb_device, add_serial_console, remove_serial_console
+        detach_usb_device, add_serial_console, remove_serial_console,
+        add_vm_input, remove_vm_input
 )
 from config import get_log_path
 from network_manager import (
@@ -57,6 +58,7 @@ from modals.disk_pool_modals import (
           SelectDiskModal, EditDiskModal
           )
 from modals.network_modals import AddEditNetworkInterfaceModal
+from modals.input_modals import AddInputDeviceModal
 
 # Configure logging
 logging.basicConfig(
@@ -88,6 +90,8 @@ class VMDetailModal(ModalScreen):
         self.selected_network_interface = None
         self.serial_devices = []
         self.selected_serial_port = None
+        self.input_devices = []
+        self.selected_input_device = None
         self.boot_order = self.vm_info.get('boot', {}).get('order', [])
         self.all_bootable_devices = [] # Initialize the new reactive list
         self.sev_caps = {'sev': False, 'sev-es': False}
@@ -166,6 +170,7 @@ class VMDetailModal(ModalScreen):
         self._populate_networks_table()
         self._populate_usb_lists()
         self._populate_serial_table()
+        self._populate_input_table()
 
     def _populate_disks_table(self):
         disks_table = self.query_one("#disks-table", DataTable)
@@ -999,6 +1004,29 @@ class VMDetailModal(ModalScreen):
             self.selected_serial_port = None
             self.query_one("#remove-serial-btn").disabled = True
 
+    def _populate_input_table(self):
+        """Populates the input devices table."""
+        input_table = self.query_one("#input-table", DataTable)
+        input_table.clear()
+        if not input_table.columns:
+            input_table.add_column("Type", key="type")
+            input_table.add_column("Bus", key="bus")
+
+        self.input_devices = get_vm_input_info(self.xml_desc)
+        for i, device in enumerate(self.input_devices):
+            row_key = f"{device['type']}-{device['bus']}-{i}"
+            input_table.add_row(device['type'], device['bus'], key=row_key)
+
+    @on(DataTable.RowSelected, "#input-table")
+    def on_input_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        row_index = event.cursor_row
+        if 0 <= row_index < len(self.input_devices):
+            self.selected_input_device = self.input_devices[row_index]
+            self.query_one("#remove-input-btn").disabled = not self.is_vm_stopped
+        else:
+            self.selected_input_device = None
+            self.query_one("#remove-input-btn").disabled = True
+
     def compose(self) -> ComposeResult:
         xml_root = ET.fromstring(self.xml_desc)
         with Vertical(id="vm-detail-container"):
@@ -1326,12 +1354,17 @@ class VMDetailModal(ModalScreen):
                         yield DataTable(id="serial-table", cursor_type="row")
                     with Vertical(classes="button-details"):
                         with Horizontal():
-                            yield Button("Add PTY Console", id="add-serial-btn", variant="primary")
+                            yield Button("Add PTY Console", id="add-serial-btn", variant="primary", disabled=not self.is_vm_stopped)
                             yield Button("Remove Console", id="remove-serial-btn", variant="error", disabled=True)
                 with TabPane("Watchdog", id="detail-watchdog-tab"):
                     yield Label("Watchdog")
                 with TabPane("Input", id="detail-input-tab"):
-                    yield Label("Input")
+                    with ScrollableContainer(classes="info-details"):
+                        yield DataTable(id="input-table", cursor_type="row")
+                    with Vertical(classes="button-details"):
+                        with Horizontal():
+                            yield Button("Add Input", id="add-input-btn", variant="primary", disabled=not self.is_vm_stopped)
+                            yield Button("Remove Input", id="remove-input-btn", variant="error", disabled=True)
                 with TabPane("USB", id="detail-usb-tab"):
                     yield Label("USB")
                 with TabPane("USB Host", id="detail-usbhost-tab"):
@@ -1473,6 +1506,42 @@ class VMDetailModal(ModalScreen):
             vm2.toggle_class("hidden")
         elif event.button.id == "close-btn":
             self.dismiss()
+
+        elif event.button.id == "add-input-btn":
+            def add_input_callback(result):
+                if result:
+                    try:
+                        add_vm_input(
+                            self.domain,
+                            result["type"],
+                            result["bus"]
+                        )
+                        self.app.show_success_message("Input device added successfully.")
+                        self.xml_desc = self.domain.XMLDesc(0)
+                        self._populate_input_table()
+                    except (libvirt.libvirtError, ValueError) as e:
+                        self.app.show_error_message(f"Error adding input device: {e}")
+
+            available_types = ["mouse", "tablet", "keyboard"]
+            available_buses = ["usb", "ps2", "virtio"]
+            self.app.push_screen(AddInputDeviceModal(
+                available_types=available_types,
+                available_buses=available_buses
+            ), add_input_callback)
+
+        elif event.button.id == "remove-input-btn":
+            if self.selected_input_device:
+                message = f"Are you sure you want to remove the {self.selected_input_device['type']} on bus {self.selected_input_device['bus']}?"
+                def on_confirm(confirmed: bool) -> None:
+                    if confirmed:
+                        try:
+                            remove_vm_input(self.domain, self.selected_input_device['type'], self.selected_input_device['bus'])
+                            self.app.show_success_message("Input device removed successfully.")
+                            self.xml_desc = self.domain.XMLDesc(0)
+                            self._populate_input_table()
+                        except (libvirt.libvirtError, ValueError) as e:
+                            self.app.show_error_message(f"Error removing input device: {e}")
+                self.app.push_screen(ConfirmationDialog(message), on_confirm)
 
         elif event.button.id == "add-virtiofs-btn":
             def add_virtiofs_callback(result):
