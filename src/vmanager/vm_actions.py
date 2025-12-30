@@ -1262,6 +1262,54 @@ def set_vm_input(domain: libvirt.virDomain, input_type: str = 'tablet', input_bu
     domain.connect().defineXML(new_xml)
 
 
+@log_function_call
+def add_vm_input(domain: libvirt.virDomain, input_type: str, input_bus: str):
+    """
+    Adds an input device to a VM.
+    The VM must be stopped.
+    """
+    invalidate_cache(domain.UUIDString())
+    if domain.isActive():
+        raise libvirt.libvirtError("VM must be stopped to add an input device.")
+
+    input_xml = f"""
+    <input type='{input_type}' bus='{input_bus}'/>
+    """
+
+    flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
+    domain.attachDeviceFlags(input_xml, flags)
+
+
+@log_function_call
+def remove_vm_input(domain: libvirt.virDomain, input_type: str, input_bus: str):
+    """
+    Removes an input device from a VM.
+    The VM must be stopped.
+    """
+    invalidate_cache(domain.UUIDString())
+    if domain.isActive():
+        raise libvirt.libvirtError("VM must be stopped to remove an input device.")
+
+    xml_desc = domain.XMLDesc(0)
+    root = ET.fromstring(xml_desc)
+    devices = root.find('devices')
+    if devices is None:
+        raise ValueError("Could not find <devices> in VM XML.")
+
+    input_to_remove = None
+    for elem in devices.findall('input'):
+        if elem.get('type') == input_type and elem.get('bus') == input_bus:
+            input_to_remove = elem
+            break
+    
+    if input_to_remove is None:
+        raise ValueError(f"Input device with type '{input_type}' and bus '{input_bus}' not found.")
+
+    input_xml = ET.tostring(input_to_remove, encoding='unicode')
+    flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
+    domain.detachDeviceFlags(input_xml, flags)
+
+
 def start_vm(domain):
     """
     Starts a VM after checking for missing disks.
