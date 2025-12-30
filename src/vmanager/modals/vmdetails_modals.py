@@ -23,7 +23,8 @@ from vm_queries import (
     get_vm_disks_info, get_vm_devices_info,
     get_supported_machine_types, get_vm_graphics_info,
     get_all_vm_nvram_usage, get_all_vm_disk_usage, get_vm_sound_model,
-    get_vm_network_ip, get_vm_rng_info, get_vm_tpm_info
+    get_vm_network_ip, get_vm_rng_info, get_vm_tpm_info,
+    get_attached_usb_devices
     )
 from vm_actions import (
         add_disk, remove_disk, set_vcpu, set_memory, set_machine_type, enable_disk,
@@ -31,7 +32,8 @@ from vm_actions import (
         add_virtiofs, set_vm_video_model, set_cpu_model, set_uefi_file,
         set_vm_graphics, set_disk_properties, set_vm_sound_model,
         add_network_interface, remove_network_interface, set_boot_info, set_vm_rng, set_vm_tpm,
-        check_for_other_spice_devices, remove_spice_devices
+        check_for_other_spice_devices, remove_spice_devices, attach_usb_device,
+        detach_usb_device
 )
 from config import get_log_path
 from network_manager import (
@@ -42,7 +44,8 @@ from firmware_manager import (
 )
 import storage_manager
 from libvirt_utils import (
-        get_cpu_models, get_domain_capabilities_xml, get_video_domain_capabilities
+        get_cpu_models, get_domain_capabilities_xml, get_video_domain_capabilities,
+        get_host_usb_devices
         )
 from modals.utils_modals import ConfirmationDialog
 from modals.cpu_mem_pc_modals import (
@@ -160,6 +163,7 @@ class VMDetailModal(ModalScreen):
         self.vm_info['disks'] = get_vm_disks_info(self.conn, self.xml_desc)
         self._populate_disks_table()
         self._populate_networks_table()
+        self._populate_usb_lists()
 
     def _populate_disks_table(self):
         disks_table = self.query_one("#disks-table", DataTable)
@@ -261,6 +265,7 @@ class VMDetailModal(ModalScreen):
             if device_id in device_map:
                 device = device_map[device_id]
                 item = ListItem(Label(device.description))
+                item.tooltip = device.description
                 item.data = device
                 boot_order_list.append(item)
 
@@ -268,6 +273,7 @@ class VMDetailModal(ModalScreen):
         for device in self.all_bootable_devices:
             if device.id not in boot_order_ids:
                 item = ListItem(Label(device.description))
+                item.tooltip = device.description
                 item.data = device
                 available_devices_list.append(item)
 
@@ -900,6 +906,74 @@ class VMDetailModal(ModalScreen):
         else:
             self.query_one("#boot-down", Button).disabled = True
 
+    def _populate_usb_lists(self):
+        """Populates the USB device lists."""
+        available_list = self.query_one("#available-usb-list", ListView)
+        attached_list = self.query_one("#attached-usb-list", ListView)
+        available_list.clear()
+        attached_list.clear()
+
+        host_devices = get_host_usb_devices(self.conn)
+        attached_device_ids = get_attached_usb_devices(self.xml_desc)
+
+        attached_ids_list = [(d['vendor_id'], d['product_id']) for d in attached_device_ids]
+
+        for dev in host_devices:
+            dev_id = (dev['vendor_id'], dev['product_id'])
+            item = ListItem(Label(dev['description']))
+            item.tooltip = dev['description']
+            item.data = dev
+            if dev_id in attached_ids_list:
+                attached_list.append(item)
+                attached_ids_list.remove(dev_id)
+            else:
+                available_list.append(item)
+
+        for vendor_id, product_id in attached_ids_list:
+            description = f"Disconnected Device ({vendor_id}:{product_id})"
+            item = ListItem(Label(description))
+            item.tooltip = description
+            item.data = {"vendor_id": vendor_id, "product_id": product_id, "description": description, "disconnected": True}
+            attached_list.append(item)
+
+    @on(ListView.Highlighted, "#available-usb-list")
+    def on_available_usb_list_highlighted(self, event: ListView.Highlighted) -> None:
+        self.query_one("#attach-usb-btn", Button).disabled = event.item is None
+
+    @on(ListView.Highlighted, "#attached-usb-list")
+    def on_attached_usb_list_highlighted(self, event: ListView.Highlighted) -> None:
+        self.query_one("#detach-usb-btn", Button).disabled = event.item is None
+
+    @on(Button.Pressed, "#attach-usb-btn")
+    def on_attach_usb_button_pressed(self, event: Button.Pressed) -> None:
+        available_list = self.query_one("#available-usb-list", ListView)
+        if available_list.highlighted_child:
+            device_to_attach = available_list.highlighted_child.data
+            vendor_id = device_to_attach['vendor_id']
+            product_id = device_to_attach['product_id']
+            try:
+                attach_usb_device(self.domain, vendor_id, product_id)
+                self.app.show_success_message(f"Attached USB device: {device_to_attach['description']}")
+                self.xml_desc = self.domain.XMLDesc(0)
+                self._populate_usb_lists()
+            except libvirt.libvirtError as e:
+                self.app.show_error_message(f"Error attaching USB device: {e}")
+
+    @on(Button.Pressed, "#detach-usb-btn")
+    def on_detach_usb_button_pressed(self, event: Button.Pressed) -> None:
+        attached_list = self.query_one("#attached-usb-list", ListView)
+        if attached_list.highlighted_child:
+            device_to_detach = attached_list.highlighted_child.data
+            vendor_id = device_to_detach['vendor_id']
+            product_id = device_to_detach['product_id']
+            try:
+                detach_usb_device(self.domain, vendor_id, product_id)
+                self.app.show_success_message(f"Detached USB device: {device_to_detach['description']}")
+                self.xml_desc = self.domain.XMLDesc(0)
+                self._populate_usb_lists()
+            except libvirt.libvirtError as e:
+                self.app.show_error_message(f"Error detaching USB device: {e}")
+
     def compose(self) -> ComposeResult:
         xml_root = ET.fromstring(self.xml_desc)
         with Vertical(id="vm-detail-container"):
@@ -1231,7 +1305,16 @@ class VMDetailModal(ModalScreen):
                 with TabPane("USB", id="detail-usb-tab"):
                     yield Label("USB")
                 with TabPane("USB Host", id="detail-usbhost-tab"):
-                    yield Label("USB Host")
+                    with Horizontal(classes="boot-manager"):
+                        with Vertical(classes="boot-list-container"):
+                            yield Label("Available Host USB Devices")
+                            yield ListView(id="available-usb-list")
+                        with Vertical(classes="boot-buttons"):
+                            yield Button("Attach >", id="attach-usb-btn", disabled=True)
+                            yield Button("< Detach", id="detach-usb-btn", disabled=True)
+                        with Vertical(classes="boot-list-container"):
+                            yield Label("Attached to VM")
+                            yield ListView(id="attached-usb-list")
                 with TabPane("PCI Host", id="detail-PCIhost-tab"):
                     yield Label("PCI Host")
                 with TabPane("PCIe", id="detail-pcie-tab"):
