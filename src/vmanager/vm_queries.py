@@ -390,7 +390,7 @@ def get_vm_devices_info(xml_content: str) -> dict:
 def get_vm_disks_info(conn: libvirt.virConnect, xml_content: str) -> list[dict]:
     """
     Extracts disks info from a VM's XML definition.
-    Returns a list of dictionaries with 'path' and 'status'.
+    Returns a list of dictionaries with 'path', 'status', 'bus', 'cache_mode', and 'discard_mode'.
     """
     disks = []
     try:
@@ -420,7 +420,11 @@ def get_vm_disks_info(conn: libvirt.virConnect, xml_content: str) -> list[dict]:
                     driver = disk.find("driver")
                     cache_mode = driver.get("cache") if driver is not None else "default"
                     discard_mode = driver.get("discard") if driver is not None else "ignore"
-                    disks.append({'path': disk_path, 'status': 'enabled', 'cache_mode': cache_mode, 'discard_mode': discard_mode})
+                    
+                    target_elem = disk.find('target')
+                    bus = target_elem.get('bus') if target_elem is not None else 'N/A'
+
+                    disks.append({'path': disk_path, 'status': 'enabled', 'cache_mode': cache_mode, 'discard_mode': discard_mode, 'bus': bus})
 
         # Disabled disks from metadata
         metadata_elem = root.find('metadata')
@@ -452,7 +456,11 @@ def get_vm_disks_info(conn: libvirt.virConnect, xml_content: str) -> list[dict]:
                             driver = disk.find("driver")
                             cache_mode = driver.get("cache") if driver is not None else "default"
                             discard_mode = driver.get("discard") if driver is not None else "ignore"
-                            disks.append({'path': disk_path, 'status': 'disabled', 'cache_mode': cache_mode, 'discard_mode': discard_mode})
+                            
+                            target_elem = disk.find('target')
+                            bus = target_elem.get('bus') if target_elem is not None else 'N/A'
+
+                            disks.append({'path': disk_path, 'status': 'disabled', 'cache_mode': cache_mode, 'discard_mode': discard_mode, 'bus': bus})
     except ET.ParseError:
         pass  # Failed to get disks, continue without them
 
