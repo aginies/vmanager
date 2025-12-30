@@ -80,8 +80,8 @@ python3 vmanager.py --cmd
 
 The application uses a YAML configuration file to customize its behavior. The configuration file can be placed at:
 
-- `~/.config/vmanager/config.yaml` (user-specific)
-- `/etc/vmanager/config.yaml` (system-wide)
+- `~/.config/virtui-manager/config.yaml` (user-specific)
+- `/etc/virtui-manager/config.yaml` (system-wide)
 
 The default configuration is provided in `config.py`, and user configurations merge with these defaults. Here are the key configuration options:
 
