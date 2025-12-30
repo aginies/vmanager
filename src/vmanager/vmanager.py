@@ -180,6 +180,7 @@ class VMManagerTUI(App):
         self._color_index = 0
         self.devel = "(Devel v0.4.0)"
         self.vm_cards: dict[str, VMCard] = {}
+        self._resize_timer = None
 
     @on(Worker.StateChanged)
     def _on_worker_state_changed(self, event: Worker.StateChanged) -> None:
@@ -339,10 +340,9 @@ class VMManagerTUI(App):
 
     def on_resize(self, event):
         """Handle terminal resize events."""
-        #        if hasattr(self, 'resize_timer'):
-        #            self.resize_timer.stop()
-        #        self.resize_timer = self.set_timer(0.5, self._update_layout_for_size)
-        self.set_timer(1.5, self._update_layout_for_size)
+        if self._resize_timer:
+            self._resize_timer.stop()
+        self._resize_timer = self.set_timer(0.5, self._update_layout_for_size)
 
     def on_unload(self) -> None:
         """Called when the app is about to be unloaded."""
