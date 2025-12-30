@@ -12,8 +12,8 @@ from storage_manager import list_unused_volumes, list_storage_pools
 
 class VManagerCMD(cmd.Cmd):
     """VManager command-line interface."""
-    prompt = '(vmanager) '
-    intro = "Welcome to the vmanager command shell. Type help or ? to list commands.\n"
+    prompt = '(virtui-manager) '
+    intro = "Welcome to the Virtui Manager command shell. Type help or ? to list commands.\n"
 
     def __init__(self):
         super().__init__()
@@ -38,7 +38,7 @@ class VManagerCMD(cmd.Cmd):
             else:
                 self.prompt = f"({server_names}) "
         else:
-            self.prompt = '(vmanager)> '
+            self.prompt = '(virtui-manager)> '
 
     def _get_vms_to_operate(self, args):
         vms_to_operate = {}
@@ -756,14 +756,14 @@ Usage: list_pool"""
             return [pool for pool in all_pool_names if pool.startswith(text)]
 
     def do_quit(self, arg):
-        """Exit the vmanager shell."""
+        """Exit the virtui-manager shell."""
         # Disconnect all connections when quitting
         self.vm_service.disconnect_all()
-        print("\nExiting vmanager.")
+        print("\nExiting Virtui Manager.")
         return True
 
 def main():
-    """Entry point for vmanager command-line interface."""
+    """Entry point for Virtui Manager command-line interface."""
     VManagerCMD().cmdloop()
 
 if __name__ == '__main__':
