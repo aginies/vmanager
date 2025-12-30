@@ -305,3 +305,58 @@ def get_host_usb_devices(conn: libvirt.virConnect) -> list[dict]:
     except libvirt.libvirtError as e:
         logging.error(f"Error getting host USB devices: {e}")
     return usb_devices
+
+
+def get_host_pci_devices(conn: libvirt.virConnect) -> list[dict]:
+    """Gets all PCI devices from the host that are available for passthrough."""
+    pci_devices = []
+    try:
+        devices = conn.listAllDevices(0)
+        for dev in devices:
+            try:
+                xml_desc = dev.XMLDesc(0)
+                root = ET.fromstring(xml_desc)
+                if root.tag == 'capability' and root.get('type') == 'pci_device':
+                    capability = root
+                    vendor_elem = capability.find('vendor')
+                    product_elem = capability.find('product')
+                    address_elem = capability.find('address')
+
+                    vendor_id = vendor_elem.get('id') if vendor_elem is not None else None
+                    product_id = product_elem.get('id') if product_elem is not None else None
+
+                    if not vendor_id or not product_id:
+                        continue
+
+                    product_name = "Unknown"
+                    if product_elem is not None and product_elem.text:
+                        product_name = product_elem.text.strip()
+
+                    vendor_name = "Unknown"
+                    if vendor_elem is not None and vendor_elem.text:
+                        vendor_name = vendor_elem.text.strip()
+
+                    pci_address = None
+                    if address_elem is not None:
+                        domain = address_elem.get('domain')
+                        bus = address_elem.get('bus')
+                        slot = address_elem.get('slot')
+                        function = address_elem.get('function')
+                        if all([domain, bus, slot, function]):
+                            pci_address = f"{int(domain, 16):04x}:{int(bus, 16):02x}:{int(slot, 16):02x}.{int(function, 16)}"
+
+                    pci_devices.append({
+                        "name": dev.name(),
+                        "vendor_id": vendor_id,
+                        "product_id": product_id,
+                        "vendor_name": vendor_name,
+                        "product_name": product_name,
+                        "pci_address": pci_address,
+                        "description": f"{vendor_name} - {product_name} ({pci_address})" if pci_address else f"{vendor_name} - {product_name} ({vendor_id}:{product_id})"
+                    })
+            except (libvirt.libvirtError, ET.ParseError) as e:
+                logging.warning(f"Skipping device {dev.name() if hasattr(dev, 'name') else 'unknown'}: {e}")
+                continue
+    except (libvirt.libvirtError, AttributeError) as e:
+        logging.error(f"Error getting host PCI devices: {e}")
+    return pci_devices
