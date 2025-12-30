@@ -1670,3 +1670,47 @@ def check_vm_migration_compatibility(domain: libvirt.virDomain, dest_conn: libvi
         issues.append({'severity': 'INFO', 'message': "This usually means using a shared storage system like NFS or iSCSI, mounted at the same location on both hosts."})
 
     return issues
+
+
+def attach_usb_device(domain: libvirt.virDomain, vendor_id: str, product_id: str):
+    """
+    Attaches a host USB device to the specified VM.
+    The device is identified by its vendor and product ID.
+    """
+    if not domain:
+        raise ValueError("Invalid domain object.")
+
+    xml = f"""
+<hostdev mode='subsystem' type='usb'>
+  <source>
+    <vendor id='{vendor_id}'/>
+    <product id='{product_id}'/>
+  </source>
+</hostdev>
+"""
+    flags = libvirt.VIR_DOMAIN_AFFECT_LIVE | libvirt.VIR_DOMAIN_AFFECT_CONFIG
+    domain.attachDeviceFlags(xml, flags)
+
+    invalidate_cache(domain.UUIDString())
+
+
+def detach_usb_device(domain: libvirt.virDomain, vendor_id: str, product_id: str):
+    """
+    Detaches a host USB device from the specified VM.
+    The device is identified by its vendor and product ID.
+    """
+    if not domain:
+        raise ValueError("Invalid domain object.")
+
+    xml = f"""
+<hostdev mode='subsystem' type='usb'>
+  <source>
+    <vendor id='{vendor_id}'/>
+    <product id='{product_id}'/>
+  </source>
+</hostdev>
+"""
+    flags = libvirt.VIR_DOMAIN_AFFECT_LIVE | libvirt.VIR_DOMAIN_AFFECT_CONFIG
+    domain.detachDeviceFlags(xml, flags)
+
+    invalidate_cache(domain.UUIDString())
