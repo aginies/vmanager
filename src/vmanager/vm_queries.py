@@ -3,11 +3,27 @@ Module for retrieving information about virtual machines.
 """
 import xml.etree.ElementTree as ET
 import logging
+from functools import lru_cache
 import libvirt
 from libvirt_utils import _get_disabled_disks_elem, VIRTUI_MANAGER_NS
 from vm_cache import get_from_cache, set_in_cache
 #from utils import log_function_call
 
+@lru_cache(maxsize=512)
+def _parse_domain_xml(xml_content: str) -> ET.Element | None:
+    """Cache XML parsing results."""
+    try:
+        return ET.fromstring(xml_content)
+    except ET.ParseError:
+        return None
+
+def _get_domain_root(domain) -> tuple[str, ET.Element | None]:
+    """Returns (xml_content, root_element) for a domain."""
+    try:
+        xml_content = domain.XMLDesc(0)
+        return xml_content, _parse_domain_xml(xml_content)
+    except libvirt.libvirtError:
+        return "", None
 
 
 def get_vm_info(conn):
@@ -30,7 +46,10 @@ def get_vm_info(conn):
                 continue
 
             info = domain.info()
-            xml_content = domain.XMLDesc(0)
+            xml_content, root = _get_domain_root(domain)
+            if root is None:
+                continue
+
             vm_info = {
                 'name': domain.name(),
                 'uuid': domain.UUIDString(),
@@ -38,19 +57,19 @@ def get_vm_info(conn):
                 'description': get_vm_description(domain),
                 'cpu': info[3],
                 'memory': info[2] // 1024,  # Convert KiB to MiB
-                'machine_type': get_vm_machine_info(xml_content),
-                'firmware': get_vm_firmware_info(xml_content),
-                'networks': get_vm_networks_info(xml_content),
-                'graphics': get_vm_graphics_info(xml_content),
-                'rng': get_vm_rng_info(xml_content),
-                'watchdog': get_vm_watchdog_info(xml_content),
-                'tmp': get_vm_tpm_info(xml_content),
-                'input': get_vm_input_info(xml_content),
-                'boot': get_boot_info(xml_content, conn),
+                'machine_type': get_vm_machine_info(root),
+                'firmware': get_vm_firmware_info(root),
+                'networks': get_vm_networks_info(root),
+                'graphics': get_vm_graphics_info(root),
+                'rng': get_vm_rng_info(root),
+                'watchdog': get_vm_watchdog_info(root),
+                'tpm': get_vm_tpm_info(root),
+                'input': get_vm_input_info(root),
+                'boot': get_boot_info(conn, root),
                 'detail_network': get_vm_network_ip(domain),
-                'network_dns_gateway': get_vm_network_dns_gateway_info(domain),
-                'disks': get_vm_disks_info(conn, xml_content),
-                'devices': get_vm_devices_info(xml_content),
+                'network_dns_gateway': get_vm_network_dns_gateway_info(domain, root=root),
+                'disks': get_vm_disks_info(conn, root),
+                'devices': get_vm_devices_info(root),
             }
             set_in_cache(uuid, vm_info)
             vm_info_list.append(vm_info)
@@ -58,7 +77,7 @@ def get_vm_info(conn):
     return vm_info_list
 
 #@log_function_call
-def get_vm_network_dns_gateway_info(domain: libvirt.virDomain):
+def get_vm_network_dns_gateway_info(domain: libvirt.virDomain, root=None):
     """
     Extracts DNS and gateway information for networks connected to the VM.
     """
@@ -66,8 +85,11 @@ def get_vm_network_dns_gateway_info(domain: libvirt.virDomain):
         return []
 
     conn = domain.connect()
-    xml_content = domain.XMLDesc(0)
-    root = ET.fromstring(xml_content)
+    if root is None:
+        _, root = _get_domain_root(domain)
+
+    if root is None:
+        return []
 
     network_details = []
 
@@ -131,15 +153,17 @@ def get_vm_description(domain):
     except libvirt.libvirtError:
         return "No description available"
 
-def get_vm_firmware_info(xml_content: str) -> dict:
+def get_vm_firmware_info(root: ET.Element) -> dict:
     """
     Extracts firmware (BIOS/UEFI) from a VM's XML definition.
     Returns a dictionary with firmware info.
     """
     firmware_info = {'type': 'BIOS', 'path': None, 'secure_boot': False} # Default to BIOS
 
+    if root is None:
+        return firmware_info
+
     try:
-        root = ET.fromstring(xml_content)
         os_elem = root.find('os')
 
         if os_elem is not None:
@@ -156,19 +180,21 @@ def get_vm_firmware_info(xml_content: str) -> dict:
                 if bootloader_elem is not None:
                      firmware_info['type'] = 'BIOS'
 
-    except ET.ParseError:
-        pass # Return default values if XML parsing fails
+    except Exception:
+        pass # Return default values if error
 
     return firmware_info
 
-def get_vm_machine_info(xml_content: str) -> str:
+def get_vm_machine_info(root: ET.Element) -> str:
     """
     Extracts machine type from a VM's XML definition.
     """
     machine_type = "N/A"
 
+    if root is None:
+        return machine_type
+
     try:
-        root = ET.fromstring(xml_content)
         os_elem = root.find('os')
 
         # Get machine type from the 'machine' attribute of the 'type' element within 'os'
@@ -177,15 +203,16 @@ def get_vm_machine_info(xml_content: str) -> str:
             if type_elem is not None and 'machine' in type_elem.attrib:
                 machine_type = type_elem.get('machine')
 
-    except ET.ParseError:
-        pass # Return default values if XML parsing fails
+    except Exception:
+        pass # Return default values if error
 
     return machine_type
 
-def get_vm_networks_info(xml_content: str) -> list[dict]:
+def get_vm_networks_info(root: ET.Element) -> list[dict]:
     """Extracts network interface information from a VM's XML definition."""
-    root = ET.fromstring(xml_content)
     networks = []
+    if root is None:
+        return networks
     for interface in root.findall(".//devices/interface"):
         mac_address_node = interface.find("mac")
         if mac_address_node is None:
@@ -237,7 +264,7 @@ def get_vm_network_ip(domain) -> list:
         return ip_addresses
     return []
 
-def get_vm_devices_info(xml_content: str) -> dict:
+def get_vm_devices_info(root: ET.Element) -> dict:
     """
     Extracts information about various virtual devices from a VM's XML definition.
     """
@@ -257,8 +284,10 @@ def get_vm_devices_info(xml_content: str) -> dict:
         'scsi': [],
     }
 
+    if root is None:
+        return devices_info
+
     try:
-        root = ET.fromstring(xml_content)
         devices = root.find("devices")
 
         if devices is not None:
@@ -381,20 +410,21 @@ def get_vm_devices_info(xml_content: str) -> dict:
                 devices_info['tpm'].append({'model': model})
 
 
-    except ET.ParseError:
+    except Exception:
         pass
 
     return devices_info
 
 
-def get_vm_disks_info(conn: libvirt.virConnect, xml_content: str) -> list[dict]:
+def get_vm_disks_info(conn: libvirt.virConnect, root: ET.Element) -> list[dict]:
     """
     Extracts disks info from a VM's XML definition.
     Returns a list of dictionaries with 'path', 'status', 'bus', 'cache_mode', and 'discard_mode'.
     """
     disks = []
+    if root is None:
+        return disks
     try:
-        root = ET.fromstring(xml_content)
         # Enabled disks
         devices = root.find("devices")
         if devices is not None:
@@ -461,7 +491,7 @@ def get_vm_disks_info(conn: libvirt.virConnect, xml_content: str) -> list[dict]:
                             bus = target_elem.get('bus') if target_elem is not None else 'N/A'
 
                             disks.append({'path': disk_path, 'status': 'disabled', 'cache_mode': cache_mode, 'discard_mode': discard_mode, 'bus': bus})
-    except ET.ParseError:
+    except Exception:
         pass  # Failed to get disks, continue without them
 
     return disks
@@ -481,17 +511,18 @@ def get_all_vm_disk_usage(conn: libvirt.virConnect) -> dict[str, list[str]]:
 
     for domain in domains:
         try:
-            xml_desc = domain.XMLDesc(0)
-            disks = get_vm_disks_info(conn, xml_desc) # Re-use existing function
-            vm_name = domain.name()
-            for disk in disks:
-                path = disk.get('path')
-                if path:
-                    if path not in disk_to_vms_map:
-                        disk_to_vms_map[path] = []
-                    if vm_name not in disk_to_vms_map[path]:
-                        disk_to_vms_map[path].append(vm_name)
-        except libvirt.libvirtError:
+            _, root = _get_domain_root(domain)
+            if root is not None:
+                disks = get_vm_disks_info(conn, root)
+                vm_name = domain.name()
+                for disk in disks:
+                    path = disk.get('path')
+                    if path:
+                        if path not in disk_to_vms_map:
+                            disk_to_vms_map[path] = []
+                        if vm_name not in disk_to_vms_map[path]:
+                            disk_to_vms_map[path].append(vm_name)
+        except Exception:
             continue
 
     return disk_to_vms_map
@@ -511,18 +542,18 @@ def get_all_vm_nvram_usage(conn: libvirt.virConnect) -> dict[str, list[str]]:
 
     for domain in domains:
         try:
-            xml_desc = domain.XMLDesc(0)
-            root = ET.fromstring(xml_desc)
-            nvram_elem = root.find('.//os/nvram')
-            if nvram_elem is not None:
-                nvram_path = nvram_elem.text
-                if nvram_path:
-                    vm_name = domain.name()
-                    if nvram_path not in nvram_to_vms_map:
-                        nvram_to_vms_map[nvram_path] = []
-                    if vm_name not in nvram_to_vms_map[nvram_path]:
-                        nvram_to_vms_map[nvram_path].append(vm_name)
-        except (libvirt.libvirtError, ET.ParseError):
+            _, root = _get_domain_root(domain)
+            if root is not None:
+                nvram_elem = root.find('.//os/nvram')
+                if nvram_elem is not None:
+                    nvram_path = nvram_elem.text
+                    if nvram_path:
+                        vm_name = domain.name()
+                        if nvram_path not in nvram_to_vms_map:
+                            nvram_to_vms_map[nvram_path] = []
+                        if vm_name not in nvram_to_vms_map[nvram_path]:
+                            nvram_to_vms_map[nvram_path].append(vm_name)
+        except Exception:
             continue
     return nvram_to_vms_map
 
@@ -536,8 +567,9 @@ def get_supported_machine_types(conn, domain):
 
     try:
         # Get domain architecture
-        domain_xml = domain.XMLDesc(0)
-        domain_root = ET.fromstring(domain_xml)
+        _, domain_root = _get_domain_root(domain)
+        if domain_root is None:
+            return []
         arch_elem = domain_root.find(".//os/type")
         arch = arch_elem.get('arch') if arch_elem is not None else 'x86_64' # default
 
@@ -553,10 +585,11 @@ def get_supported_machine_types(conn, domain):
         return []
 
 
-def get_vm_shared_memory_info(xml_content: str) -> bool:
+def get_vm_shared_memory_info(root: ET.Element) -> bool:
     """Check if shared memory is enabled for the VM."""
+    if root is None:
+        return False
     try:
-        root = ET.fromstring(xml_content)
         memory_backing = root.find('memoryBacking')
         if memory_backing is not None:
             if memory_backing.find('shared') is not None:
@@ -564,13 +597,15 @@ def get_vm_shared_memory_info(xml_content: str) -> bool:
             access_elem = memory_backing.find('access')
             if access_elem is not None and access_elem.get('mode') == 'shared':
                 return True
-    except (ET.ParseError, AttributeError):
+    except Exception:
         pass
     return False
 
-def get_boot_info(xml_content: str, conn: libvirt.virConnect) -> dict:
+
+def get_boot_info(conn: libvirt.virConnect, root: ET.Element) -> dict:
     """Extracts boot information from the VM's XML."""
-    root = ET.fromstring(xml_content)
+    if root is None:
+        return {'menu_enabled': False, 'order': []}
     os_elem = root.find('.//os')
     if os_elem is None:
         return {'menu_enabled': False, 'order': []}
@@ -627,47 +662,51 @@ def get_boot_info(xml_content: str, conn: libvirt.virConnect) -> dict:
     return {'menu_enabled': menu_enabled, 'order': order_from_os}
 
 
-def get_vm_video_model(xml_content: str) -> str | None:
+def get_vm_video_model(root: ET.Element) -> str | None:
     """Extracts the video model from a VM's XML definition."""
+    if root is None:
+        return None
     try:
-        root = ET.fromstring(xml_content)
         video = root.find('.//devices/video/model')
         if video is not None:
             return video.get('type')
-    except ET.ParseError:
+    except Exception:
         pass
     return None
 
-def get_vm_cpu_model(xml_content: str) -> str | None:
+def get_vm_cpu_model(root: ET.Element) -> str | None:
     """Extracts the cpu model from a VM's XML definition."""
+    if root is None:
+        return None
     try:
-        root = ET.fromstring(xml_content)
         cpu = root.find('.//cpu')
         if cpu is not None:
             return cpu.get('mode')
-    except ET.ParseError:
+    except Exception:
         pass
     return None
 
-def get_vm_sound_model(xml_content: str) -> str | None:
+def get_vm_sound_model(root: ET.Element) -> str | None:
     """Extracts the sound model from a VM's XML definition."""
+    if root is None:
+        return None
     try:
-        root = ET.fromstring(xml_content)
         sound = root.find('.//devices/sound')
         if sound is not None:
             return sound.get("model")
-    except ET.ParseError:
+    except Exception:
         pass
     return None
 
-def get_vm_tpm_info(xml_content: str) -> list[dict]:
+def get_vm_tpm_info(root: ET.Element) -> list[dict]:
     """
     Extracts TPM information from a VM's XML definition.
     Returns a list of dictionaries with TPM details including passthrough devices.
     """
     tpm_info = []
+    if root is None:
+        return tpm_info
     try:
-        root = ET.fromstring(xml_content)
         devices = root.find("devices")
 
         if devices is not None:
@@ -700,12 +739,12 @@ def get_vm_tpm_info(xml_content: str) -> list[dict]:
                     'backend_path': backend_path
                 })
 
-    except ET.ParseError:
+    except Exception:
         pass
 
     return tpm_info
 
-def get_vm_rng_info(xml_content: str) -> dict:
+def get_vm_rng_info(root: ET.Element) -> dict:
     """
     Extracts RNG (Random Number Generator) information from a VM's XML definition.
     Returns a dictionary with RNG details.
@@ -715,8 +754,9 @@ def get_vm_rng_info(xml_content: str) -> dict:
         'backend_model': None,
         'backend_path': None,
     }
+    if root is None:
+        return rng_info
     try:
-        root = ET.fromstring(xml_content)
         devices = root.find("devices")
 
         if devices is not None:
@@ -735,12 +775,12 @@ def get_vm_rng_info(xml_content: str) -> dict:
                         if source_elem is not None:
                             rng_info['backend_path'] = source_elem.get('path')
 
-    except ET.ParseError:
+    except Exception:
         pass
 
     return rng_info
 
-def get_vm_watchdog_info(xml_content: str) -> dict:
+def get_vm_watchdog_info(root: ET.Element) -> dict:
     """
     Extracts Watchdog information from a VM's XML definition.
     Returns a dictionary with Watchdog details.
@@ -749,9 +789,10 @@ def get_vm_watchdog_info(xml_content: str) -> dict:
         'model': None,
         'action': None
     }
+    if root is None:
+        return watchdog_info
 
     try:
-        root = ET.fromstring(xml_content)
         devices = root.find("devices")
 
         if devices is not None:
@@ -760,20 +801,21 @@ def get_vm_watchdog_info(xml_content: str) -> dict:
                 watchdog_info['model'] = watchdog_elem.get('model')
                 watchdog_info['action'] = watchdog_elem.get('action')
 
-    except ET.ParseError:
+    except Exception:
         pass
 
     return watchdog_info
 
-def get_vm_input_info(xml_content: str) -> list[dict]:
+def get_vm_input_info(root: ET.Element) -> list[dict]:
     """
     Extracts Input (keyboard and mouse) information from a VM's XML definition.
     Returns a list of dictionaries with input device details.
     """
     input_info = []
+    if root is None:
+        return input_info
 
     try:
-        root = ET.fromstring(xml_content)
         devices = root.find("devices")
 
         if devices is not None:
@@ -797,12 +839,12 @@ def get_vm_input_info(xml_content: str) -> list[dict]:
 
                 input_info.append(input_details)
 
-    except ET.ParseError:
+    except Exception:
         pass
 
     return input_info
 
-def get_vm_graphics_info(xml_content: str) -> dict:
+def get_vm_graphics_info(root: ET.Element) -> dict:
     """
     Extracts graphics information (VNC/Spice) from a VM's XML definition.
     Returns a dictionary with graphics details.
@@ -817,8 +859,10 @@ def get_vm_graphics_info(xml_content: str) -> dict:
         'password': None,
     }
 
+    if root is None:
+        return graphics_info
+
     try:
-        root = ET.fromstring(xml_content)
         devices = root.find('devices')
         if devices is None:
             return graphics_info
@@ -849,7 +893,7 @@ def get_vm_graphics_info(xml_content: str) -> dict:
             graphics_info['password_enabled'] = True
             graphics_info['password'] = graphics_elem.get('passwd') # Note: libvirt XML may not store password
 
-    except ET.ParseError:
+    except Exception:
         pass
 
     return graphics_info
@@ -864,10 +908,11 @@ def check_for_spice_vms(conn):
     try:
         all_domains = conn.listAllDomains(0) or []
         for domain in all_domains:
-            xml_content = domain.XMLDesc(0)
-            graphics_info = get_vm_graphics_info(xml_content)
-            if graphics_info.get("type") == "spice":
-                return "Some VMs use Spice graphics. 'Web Console' is only available for VNC."
+            _, root = _get_domain_root(domain)
+            if root is not None:
+                graphics_info = get_vm_graphics_info(root)
+                if graphics_info.get("type") == "spice":
+                    return "Some VMs use Spice graphics. 'Web Console' is only available for VNC."
     except libvirt.libvirtError:
         pass
     return None
@@ -887,28 +932,29 @@ def get_all_network_usage(conn: libvirt.virConnect) -> dict[str, list[str]]:
 
     for domain in domains:
         try:
-            xml_desc = domain.XMLDesc(0)
-            vm_name = domain.name()
-            # get_vm_networks_info is already in vm_queries.py
-            networks = get_vm_networks_info(xml_desc)
-            for net in networks:
-                net_name = net.get('network')
-                if net_name:
-                    if net_name not in network_to_vms:
-                        network_to_vms[net_name] = []
-                    if vm_name not in network_to_vms[net_name]:
-                        network_to_vms[net_name].append(vm_name)
-        except libvirt.libvirtError:
+            _, root = _get_domain_root(domain)
+            if root is not None:
+                vm_name = domain.name()
+                networks = get_vm_networks_info(root)
+                for net in networks:
+                    net_name = net.get('network')
+                    if net_name:
+                        if net_name not in network_to_vms:
+                            network_to_vms[net_name] = []
+                        if vm_name not in network_to_vms[net_name]:
+                            network_to_vms[net_name].append(vm_name)
+        except Exception:
             continue
 
     return network_to_vms
 
 
-def get_attached_usb_devices(xml_content: str) -> list[dict]:
-    """Gets all USB devices attached to the VM described by xml_content."""
+def get_attached_usb_devices(root: ET.Element) -> list[dict]:
+    """Gets all USB devices attached to the VM described by root."""
     attached_devices = []
+    if root is None:
+        return attached_devices
     try:
-        root = ET.fromstring(xml_content)
         for hostdev in root.findall(".//devices/hostdev[@type='usb']"):
             source = hostdev.find('source')
             vendor = source.find('vendor')
@@ -920,20 +966,19 @@ def get_attached_usb_devices(xml_content: str) -> list[dict]:
                     "vendor_id": vendor_id,
                     "product_id": product_id,
                 })
-    except ET.ParseError as e:
-        logging.error(f"Error parsing XML for attached USB devices: {e}")
     except Exception as e:
         logging.error(f"Unexpected error getting attached USB devices: {e}")
     return attached_devices
 
 
-def get_serial_devices(xml_content: str) -> list[dict]:
+def get_serial_devices(root: ET.Element) -> list[dict]:
     """
     Extracts serial and console device information from a VM's XML definition.
     """
     devices = []
+    if root is None:
+        return devices
     try:
-        root = ET.fromstring(xml_content)
         # Find serial devices
         for serial in root.findall(".//devices/serial"):
             dev_type = serial.get('type')
@@ -957,17 +1002,18 @@ def get_serial_devices(xml_content: str) -> list[dict]:
                 'port': port,
                 'details': f"Type: {dev_type}, Target: {target_type} on port {port}"
             })
-    except ET.ParseError as e:
-        logging.error(f"Error parsing XML for serial devices: {e}")
+    except Exception as e:
+        logging.error(f"Error getting serial devices: {e}")
     return devices
 
-def get_attached_pci_devices(xml_content: str) -> list[dict]:
+def get_attached_pci_devices(root: ET.Element) -> list[dict]:
     """
     Parses the VM XML description and returns a list of attached PCI devices (hostdev).
     """
     attached_pci_devices = []
+    if root is None:
+        return attached_pci_devices
     try:
-        root = ET.fromstring(xml_content)
         # Find all hostdev devices with a PCI address
         for hostdev_elem in root.findall(".//devices/hostdev[@type='pci']"):
             source_elem = hostdev_elem.find('source')
@@ -984,8 +1030,6 @@ def get_attached_pci_devices(xml_content: str) -> list[dict]:
                             'pci_address': pci_address,
                             'source_xml': ET.tostring(hostdev_elem, encoding='unicode')
                         })
-    except ET.ParseError as e:
-        logging.error(f"Error parsing XML for attached PCI devices: {e}")
     except Exception as e:
         logging.error(f"Unexpected error getting attached PCI devices: {e}")
     return attached_pci_devices

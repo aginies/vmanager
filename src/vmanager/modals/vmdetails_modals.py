@@ -101,12 +101,17 @@ class VMDetailModal(ModalScreen):
         self.sev_caps = {'sev': False, 'sev-es': False}
         self.uefi_path_map = {}
         self.xml_desc = self.domain.XMLDesc(0)
-        self.graphics_info = get_vm_graphics_info(self.xml_desc)
-        self.vm_info['sound_model'] = get_vm_sound_model(self.xml_desc)
-        self.rng_info = get_vm_rng_info(self.xml_desc)
+        try:
+            root = ET.fromstring(self.xml_desc)
+        except ET.ParseError:
+            root = None
+
+        self.graphics_info = get_vm_graphics_info(root)
+        self.vm_info['sound_model'] = get_vm_sound_model(root)
+        self.rng_info = get_vm_rng_info(root)
         # Initialize TPM info
-        self.tpm_info = get_vm_tpm_info(self.xml_desc)
-        self.watchdog_info = get_vm_watchdog_info(self.xml_desc)
+        self.tpm_info = get_vm_tpm_info(root)
+        self.watchdog_info = get_vm_watchdog_info(root)
 
     @property
     def is_vm_stopped(self) -> bool:
@@ -170,7 +175,11 @@ class VMDetailModal(ModalScreen):
         # Initialize Graphics tab values
         self._update_graphics_ui()
         self._update_tpm_ui()
-        self.vm_info['disks'] = get_vm_disks_info(self.conn, self.xml_desc)
+        try:
+            root = ET.fromstring(self.xml_desc)
+        except ET.ParseError:
+            root = None
+        self.vm_info['disks'] = get_vm_disks_info(self.conn, root)
         self._populate_disks_table()
         self._populate_networks_table()
         self._populate_usb_lists()
@@ -794,7 +803,11 @@ class VMDetailModal(ModalScreen):
                     password
                 )
                 self.app.show_success_message("Graphics settings applied successfully.")
-                self.graphics_info = get_vm_graphics_info(self.domain.XMLDesc(0))
+                try:
+                    root = ET.fromstring(self.domain.XMLDesc(0))
+                except ET.ParseError:
+                    root = None
+                self.graphics_info = get_vm_graphics_info(root)
                 self._update_graphics_ui()
             except (libvirt.libvirtError, Exception) as e:
                 self.app.show_error_message(f"Error applying graphics settings: {e}")
@@ -885,7 +898,11 @@ class VMDetailModal(ModalScreen):
                 backend_path=backend_path if tpm_type == 'passthrough' else None
             )
             self.app.show_success_message("TPM settings applied successfully.")
-            self.tpm_info = get_vm_tpm_info(self.domain.XMLDesc(0)) # Refresh info
+            try:
+                root = ET.fromstring(self.domain.XMLDesc(0))
+            except ET.ParseError:
+                root = None
+            self.tpm_info = get_vm_tpm_info(root) # Refresh info
             self._update_tpm_ui()
         except Exception as e:
             self.app.show_error_message(f"Error applying TPM settings: {e}")
@@ -932,7 +949,11 @@ class VMDetailModal(ModalScreen):
         attached_list.clear()
 
         host_devices = get_host_usb_devices(self.conn)
-        attached_device_ids = get_attached_usb_devices(self.xml_desc)
+        try:
+            root = ET.fromstring(self.xml_desc)
+        except ET.ParseError:
+            root = None
+        attached_device_ids = get_attached_usb_devices(root)
 
         attached_ids_list = [(d['vendor_id'], d['product_id']) for d in attached_device_ids]
 
@@ -1000,7 +1021,11 @@ class VMDetailModal(ModalScreen):
         attached_list.clear()
 
         host_devices = get_host_pci_devices(self.conn)
-        attached_device_info = get_attached_pci_devices(self.xml_desc)
+        try:
+            root = ET.fromstring(self.xml_desc)
+        except ET.ParseError:
+            root = None
+        attached_device_info = get_attached_pci_devices(root)
 
         attached_pci_addresses = [d['pci_address'] for d in attached_device_info]
 
@@ -1049,7 +1074,11 @@ class VMDetailModal(ModalScreen):
             serial_table.add_column("Device", key="device")
             serial_table.add_column("Details", key="details")
 
-        self.serial_devices = get_serial_devices(self.xml_desc)
+        try:
+            root = ET.fromstring(self.xml_desc)
+        except ET.ParseError:
+            root = None
+        self.serial_devices = get_serial_devices(root)
         for i, device in enumerate(self.serial_devices):
             row_key = f"{device['device']}-{device['port']}-{i}"
             serial_table.add_row(device['device'], device['details'], key=row_key)
@@ -1072,7 +1101,11 @@ class VMDetailModal(ModalScreen):
             input_table.add_column("Type", key="type")
             input_table.add_column("Bus", key="bus")
 
-        self.input_devices = get_vm_input_info(self.xml_desc)
+        try:
+            root = ET.fromstring(self.xml_desc)
+        except ET.ParseError:
+            root = None
+        self.input_devices = get_vm_input_info(root)
         for i, device in enumerate(self.input_devices):
             row_key = f"{device['type']}-{device['bus']}-{i}"
             input_table.add_row(device['type'], device['bus'], key=row_key)
@@ -1088,7 +1121,11 @@ class VMDetailModal(ModalScreen):
         self.xml_desc = self.domain.XMLDesc(0)
         logging.info(f"Updated XML for VM {self.vm_name}")
 
-        inputs = get_vm_input_info(self.xml_desc)
+        try:
+            root = ET.fromstring(self.xml_desc)
+        except ET.ParseError:
+            root = None
+        inputs = get_vm_input_info(root)
         logging.info(f"Found {len(inputs)} input devices after update: {inputs}")
 
         if 'devices' in self.vm_info and isinstance(self.vm_info['devices'], dict):
@@ -1133,7 +1170,11 @@ class VMDetailModal(ModalScreen):
     def _update_controller_table(self):
         """Refreshes the controller table."""
         new_xml = self.domain.XMLDesc(0)
-        self.vm_info['devices'] = get_vm_devices_info(new_xml)
+        try:
+            root = ET.fromstring(new_xml)
+        except ET.ParseError:
+            root = None
+        self.vm_info['devices'] = get_vm_devices_info(root)
         self._populate_controller_table()
 
     @on(DataTable.RowSelected, "#controller-table")
@@ -1645,7 +1686,11 @@ class VMDetailModal(ModalScreen):
         try:
             set_vm_watchdog(self.domain, model, action)
             self.app.show_success_message("Watchdog settings applied successfully.")
-            self.watchdog_info = get_vm_watchdog_info(self.domain.XMLDesc(0))
+            try:
+                root = ET.fromstring(self.domain.XMLDesc(0))
+            except ET.ParseError:
+                root = None
+            self.watchdog_info = get_vm_watchdog_info(root)
             self._update_watchdog_ui()
         except Exception as e:
             self.app.show_error_message(f"Error applying Watchdog settings: {e}")
@@ -1671,7 +1716,11 @@ class VMDetailModal(ModalScreen):
 
     def _update_disk_list(self):
         new_xml = self.domain.XMLDesc(0)
-        disks_info = get_vm_disks_info(self.conn, new_xml)
+        try:
+            root = ET.fromstring(new_xml)
+        except ET.ParseError:
+            root = None
+        disks_info = get_vm_disks_info(self.conn, root)
         self.vm_info['disks'] = disks_info
         self._populate_disks_table()
 
@@ -1707,7 +1756,11 @@ class VMDetailModal(ModalScreen):
 
         # Re-fetch VM info to get updated virtiofs list
         new_xml = self.domain.XMLDesc(0)
-        updated_devices = get_vm_devices_info(new_xml)
+        try:
+            root = ET.fromstring(new_xml)
+        except ET.ParseError:
+            root = None
+        updated_devices = get_vm_devices_info(root)
         self.vm_info['devices']['virtiofs'] = updated_devices.get('virtiofs', [])
 
         for fs in self.vm_info["devices"]["virtiofs"]:
@@ -1724,7 +1777,11 @@ class VMDetailModal(ModalScreen):
     def _update_networks_table(self):
         """Refreshes the networks table."""
         new_xml = self.domain.XMLDesc(0)
-        self.vm_info['networks'] = get_vm_networks_info(new_xml)
+        try:
+            root = ET.fromstring(new_xml)
+        except ET.ParseError:
+            root = None
+        self.vm_info['networks'] = get_vm_networks_info(root)
         self.vm_info['detail_network'] = get_vm_network_ip(self.domain)
         self._populate_networks_table()
 

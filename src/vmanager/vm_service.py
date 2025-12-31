@@ -471,24 +471,31 @@ class VMService:
             if info is None or xml_content is None:
                 # If we can't get essential info, we can't proceed.
                 return None
+            
+            root = None
+            try:
+                root = ET.fromstring(xml_content)
+            except ET.ParseError:
+                pass
+
             vm_info = {
                 'name': domain.name(),
                 'uuid': domain.UUIDString(),
                 'status': get_status(domain),
                 'description': get_vm_description(domain),
                 'cpu': info[3],
-                'cpu_model': get_vm_cpu_model(xml_content),
+                'cpu_model': get_vm_cpu_model(root),
                 'memory': info[2] // 1024,
-                'machine_type': get_vm_machine_info(xml_content),
-                'firmware': get_vm_firmware_info(xml_content),
-                'shared_memory': get_vm_shared_memory_info(xml_content),
-                'networks': get_vm_networks_info(xml_content),
+                'machine_type': get_vm_machine_info(root),
+                'firmware': get_vm_firmware_info(root),
+                'shared_memory': get_vm_shared_memory_info(root),
+                'networks': get_vm_networks_info(root),
                 'detail_network': get_vm_network_ip(domain),
-                'network_dns_gateway': get_vm_network_dns_gateway_info(domain),
-                'disks': get_vm_disks_info(conn_for_domain, xml_content),
-                'devices': get_vm_devices_info(xml_content),
-                'boot': get_boot_info(xml_content, conn_for_domain),
-                'video_model': get_vm_video_model(xml_content),
+                'network_dns_gateway': get_vm_network_dns_gateway_info(domain, root=root),
+                'disks': get_vm_disks_info(conn_for_domain, root),
+                'devices': get_vm_devices_info(root),
+                'boot': get_boot_info(conn_for_domain, root),
+                'video_model': get_vm_video_model(root),
                 'xml': xml_content,
             }
             return (vm_info, domain, conn_for_domain)
