@@ -2,6 +2,8 @@
 Usefull Modal screen
 """
 import os
+import pathlib
+from typing import Iterable
 from textual.containers import Horizontal, Vertical
 from textual.widgets import (
         Label, Button, DirectoryTree, LoadingIndicator,
@@ -9,6 +11,15 @@ from textual.widgets import (
         )
 from textual.app import ComposeResult
 from modals.base_modals import BaseModal, BaseDialog
+
+class SafeDirectoryTree(DirectoryTree):
+    """
+    A DirectoryTree that excludes problematic paths like /proc, /sys, and /dev.
+    """
+    def filter_paths(self, paths: Iterable[pathlib.Path]) -> Iterable[pathlib.Path]:
+        """Filters out blacklisted paths to prevent recursion and performance issues."""
+        BLACKLIST = ("proc", "sys", "dev")
+        return [p for p in paths if not any(part in BLACKLIST for part in p.parts)]
 
 class DirectorySelectionModal(BaseModal[str | None]):
     """A modal screen for selecting a directory."""
@@ -21,13 +32,13 @@ class DirectorySelectionModal(BaseModal[str | None]):
     def compose(self) -> ComposeResult:
         with Vertical(id="directory-selection-dialog"):
             yield Label("Select a Directory")
-            yield DirectoryTree(self.start_path, id="dir-tree")
+            yield SafeDirectoryTree(self.start_path, id="dir-tree")
             with Horizontal():
                 yield Button("Select", variant="primary", id="select-btn", disabled=True)
                 yield Button("Cancel", variant="default", id="cancel-btn")
 
     def on_mount(self) -> None:
-        self.query_one(DirectoryTree).focus()
+        self.query_one(SafeDirectoryTree).focus()
 
     def on_directory_tree_directory_selected(self, event: DirectoryTree.DirectorySelected) -> None:
         self._selected_path = str(event.path)
@@ -47,21 +58,20 @@ class FileSelectionModal(BaseModal[str | None]):
         super().__init__()
         start_dir = path if path and os.path.isdir(path) else os.path.dirname(path) if path else os.path.expanduser("/")
         if not os.path.isdir(start_dir):
-             start_dir = os.path.expanduser("~")
+             start_dir = os.path.expanduser("/")
         self.start_path = start_dir
         self._selected_path: str | None = None
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="file-selection-dialog"):
+        with Vertical(id="file-selection-dialog", classes="file-selection-dialog"):
             yield Label("Select a File")
-            yield DirectoryTree(self.start_path, id="file-tree")
-        with Vertical():
+            yield SafeDirectoryTree(self.start_path, id="file-tree")
             with Horizontal():
                 yield Button("Select", variant="primary", id="select-btn", disabled=True)
                 yield Button("Cancel", variant="default", id="cancel-btn")
 
     def on_mount(self) -> None:
-        self.query_one(DirectoryTree).focus()
+        self.query_one(SafeDirectoryTree).focus()
 
     def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
         self._selected_path = str(event.path)
