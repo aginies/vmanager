@@ -34,6 +34,7 @@ Born during a **SUSE hackweek**, this project is a work-in-progress with potenti
 - [textual](https://pypi.org/project/textual/)
 - [pyaml](https://pypi.org/project/pyaml/)
 - [virt-viewer](https://gitlab.com/virt-viewer/virt-viewer)
+
 Optionnal:
 - [novnc](https://novnc.com/noVNC/)
 - [websockify](https://pypi.org/project/websockify/)
