@@ -430,6 +430,7 @@ def get_vm_disks_info(conn: libvirt.virConnect, root: ET.Element) -> list[dict]:
         if devices is not None:
             for disk in devices.findall("disk"):
                 disk_path = ""
+                device_type = disk.get("device", "disk") # Get device type (disk/cdrom)
                 disk_source = disk.find("source")
                 if disk_source is not None:
                     if "file" in disk_source.attrib:
@@ -454,7 +455,14 @@ def get_vm_disks_info(conn: libvirt.virConnect, root: ET.Element) -> list[dict]:
                     target_elem = disk.find('target')
                     bus = target_elem.get('bus') if target_elem is not None else 'N/A'
 
-                    disks.append({'path': disk_path, 'status': 'enabled', 'cache_mode': cache_mode, 'discard_mode': discard_mode, 'bus': bus})
+                    disks.append({
+                        'path': disk_path, 
+                        'status': 'enabled', 
+                        'cache_mode': cache_mode, 
+                        'discard_mode': discard_mode, 
+                        'bus': bus,
+                        'device_type': device_type
+                    })
 
         # Disabled disks from metadata
         metadata_elem = root.find('metadata')
@@ -466,6 +474,7 @@ def get_vm_disks_info(conn: libvirt.virConnect, root: ET.Element) -> list[dict]:
                 if disabled_disks_elem is not None:
                     for disk in disabled_disks_elem.findall('disk'):
                         disk_path = ""
+                        device_type = disk.get("device", "disk") # Get device type
                         disk_source = disk.find("source")
                         if disk_source is not None:
                             if "file" in disk_source.attrib:
@@ -490,7 +499,14 @@ def get_vm_disks_info(conn: libvirt.virConnect, root: ET.Element) -> list[dict]:
                             target_elem = disk.find('target')
                             bus = target_elem.get('bus') if target_elem is not None else 'N/A'
 
-                            disks.append({'path': disk_path, 'status': 'disabled', 'cache_mode': cache_mode, 'discard_mode': discard_mode, 'bus': bus})
+                            disks.append({
+                                'path': disk_path, 
+                                'status': 'disabled', 
+                                'cache_mode': cache_mode, 
+                                'discard_mode': discard_mode, 
+                                'bus': bus,
+                                'device_type': device_type
+                            })
     except Exception:
         pass  # Failed to get disks, continue without them
 
