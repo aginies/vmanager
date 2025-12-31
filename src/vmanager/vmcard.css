@@ -161,22 +161,55 @@ Button {
     padding: 0 1;
     background: grey;
 }
+#xml:hover {
+    background: lightgrey;
+}
 
 #snapshot_take {
     background: #00008B; /* Dark blue */
 }
+#snapshot_take:hover {
+    background: #0000CD;
+}
+
 #snapshot_restore {
     background: #0000FF; /* Blue */
 }
+#snapshot_restore:hover {
+    background: #1E90FF;
+}
+
 #snapshot_delete {
     background: red;
 }
+#snapshot_delete:hover {
+    background: #FF4500;
+}
+
 #pause {
     background: #FFA500; /* Orange */
+}
+#pause:hover {
+    background: #FFD700;
 }
 
 #connect {
     background: red;
+}
+#connect:hover {
+    background: #FF4500;
+}
+
+.delete-button:hover {
+    background: #FF4500;
+}
+
+.clone-button:hover {
+    background: #FF69B4; /* HotPink */
+}
+
+.rename-button:hover {
+    background: lightgreen;
 }
 
 .vm-select-checkbox {
