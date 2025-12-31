@@ -199,6 +199,7 @@ class VMDetailModal(ModalScreen):
         disks_table.clear()
         if not disks_table.columns:
             disks_table.add_column("Path", key="path")
+            disks_table.add_column("Device", key="device_type")
             disks_table.add_column("Bus Type", key="bus")
             disks_table.add_column("Cache Mode", key="cache_mode")
             disks_table.add_column("Discard Mode", key="discard_mode")
@@ -212,10 +213,12 @@ class VMDetailModal(ModalScreen):
             bus = disk.get('bus', 'N/A')
             cache_mode = disk.get('cache_mode', 'none')
             discard_mode = disk.get('discard_mode', 'ignore')
+            device_type = disk.get('device_type', 'disk')
 
             if status == 'disabled':
                 disks_table.add_row(
                     path,
+                    device_type,
                     bus,
                     "",
                     "",
@@ -225,6 +228,7 @@ class VMDetailModal(ModalScreen):
             else:
                 disks_table.add_row(
                     path,
+                    device_type,
                     bus,
                     cache_mode,
                     discard_mode,
@@ -2092,12 +2096,18 @@ class VMDetailModal(ModalScreen):
                 return
 
             def on_machine_type_selected(new_machine_type: str | None):
-                original_machine_type = self.vm_info['machine_type']
+                if not new_machine_type:
+                    return
 
-                # Check for i440fx to q35 migration case
-                if original_machine_type.startswith("pc-i440fx") and new_machine_type.startswith("pc-q35"):
+                original_machine_type = self.vm_info['machine_type']
+                
+                current_family = '-'.join(original_machine_type.split('-')[:2])
+                new_family = '-'.join(new_machine_type.split('-')[:2])
+
+                # Check if machine type family changes
+                if current_family != new_family:
                     message = (f"Are you sure you want to change the machine type "
-                               f"from '{current_machine_type}' to '{new_machine_type}'?\n\n"
+                               f"from '{original_machine_type}' to '{new_machine_type}'?\n\n"
                                "This operation is complex and may result in an unbootable VM.\n"
                                "It will also remove some device configurations (e.g. PCI/USB addresses, watchdog)."
                                "\n\nTHIS CANNOT BE UNDONE EASILY!")
@@ -2372,8 +2382,9 @@ class VMDetailModal(ModalScreen):
                     new_cache_mode = result.get('cache')
                     new_discard_mode = result.get('discard')
                     new_bus = result.get('bus')
+                    new_device_type = result.get('device')
 
-                    if new_cache_mode == selected_disk.get('cache_mode') and new_discard_mode == selected_disk.get('discard_mode') and new_bus == selected_disk.get('bus'):
+                    if new_cache_mode == selected_disk.get('cache_mode') and new_discard_mode == selected_disk.get('discard_mode') and new_bus == selected_disk.get('bus') and new_device_type == selected_disk.get('device_type'):
                         self.app.show_success_message("No changes detected for disk properties.")
                         return
 
@@ -2386,7 +2397,8 @@ class VMDetailModal(ModalScreen):
                         disk_properties = {
                             'cache': new_cache_mode,
                             'discard': new_discard_mode,
-                            'bus': new_bus
+                            'bus': new_bus,
+                            'device': new_device_type
                         }
                         set_disk_properties(
                             self.domain,
