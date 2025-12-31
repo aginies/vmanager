@@ -13,7 +13,7 @@ from textual.app import ComposeResult
 from textual import on
 from storage_manager import create_storage_pool
 from modals.base_modals import BaseModal
-from modals.utils_modals import DirectorySelectionModal
+from modals.utils_modals import DirectorySelectionModal, FileSelectionModal
 
 class SelectPoolModal(BaseModal[str | None]):
     """Modal screen for selecting a storage pool from a list."""
@@ -103,7 +103,9 @@ class AddDiskModal(BaseModal[dict | None]):
     def compose(self) -> ComposeResult:
         with Vertical(id="add-disk-dialog"):
             yield Label("Add New Disk")
-            yield Input(placeholder="Path to disk image or ISO", id="disk-path-input")
+            with Horizontal():
+                yield Input(placeholder="Path to disk image or ISO", id="disk-path-input")
+                yield Button("Browse", id="browse-disk-btn")
             yield Checkbox("Create new disk image", id="create-disk-checkbox")
             yield Input(placeholder="Size in GB (e.g., 10)", id="disk-size-input", disabled=True)
             yield Select([("qcow2", "qcow2"), ("raw", "raw")], id="disk-format-select", disabled=True, value="qcow2", classes="disk-format-select")
@@ -116,10 +118,47 @@ class AddDiskModal(BaseModal[dict | None]):
                 yield Button("Add", variant="primary", id="add-btn", classes="Buttonpage")
                 yield Button("Cancel", variant="default", id="cancel-btn", classes="Buttonpage")
 
+    def _update_device_type_from_path(self, path: str) -> None:
+        """Automatically sets CD-ROM checkbox based on file extension."""
+        is_cdrom_checkbox = self.query_one("#cdrom-checkbox", Checkbox)
+        
+        ext = os.path.splitext(path)[1].lower()
+        if ext in ['.iso']:
+            if not is_cdrom_checkbox.value: # Only update if different
+                is_cdrom_checkbox.value = True
+                self.on_cdrom_checkbox_changed(Checkbox.Changed(is_cdrom_checkbox, value=True))
+        elif ext in ['.qcow2', '.raw', '.img', '.vmdk', '.vhdx']: # Common disk image formats
+            if is_cdrom_checkbox.value: # Only update if different
+                is_cdrom_checkbox.value = False
+                self.on_cdrom_checkbox_changed(Checkbox.Changed(is_cdrom_checkbox, value=False))
+        # For other extensions or no extension, leave as is, or default to disk if current is cdrom
+        elif is_cdrom_checkbox.value:
+            is_cdrom_checkbox.value = False
+            self.on_cdrom_checkbox_changed(Checkbox.Changed(is_cdrom_checkbox, value=False))
+
+
+    @on(Input.Changed, "#disk-path-input")
+    def on_disk_path_input_changed(self, event: Input.Changed) -> None:
+        if event.value:
+            self._update_device_type_from_path(event.value)
+        else: # Clear if input is empty
+            if self.query_one("#cdrom-checkbox", Checkbox).value:
+                cdrom_checkbox = self.query_one("#cdrom-checkbox", Checkbox)
+                cdrom_checkbox.value = False
+                self.on_cdrom_checkbox_changed(Checkbox.Changed(cdrom_checkbox, value=False))
+
+
     @on(Checkbox.Changed, "#create-disk-checkbox")
     def on_create_disk_checkbox_changed(self, event: Checkbox.Changed) -> None:
         self.query_one("#disk-size-input", Input).disabled = not event.value
         self.query_one("#disk-format-select", Select).disabled = not event.value
+        # If creating a disk, it cannot be a CD-ROM
+        if event.value:
+            cdrom_checkbox = self.query_one("#cdrom-checkbox", Checkbox)
+            if cdrom_checkbox.value:
+                 cdrom_checkbox.value = False
+                 self.on_cdrom_checkbox_changed(Checkbox.Changed(cdrom_checkbox, value=False)) # Trigger its handler
+
 
     @on(Checkbox.Changed, "#cdrom-checkbox")
     def on_cdrom_checkbox_changed(self, event: Checkbox.Changed) -> None:
@@ -134,6 +173,15 @@ class AddDiskModal(BaseModal[dict | None]):
             bus_select.value = "virtio"
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "browse-disk-btn":
+            input_to_update = self.query_one("#disk-path-input", Input)
+            def on_file_selected(path: str | None) -> None:
+                if path:
+                    input_to_update.value = path
+                    self._update_device_type_from_path(path) # Call helper here too
+            self.app.push_screen(FileSelectionModal(path=input_to_update.value), on_file_selected)
+            return
+
         if event.button.id == "add-btn":
             import re
             disk_path = self.query_one("#disk-path-input", Input).value
@@ -166,7 +214,7 @@ class AddPoolModal(BaseModal[bool | None]):
         self.conn = conn
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="add-pool-dialog", classes="add-pool-dialog"):
+        with Vertical(id="add-pool-dialog"):
             yield Label("Add New Storage Pool")
             yield Input(placeholder="Pool Name (e.g., my_pool)", id="pool-name-input")
             yield Select(
@@ -183,8 +231,9 @@ class AddPoolModal(BaseModal[bool | None]):
             with Vertical(id="dir-fields"):
                 yield Label("Target Path (for volumes)")
                 with Vertical():
-                    yield Input(value="/var/lib/libvirt/images/", id="dir-target-path-input", placeholder="/var/lib/libvirt/images/<pool_name>")
-                    yield Button("Browse", id="browse-dir-btn")
+                    with Horizontal():
+                        yield Input(value="/var/lib/libvirt/images/", id="dir-target-path-input", placeholder="/var/lib/libvirt/images/<pool_name>")
+                        yield Button("Browse", id="browse-dir-btn")
 
             # Fields for `netfs` type
             with Vertical(id="netfs-fields"):
@@ -203,9 +252,9 @@ class AddPoolModal(BaseModal[bool | None]):
                     yield Label("Source Path (on remote host)")
                     yield Input(placeholder="host0", id="netfs-source-path-input", value="host0")
 
-            with Horizontal(classes="modal-buttons"):
-                yield Button("Add", variant="primary", id="add-btn")
-                yield Button("Cancel", variant="default", id="cancel-btn")
+            with Horizontal():
+                yield Button("Add", variant="primary", id="add-pool-btn")
+                yield Button("Cancel", variant="default", id="cancel-pool-btn")
 
     def on_mount(self) -> None:
         self.query_one("#netfs-fields").display = False
@@ -339,9 +388,13 @@ class EditDiskModal(BaseModal[dict | None]):
         cache_options = [("default", "default"), ("none", "none"), ("writethrough", "writethrough"), ("writeback", "writeback"), ("directsync", "directsync"), ("unsafe", "unsafe")]
         discard_options = [("unmap", "unmap"), ("ignore", "ignore")]
         bus_options = [("virtio", "virtio"), ("sata", "sata"), ("scsi", "scsi"), ("ide", "ide"), ("usb", "usb")]
+        device_options = [("disk", "disk"), ("cdrom", "cdrom"), ("lun", "lun")]
 
         with Vertical(id="edit-disk-dialog"):
             yield Label(f"Edit Disk: {self.disk_info['path']}", id="edit-disk-title")
+
+            yield Label("Device Type:")
+            yield Select(device_options, value=self.disk_info.get('device_type') or 'disk', id="edit-device-type", disabled=not self.is_stopped)
 
             yield Label("Bus Type:")
             yield Select(bus_options, value=self.disk_info.get('bus'), id="edit-bus-type", disabled=not self.is_stopped)
@@ -364,7 +417,8 @@ class EditDiskModal(BaseModal[dict | None]):
         result = {
             "bus": self.query_one("#edit-bus-type", Select).value,
             "cache": self.query_one("#edit-cache-mode", Select).value,
-            "discard": self.query_one("#edit-discard-mode", Select).value
+            "discard": self.query_one("#edit-discard-mode", Select).value,
+            "device": self.query_one("#edit-device-type", Select).value
         }
         self.dismiss(result)
 
