@@ -1,219 +1,135 @@
-#info-container,
-#status {
-    content-align: center middle;
+#info-container, #status {
+  content-align: center middle;
 }
 
 VMCard {
-    text-align: center;
-    margin: 0 0;
-    width: 43;
-    height: 14;
+  text-align: center;
+  margin: 0;
+  width: 43;
+  height: 14;
 }
+
 #vmname {
-    background: green;
-    color: white;
-    text-style: bold;
-    height: 1;
-    content-align: center middle;
- /*   padding-left: 2;*/
+  background: green;
+  color: white;
+  text-style: bold;
+  height: 1;
+  content-align: center middle;
 }
+
 #info-container {
-    background: $background;
-    color: white;
-    /* Border properties change based on server which belong VM */
-    width: 41;
-    height: 14;
+  background: $background;
+  color: white;
+  width: 41;
+  height: 14;
 }
+
 #dialog Select {
-    width: 50;
-    height: 5;
-    border: none;
-    margin: 0 0;
-    border: none;
+  width: 50;
+  height: 5;
+  border: none;
+  margin: 0;
 }
+
 #dialog-buttons Button {
-    width: 50%;
+  width: 50%;
 }
 
 .sparkline-container {
-    align-horizontal: left;
-    margin: 0 1;
+  align-horizontal: left;
+  margin: 0 1;
 }
 
 .sparkline-label {
-    width: 10;
-    text-align: left;
-    padding-right: 0;
-    padding-left: 0;
+  width: 10;
+  text-align: left;
+  padding: 0;
 }
 
-
-#cpu-sparkline,
-#mem-sparkline {
-    background: $panel;
-    width: 25;
-    margin-right: 1;
-    padding-right: 1;
+#cpu-sparkline, #mem-sparkline {
+  background: $panel;
+  width: 25;
+  margin-right: 1;
+  padding-right: 1;
 }
 
-#cpu-sparkline {
-    color: $success;
+#cpu-sparkline { color: $success; }
+#mem-sparkline { color: $warning; }
+
+#status, Button, .Buttonpage, #xml, #snapshot_take, #snapshot_restore, #snapshot_delete, .button-separator, #connect {
+  height: 1;
+  padding: 0;
 }
 
-#mem-sparkline {
-    color: $warning;
+VMCard, Button, .Buttonpage, #snapshot-tab, #manage-tab {
+  border: none;
 }
 
-#status,
-Button,
-.Buttonpage,
-#xml,
-#snapshot_take,
-#snapshot_restore,
-#snapshot_delete,
-.button-separator,
-#connect {
-    height: 1;
-}
-
-#name,
-#info-container,
-Button,
-.Buttonpage,
-#snapshot_take,
-#snapshot_restore,
-#snapshot_delete {
-    padding: 0 0;
-}
-
-VMCard,
-Button,
-.Buttonpage,
-#snapshot-tab,
-#manage-tab {
-    border: hidden;
-}
-
-.hidden {
-    display: none !important;
-}
+.hidden { display: none !important; }
 
 #vm-header-row {
-    height: 3;
-    align: center middle; /* Align children vertically */
+  height: 3;
+  align: center middle;
 }
 
 #status {
-    margin: 0 0;
-    padding: 0 0;
-    text-style: bold;
-    margin-bottom: 1;
-}
-#status.running,
-#status.stopped,
-#status.paused {
-    color: black;
-}
-#status.running {
-    background: lightgreen;
-}
-#status.stopped {
-    background: red;
-}
-#status.paused {
-    background: yellow;
+  margin: 0;
+  text-style: bold;
+  margin-bottom: 1;
 }
 
+#status.running, #status.stopped, #status.paused { color: black; }
+#status.running { background: lightgreen; }
+#status.stopped { background: red; }
+#status.paused { background: yellow; }
+
 Button {
-    width: 100%;
-    margin: 0 1;
+  width: 100%;
+  margin: 0 1;
 }
 
 .Buttonpage {
-    width: auto;
-    margin: 0 -1;
-    padding: 0 0;
-    border: none;
-    background: $primary-lighten-1;
+  width: auto;
+  margin: 0 -1;
+  border: none;
+  background: $primary-lighten-1;
 }
 
-#button-container {
-    width: 100%;
-    height: 100%;
-    margin: 1 1;
-    padding: 0 1;
+#button-container, #status-cpu-mem {
+  width: 100%;
+  height: 100%;
+  margin: 1;
+  padding: 0 1;
 }
 
-#status-cpu-mem {
-    width: 100%;
-    height: 100%;
-    padding: 0 1;
+#xml, #snapshot_take, #snapshot_restore, #snapshot_delete {
+  color: white;
 }
 
-/* Custom button styles */
-#xml,
-#snapshot_take,
-#snapshot_restore,
-#snapshot_delete {
-    color: white;
-}
 #xml {
-    padding: 0 1;
-    background: grey;
-}
-#xml:hover {
-    background: lightgrey;
+  padding: 0 1;
+  background: grey;
 }
 
-#snapshot_take {
-    background: #00008B; /* Dark blue */
-}
-#snapshot_take:hover {
-    background: #0000CD;
-}
+#xml:hover { background: lightgrey; }
+#snapshot_take { background: #00008B; }
+#snapshot_take:hover { background: #0000CD; }
+#snapshot_restore { background: #0000FF; }
+#snapshot_restore:hover { background: #1E90FF; }
+#snapshot_delete { background: red; }
+#snapshot_delete:hover { background: #FF4500; }
+#pause { background: #FFA500; }
+#pause:hover { background: #FFD700; }
+#connect { background: red; }
+#connect:hover { background: #FF4500; }
 
-#snapshot_restore {
-    background: #0000FF; /* Blue */
-}
-#snapshot_restore:hover {
-    background: #1E90FF;
-}
-
-#snapshot_delete {
-    background: red;
-}
-#snapshot_delete:hover {
-    background: #FF4500;
-}
-
-#pause {
-    background: #FFA500; /* Orange */
-}
-#pause:hover {
-    background: #FFD700;
-}
-
-#connect {
-    background: red;
-}
-#connect:hover {
-    background: #FF4500;
-}
-
-.delete-button:hover {
-    background: #FF4500;
-}
-
-.clone-button:hover {
-    background: #FF69B4; /* HotPink */
-}
-
-.rename-button:hover {
-    background: lightgreen;
-}
+.delete-button:hover { background: #FF4500; }
+.clone-button:hover { background: #FF69B4; }
+.rename-button:hover { background: lightgreen; }
 
 .vm-select-checkbox {
-    width: 5;
-    height: 2;
-    border: none;
+  width: 5;
+  height: 2;
+  border: none;
 }
+

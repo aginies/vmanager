@@ -1439,7 +1439,7 @@ class VMDetailModal(ModalScreen):
                         )
 
                 with TabPane("Graphics", id="detail-graphics-tab"):
-                    with ScrollableContainer(): #classes="info-details"):
+                    with ScrollableContainer(classes="info-details"):
                         yield Label("Type:")
                         yield Select(
                             [("VNC", "vnc"), ("Spice", "spice"), ("None", "")],
@@ -1485,7 +1485,7 @@ class VMDetailModal(ModalScreen):
                             password=True, # Hide password input
                             disabled=not self.is_vm_stopped or not self.graphics_info['password_enabled']
                         )
-                        yield Button("Apply Graphics Settings", id="graphics-apply-btn", variant="primary", disabled=not self.is_vm_stopped)
+                    yield Button("Apply Graphics Settings", id="graphics-apply-btn", variant="primary", disabled=not self.is_vm_stopped)
                 with TabPane("TPM", id="detail-tpm-tab"):
                     tpm_model = self.tpm_info[0].get('model') if self.tpm_info else 'none'
                     tpm_type = self.tpm_info[0].get('type') if self.tpm_info else 'emulated'
@@ -1531,7 +1531,7 @@ class VMDetailModal(ModalScreen):
                             disabled=not self.is_vm_stopped or tpm_type != 'passthrough',
                             placeholder="/dev/tpmrm0"
                         )
-                        yield Button("Apply TPM Settings", id="apply-tpm-btn", variant="primary", disabled=not self.is_vm_stopped)
+                    yield Button("Apply TPM Settings", id="apply-tpm-btn", variant="primary", disabled=not self.is_vm_stopped)
 
 
             with TabbedContent(id="detail2-vm"):
@@ -1578,7 +1578,7 @@ class VMDetailModal(ModalScreen):
                             disabled=not self.is_vm_stopped,
                             allow_blank=False
                         )
-                    with Vertical():
+                    with Vertical(classes="button-details"):
                         with Horizontal():
                             yield Button("Apply Watchdog Settings", id="apply-watchdog-btn", variant="primary", disabled=not self.is_vm_stopped)
                             yield Button("Remove Watchdog", id="remove-watchdog-btn", variant="error", disabled=not self.is_vm_stopped or watchdog_model == 'none')
