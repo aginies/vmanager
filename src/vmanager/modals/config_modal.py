@@ -18,9 +18,9 @@ class ConfigModal(BaseModal[None]):
         self.config = config
 
     def compose(self) -> ComposeResult:
-        with ScrollableContainer(id="config-dialog"):
+        with Vertical(id="config-dialog"):
             yield Label(f"{AppInfo.namecase} Configuration", id="config-title")
-            yield Static(f"Editing: {get_user_config_path()}", classes="config-path-label")
+            yield Static(f"(Editing: {get_user_config_path()})", id="config-title-file") #classes="config-path-label")
             with ScrollableContainer():
                 # Autoconnect on startup
                 yield Checkbox(
@@ -94,7 +94,6 @@ class ConfigModal(BaseModal[None]):
                             type="integer",
                             tooltip="VNC quality setting (0-9)"
                         )
-                    with Horizontal():
                         yield Label("VNC Compression (0-9):")
                         yield Input(
                             value=str(self.config.get("VNC_COMPRESSION", 9)),
@@ -103,9 +102,9 @@ class ConfigModal(BaseModal[None]):
                             tooltip="VNC compression level (0-9)"
                         )
 
-        with Horizontal():
-            yield Button("Save", variant="primary", id="save-config-btn")
-            yield Button("Cancel", variant="default", id="cancel-btn")
+                with Horizontal():
+                    yield Button("Save", variant="primary", id="save-config-btn")
+                    yield Button("Cancel", variant="default", id="cancel-btn")
 
     @on(Button.Pressed)
     def on_button_pressed(self, event: Button.Pressed) -> None:

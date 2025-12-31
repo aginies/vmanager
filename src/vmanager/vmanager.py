@@ -170,6 +170,7 @@ class VMManagerTUI(App):
     ]
 
     CSS_PATH = ["vmanager.css", "vmcard.css", "dialog.css"]
+    #CSS_PATH = ["d.css", ]
 
     def __init__(self):
         super().__init__()

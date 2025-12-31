@@ -1,8 +1,8 @@
 /*
- * Common styles for Dialogs.
+ * dialog.css - Textual TUI
  */
 
-/* Modal screen overlay */
+/* === COMMON OVERLAY MODAL === */
 BulkActionModal,
 WebConsoleDialog,
 SnapshotNameDialog,
@@ -23,13 +23,63 @@ MoveVolumeModal,
 DeleteVMConfirmationDialog,
 AdvancedCloneDialog,
 RenameVMDialog,
-AddInputDeviceModal {
-    align: center middle;
-    background: rgba(0, 0, 0, 0.5);
+AddInputDeviceModal,
+PasswordModal,
+ConfigModal,
+HowToSSHModal {
+  align: center middle;
+  background: rgba(0, 0, 0, 0.5);
 }
 
-/* Common centered content alignment for many dialogs */
-ConfirmationDialog #dialog Label,
+/* === BASE DIALOGUE === */
+SnapshotNameDialog > #dialog,
+SelectSnapshotDialog > #dialog,
+ConfirmationDialog > #dialog,
+WebConsoleDialog > #dialog,
+SelectDiskModal > #dialog,
+MoveVolumeModal > #move-volume-dialog,
+SelectPoolModal > #dialog,
+SelectOneServerModal > #select-one-server-container,
+DeleteVMConfirmationDialog > #delete-vm-dialog,
+SelectServerModal > #select-server-container,
+RenameVMDialog > #dialog,
+ChangeNetworkDialog > #dialog,
+AddInputDeviceModal > #add-input-container,
+PasswordModal > #password-dialog,
+ConfigModal > #config-dialog,
+HowToSSHModal > #howto-ssh-dialog {
+  width: 60;
+  padding: 1;
+  content-align: center middle;
+  align: center middle;
+  border: round $primary;
+  height: auto;
+}
+
+/* === SPECIFIC HEIGHT === */
+DeleteVMConfirmationDialog > #delete-vm-dialog,
+SnapshotNameDialog > #dialog { height: 12; }
+ConfirmationDialog > #dialog { 
+  height: 15; 
+  border: $error; 
+}
+ConfigModal #config-dialog,
+HowToSSHModal #howto-ssh-dialog {
+    width: 80;
+    height: 95%;
+}
+
+RenameVMDialog > #dialog { height: 13; }
+ChangeNetworkDialog > #dialog { height: 20; }
+AddInputDeviceModal > #add-input-container { height: 16; }
+PasswordModal > #password-dialog { height: 12; }
+XMLDisplayModal > #xml-display-dialog, #xml-textarea, { 
+  width: 100%; 
+  height: 95%; 
+}
+
+/* === CENTERED CONTENT === */
+ConfirmationDialog Label,
 RenameVMDialog,
 AddDiskModal,
 EditDiskModal,
@@ -37,374 +87,199 @@ WebConsoleDialog,
 XMLDisplayModal,
 MigrationModal,
 MoveVolumeModal,
-SelectDiskModal #dialog,
-SelectPoolModal #dialog,
+SelectDiskModal > #dialog,
+SelectPoolModal > #dialog,
 AddInputDeviceModal,
 SelectOneServerModal,
-DeleteVMConfirmationDialog #dialog,
 SelectServerModal {
-    content-align: center middle;
+  content-align: center middle;
 }
 
-/*
- * Base styles for standard dialog containers.
- */
-SnapshotNameDialog #dialog,
-SelectSnapshotDialog #dialog,
-ConfirmationDialog #dialog,
-WebConsoleDialog #dialog,
-SelectDiskModal #dialog,
-MoveVolumeModal #move-volume-dialog,
-SelectPoolModal #dialog,
-SelectOneServerModal #select-one-server-container,
-DeleteVMConfirmationDialog #dialog,
-SelectServerModal #select-server-container,
-RenameVMDialog #dialog,
-ChangeNetworkDialog #dialog,
-AddInputDeviceModal #add-input-container {
-    width: 60;
-    padding: 1;
-    content-align: center middle;
-    align: center middle;
-    border: round $primary;
-    background: $surface;
-    height: auto; /* Default to auto height, override below if needed */
-}
-
-/* Height overrides for standard dialogs */
-SnapshotNameDialog #dialog { height: 12; }
-ConfirmationDialog #dialog { height: 15; }
-RenameVMDialog #dialog { height: 13; }
-ChangeNetworkDialog #dialog { height: 20; }
-AddInputDeviceModal #add-input-container { height: 16; } /* Adjust height as needed */
-
-/* Border override for confirmation dialog */
-ConfirmationDialog #dialog {
-    border: $error;
-}
-
-/* Common style for question/prompt labels */
-SnapshotNameDialog #question,
-ConfirmationDialog #question,
-RenameVMDialog #question,
-SelectDiskModal #question,
-SelectPoolModal #question,
-DeleteVMConfirmationDialog #question,
-SelectServerModal #select-server-container Label,
+/* === LABELS QUESTION === */
+SnapshotNameDialog > #question,
+ConfirmationDialog > #question,
+RenameVMDialog > #question,
+SelectDiskModal > #question,
+SelectPoolModal > #question,
+DeleteVMConfirmationDialog > #question,
+SelectServerModal Label,
 AddInputDeviceModal Label {
-    margin-bottom: 1;
+  margin-bottom: 1;
+  content-align: center middle;
 }
 
-SelectDiskModal #question,
-SelectPoolModal #question,
-DeleteVMConfirmationDialog #question,
-SelectServerModal #select-server-container Label,
-RenameVMDialog #question,
-AddInputDeviceModal Label {
-    content-align: center middle;
+/* === BOUTONS CONTAINERS === */
+SnapshotNameDialog > #dialog-buttons,
+ConfirmationDialog > #dialog-buttons,
+WebConsoleDialog > #dialog-buttons,
+SelectDiskModal > #dialog-buttons,
+SelectPoolModal > #dialog-buttons,
+DeleteVMConfirmationDialog > #dialog-buttons,
+SelectServerModal Button,
+RenameVMDialog > #dialog-buttons,
+ChangeNetworkDialog > #dialog-buttons,
+AddInputDeviceModal .modal-buttons,
+PasswordModal > #dialog-buttons {
+  width: 100%;
 }
 
-/* Common style for dialog button containers */
-SnapshotNameDialog #dialog-buttons,
-ConfirmationDialog #dialog-buttons,
-WebConsoleDialog #dialog-buttons,
-SelectDiskModal #dialog-buttons,
-SelectPoolModal #dialog-buttons,
-DeleteVMConfirmationDialog #dialog-buttons,
-SelectServerModal #dialog-buttons,
-RenameVMDialog #dialog-buttons,
-ChangeNetworkDialog #dialog-buttons,
-AddInputDeviceModal .modal-buttons {
-    width: 100%;
+ConfirmationDialog > #dialog-buttons { margin-top: 1; }
+
+/* === LARGES BOUTONS (50%) === */
+SnapshotNameDialog Button,
+ConfirmationDialog Button,
+RenameVMDialog Button,
+ChangeNetworkDialog Button,
+AddInputDeviceModal Button,
+WebConsoleDialog Button,
+SelectDiskModal Button,
+SelectPoolModal Button,
+DeleteVMConfirmationDialog Button,
+ConfigModal Button,
+PasswordModal Button {
+  width: 50%;
+  margin: 1;
+  margin-left: 1;
 }
 
-ConfirmationDialog #dialog-buttons {
-    margin-top: 1;
-}
+ConfirmationDialog Button { margin-right: 1; }
 
-/* Common styles for dialog buttons */
-SnapshotNameDialog #dialog-buttons Button,
-ConfirmationDialog #dialog-buttons Button,
-RenameVMDialog #dialog-buttons Button,
-ChangeNetworkDialog #dialog-buttons Button,
-AddInputDeviceModal .modal-buttons Button {
-    width: 50%;
-    margin-left: 1;
-}
-
-ConfirmationDialog #dialog-buttons Button {
-    margin-right: 1;
-}
-
-WebConsoleDialog #dialog-buttons Button,
-SelectDiskModal #dialog-buttons Button,
-SelectPoolModal #dialog-buttons Button,
-DeleteVMConfirmationDialog #dialog-buttons Button,
-SelectServerModal #select-server-container Button {
-    width: 48%;
-    margin: 0 0;
-}
-
-
-/* --- Specific/Complex Dialog Styles --- */
-
-/* Inputs for dialogs that ask for a name */
+/* === INPUTS === */
 SnapshotNameDialog Input,
-RenameVMDialog Input {
-    margin-bottom: 1;
-}
-
-/* Select widgets in AddInputDeviceModal */
+RenameVMDialog Input,
+PasswordModal Input,
 AddInputDeviceModal Select {
-    margin-bottom: 1;
+  margin-bottom: 1;
 }
 
-/* List used in snapshot selection */
-SelectSnapshotDialog #snapshot-list,
+/* === LISTS === */
+SelectSnapshotDialog > #snapshot-list,
 ProgressModal,
 SelectServerModal {
-    margin-bottom: 1;
-    border: round $primary;
-    height: 10;
+  margin-bottom: 1;
+  border: round $primary;
+  height: 10;
 }
 
-/* Network selection dialog */
-ChangeNetworkDialog #interface-select,
-ChangeNetworkDialog #network-select {
-    margin-bottom: 1;
-    height: 4;
+/* === NETWORK === */
+ChangeNetworkDialog > #interface-select,
+ChangeNetworkDialog > #network-select {
+  margin-bottom: 1;
+  height: 4;
 }
 
-/* XML Display Modal */
-XMLDisplayModal #xml-display-dialog {
-    width: 80%;
-    height: 95%;
-    padding: 1;
-    border: round $primary;
-    background: $surface;
+/* === PROGRESS MODAL === */
+ProgressModal > #progress-modal-container {
+  layout: vertical;
+  height: 80%;
+  width: 80%;
+  border: round $primary;
 }
 
-XMLDisplayModal #xml-textarea {
-    height: 1fr;
-    border: round $primary;
-    margin-bottom: 1;
+ProgressModal > #progress-title,
+ProgressModal > #progress-bar { 
+  height: auto; 
 }
 
-XMLDisplayModal #dialog-buttons {
-    width: 100%;
-    height: auto;
-    align: center middle;
-}
-
-XMLDisplayModal #dialog-buttons Button {
-    content-align: center middle;
-    width: 100%;
-}
-
-/* Progress Modal */
-ProgressModal {
-    align: center middle;
-    width: 80%;
-    height: 80%;
-    padding: 2;
-    border: round $primary;
-}
-
-ProgressModal #progress-modal-container {
-    layout: vertical;
-    height: 80%;
-    width: 80%;
-    border: round $primary;
-}
-
-ProgressModal #progress-title {
-    height: auto;
-}
-
-ProgressModal #progress-bar {
-    height: auto;
-    margin-bottom: 1;
+ProgressModal > #progress-bar { 
+  margin-bottom: 1; 
 }
 
 ProgressModal .progress-log {
-    height: 1fr;
-    min-height: 5;
-    border: heavy $primary;
-    padding: 0 1;
-    background: $surface-darken-1;
+  height: 1fr;
+  min-height: 5;
+  border: heavy $primary;
+  padding: 0 1;
+  background: $surface-darken-1;
 }
 
-/* WebConsole Dialogs */
+/* === WEBCONSOLE === */
 #webconsole-dialog,
 #webconsole-config-dialog {
-    padding: 0 1;
-    width: 60;
-    content-align: center middle;
-    border: round $primary;
+  padding: 0 1;
+  width: 60;
+  content-align: center middle;
+  border: round $primary;
 }
-#webconsole-dialog {
-    height: 10;
-    width: 85;
+
+#webconsole-dialog { 
+  width: 85; 
+  height: 10; 
 }
-#webconsole-config-dialog {
-    height: 26;
+
+#webconsole-config-dialog { 
+  height: 26; 
 }
+
 #remote-console-switch,
 #config-title,
+#config-title-file,
 #webconsole-config-title {
-    column-span: 2;
-    margin: 1 1;
-    content-align: center middle;
-    width: 100%;
-}
-.webconsole-config-label {
-    content-align: right middle;
+  column-span: 2;
+  margin: 0 1;
+  content-align: center middle;
+  width: 100%;
 }
 
+.webconsole-config-label { 
+  content-align: right middle; 
+}
 
-/* Bulk Action Dialog */
+/* === BULK ACTION === */
 #bulk-action-dialog {
-    height: 24;
-    width: 80;
-    border: round $primary;
-    content-align: center middle;
-    padding: 0 1;
-}
-#apply-disk-edit,
-#cancel-disk-edit,
-#add-input,
-#cancel-input {
-   width: 50%;
-}
-#cancel-btn,
-#save-config-btn,
-#perform-action-btn {
-    width: 25%;
+  height: 24;
+  width: 80;
+  border: round $primary;
+  content-align: center middle;
+  padding: 0 1;
 }
 
-/* --- MISC & UNCATEGORIZED --- */
-
-SelectServerModal Checkbox {
-    padding: 0 1;
-    margin-bottom: 1;
+/* === MISC === */
+SelectServerModal Checkbox { 
+  padding: 0 1; 
+  margin-bottom: 1; 
 }
 
-#tab-storage {
-    layout: vertical;
-}
+#tab-storage { layout: vertical; }
 
 #storage-tree {
-    height: 1fr;
-    border: round $primary;
-    margin-bottom: 1;
-}
-
-#storage-actions {
-    height: auto;
-}
-#delete-vm-dialog {
-    height: 12;
-    border: round $primary;
-    width: 50;
-}
-
-.storage-action-label {
-    margin-top: 1;
-    text-style: bold;
+  height: 1fr;
+  border: round $primary;
+  margin-bottom: 1;
 }
 
 .storage-buttons {
-    align: center middle;
-    height: auto;
-    margin-top: 1;
+  align: center middle;
+  height: auto;
+  margin-top: 1;
 }
 
-.storage-buttons Button {
-    width: 1fr;
-    margin: 0 1;
-}
-
-.net-name,
-.net-active-check,
-.net-autostart-check,
-.net-usage {
-    width: 2fr;
-    margin-right: 2;
-}
-.net-mode {
-    width: 1fr;
+.storage-buttons Button { 
+  width: 1fr; 
+  margin: 0 1; 
 }
 
 #clone-dialog {
-    grid-rows: 4;
-    grid-size-columns: 2;
-    grid-gutter: 0 1;
-    border: round $primary;
-    width: 55;
-    height: 15;
+  grid-rows: 4;
+  grid-size-columns: 2;
+  grid-gutter: 0 1;
+  border: round $primary;
+  width: 55;
+  height: 15;
 }
 
 .log-view {
-    background: #222222; /* Dark grey */
-    color: #DDDDDD;     /* Light grey */
+  background: #222222;
+  color: #DDDDDD;
 }
 
-/* --- Password Modal --- */
-PasswordModal {
-    align: center middle;
-    background: rgba(0, 0, 0, 0.5);
-}
-PasswordModal #password-dialog {
-    width: 60;
-    height: 12;
-    padding: 1;
-    border: round $primary;
-    background: $surface;
-}
-PasswordModal Input {
-    margin-bottom: 1;
-}
-PasswordModal #dialog-buttons {
-    width: 100%;
-}
-PasswordModal #dialog-buttons Button {
-    width: 50%;
-    margin-left: 1;
-}
-
-/* --- HowTo SSH / Config Modal --- */
-ConfigModal #config-dialog,
-HowToSSHModal {
-    align: center middle;
-    background: rgba(0, 0, 0, 0.5);
-}
-ConfigModal #config-dialog,
-HowToSSHModal #howto-ssh-dialog {
-    width: 80;
-    height: 34;
-    padding: 1;
-    border: round $primary;
-    background: $surface;
-}
-HowToSSHModal #howto-ssh-content {
-    height: 1fr;
-}
-HowToSSHModal #dialog-buttons {
-    width: 100%;
-    height: auto;
-    align: center middle;
-    padding-top: 1;
-}
-HowToSSHModal Button {
-    width: 100%;
-}
 #wc-port-start-input,
 #wc-port-end-input,
 #vnc-quality-input,
 #vnc-compression-input,
 #cache-ttl-input,
 #port-range-label {
-    width: 33%;
-    height: 1;
-    border: none;
+  width: 25%;
+  height: 1;
+  border: none;
 }

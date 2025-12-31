@@ -3,7 +3,7 @@ XML Display and Edit Modal
 """
 from textual.app import ComposeResult
 from textual.widgets import Button, TextArea
-from textual.containers import Vertical
+from textual.containers import Vertical, Horizontal
 from modals.base_modals import BaseModal
 
 class XMLDisplayModal(BaseModal[str | None]):
@@ -25,9 +25,10 @@ class XMLDisplayModal(BaseModal[str | None]):
                 id="xml-textarea"
             )
             with Vertical(id="dialog-buttons"):
-                if not self.read_only:
-                    yield Button("Save", variant="primary", id="save-btn")
-                yield Button("Close", id="close-btn")
+                with Horizontal():
+                    if not self.read_only:
+                        yield Button("Save", variant="primary", id="save-btn")
+                    yield Button("Close", id="close-btn")
 
     def on_mount(self) -> None:
         self.query_one(TextArea).focus()
