@@ -796,7 +796,7 @@ class VMManagerTUI(App):
                 if vm_card:
                     # Update existing card
                     info = domain.info()
-                    vm_card.status = get_status(domain)
+                    vm_card.status = get_status(domain, state=info[0])
                     vm_card.cpu = info[3]
                     vm_card.memory = info[1] // 1024
                     vm_card.is_selected = is_vm_selected
@@ -811,7 +811,7 @@ class VMManagerTUI(App):
 
                     vm_card = VMCard(is_selected=is_vm_selected)
                     vm_card.name = domain.name()
-                    vm_card.status = get_status(domain)
+                    vm_card.status = get_status(domain, state=info[0])
                     vm_card.cpu = info[3]
                     vm_card.memory = info[1] // 1024
                     vm_card.vm = domain

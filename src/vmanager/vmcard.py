@@ -211,7 +211,8 @@ class VMCard(Static):
                 pass
 
         self.update_stats()
-        self.timer = self.set_interval(5, self.update_stats)
+        stats_interval = self.app.config.get('STATS_INTERVAL', 5)
+        self.timer = self.set_interval(stats_interval, self.update_stats)
 
     def watch_stats_view_mode(self, old_mode: str, new_mode: str) -> None:
         """Update sparklines when view mode changes."""
