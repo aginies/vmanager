@@ -45,7 +45,11 @@ def get_vm_info(conn):
                 vm_info_list.append(cached_info)
                 continue
 
-            info = domain.info()
+            try:
+                info = domain.info()
+            except libvirt.libvirtError:
+                continue
+
             xml_content, root = _get_domain_root(domain)
             if root is None:
                 continue
@@ -53,7 +57,7 @@ def get_vm_info(conn):
             vm_info = {
                 'name': domain.name(),
                 'uuid': domain.UUIDString(),
-                'status': get_status(domain),
+                'status': get_status(domain, state=info[0]),
                 'description': get_vm_description(domain),
                 'cpu': info[3],
                 'memory': info[2] // 1024,  # Convert KiB to MiB
@@ -132,11 +136,16 @@ def get_vm_network_dns_gateway_info(domain: libvirt.virDomain, root=None):
 
     return network_details
 
-def get_status(domain):
+def get_status(domain, state=None):
     """
     state of a VM
     """
-    state = domain.info()[0]
+    if state is None:
+        try:
+            state, _ = domain.state()
+        except libvirt.libvirtError:
+            return 'Unknown'
+
     if state == libvirt.VIR_DOMAIN_RUNNING:
         return 'Running'
     elif state == libvirt.VIR_DOMAIN_PAUSED:
