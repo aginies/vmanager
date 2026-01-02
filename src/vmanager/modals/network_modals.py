@@ -4,6 +4,7 @@ Network Hypervisor and guest side
 import ipaddress
 from textual.app import ComposeResult
 from textual.widgets import Button, Input, Label, RadioSet, RadioButton, Checkbox, Select, TextArea
+from textual.widgets.text_area import LanguageDoesNotExist
 from textual.containers import Vertical, Horizontal, ScrollableContainer
 from textual import on
 
@@ -161,7 +162,7 @@ class AddEditNetworkModal(BaseModal[None]):
                         dhcp_options_classes = "" if dhcp_val else "hidden"
                         with Horizontal(id="dhcp-options", classes=dhcp_options_classes):
                             yield Input(
-                                placeholder="DHCP Start (e.g., 192.168.100.100)",
+                                placeholder="DHCP Start (e.192.168.100.100)",
                                 id="dhcp-start-input",
                                 classes="dhcp-input",
                                 value=dhcp_start_val
@@ -348,7 +349,11 @@ class NetworkXMLModal(BaseModal[None]):
         with Vertical(id="network-detail-dialog"):
             yield Label(f"Network Details: {self.network_name}", id="title")
             with ScrollableContainer():
-                text_area = TextArea(self.network_xml, language="xml", read_only=True)
+                text_area = TextArea(self.network_xml, read_only=True)
+                try:
+                    text_area.language = "xml"
+                except LanguageDoesNotExist:
+                    text_area.language = None
                 text_area.styles.height = "auto"
                 yield text_area
             with Horizontal():

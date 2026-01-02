@@ -3,6 +3,7 @@ XML Display and Edit Modal
 """
 from textual.app import ComposeResult
 from textual.widgets import Button, TextArea
+from textual.widgets.text_area import LanguageDoesNotExist
 from textual.containers import Vertical, Horizontal
 from modals.base_modals import BaseModal
 
@@ -16,14 +17,18 @@ class XMLDisplayModal(BaseModal[str | None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="xml-display-dialog"):
-            yield TextArea(
+            text_area = TextArea(
                 self.xml_content,
-                language="xml",
                 show_line_numbers=True,
                 read_only=self.read_only,
                 theme="monokai",
                 id="xml-textarea"
             )
+            try:
+                text_area.language = "xml"
+            except LanguageDoesNotExist:
+                text_area.language = None
+            yield text_area
             with Vertical(id="dialog-buttons"):
                 with Horizontal():
                     if not self.read_only:
