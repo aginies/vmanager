@@ -211,8 +211,8 @@ class VMCard(Static):
                 pass
 
         self.update_stats()
-        stats_interval = self.app.config.get('STATS_INTERVAL', 5)
-        self.timer = self.set_interval(stats_interval, self.update_stats)
+        # Timer is now managed within update_stats for dynamic intervals
+        # self.timer = self.set_interval(stats_interval, self.update_stats)
 
     def watch_stats_view_mode(self, old_mode: str, new_mode: str) -> None:
         """Update sparklines when view mode changes."""
@@ -306,6 +306,10 @@ class VMCard(Static):
         """Schedules a worker to update statistics for the VM."""
         if not self.vm:
             return
+
+        # Schedule next update
+        interval = self.app.config.get('STATS_INTERVAL', 5)
+        self.timer = self.set_timer(interval, self.update_stats)
 
         try:
             uuid = self.vm.UUIDString()

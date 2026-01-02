@@ -135,6 +135,7 @@ The configuration file supports the following options:
 ### Performance & Behavior
 - **AUTOCONNECT_ON_STARTUP**: Automatically connect to the first configured server on application startup (default: `False`)
 - **CACHE_TTL**: Time-to-live for VM metadata cache in seconds. Reduces `libvirt` calls. (default: `3`)
+- **STATS_INTERVAL**: Interval for updating VM info, Status, Statistics (CPU, Memory, I/O) in seconds
 
 ### Network & Sound Models
 
