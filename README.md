@@ -126,6 +126,16 @@ The configuration file supports the following options:
 - **CACHE_TTL**: Time-to-live for VM metadata cache in seconds. Reduces `libvirt` calls. (default: `3`)
 
 ### Network & Sound Models
+
+As there is no simple way to get **sound** and **network** model using libvirt API, the user can provides a list in his own configuration file. 
+
+To get a list of model for a machine type you can use the **qemu** command line:
+```bash
+qemu-system-x86_64 -machine pc-q35-10.1 -audio  model=help
+qemu-system-x86_64 -machine pc-q35-10.1 -net  model=help
+```
+
+User config parameters:
 - **network_models**: List of allowed network models (default: `['virtio', 'e1000', 'e1000e', 'rtl8139', 'ne2k_pci', 'pcnet']`)
 - **sound_models**: List of allowed sound models (default: `['none', 'ich6', 'ich9', 'ac97', 'sb16', 'usb']`)
 
