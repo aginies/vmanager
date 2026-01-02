@@ -19,6 +19,15 @@ Virtui Manager solves these challenges with:
 - **Multi-server Support**: Manage VMs across multiple libvirt servers from a single interface
 - **Performance Optimized**: Built-in caching reduces libvirt calls and improves responsiveness
 
+## Resource Usage Comparison
+
+| Metric | virt-manager (GUI) | vmanager (TUI) | Difference |
+| :--- | :--- | :--- | :--- |
+| **Interface** | GTK3 (Graphical) | Textual (Terminal UI) | N/A |
+| **Physical Memory (RSS)** | ~129 MB | ~107 MB | **-22 MB** (vmanager is lighter) |
+| **Virtual Memory (VSZ)** | ~2.2 GB | ~414 MB | **-1.8 GB** (vmanager uses significantly less address space) |
+| **CPU Usage (Idle/Polling)** | ~3.4% | ~2.3% | **-1.1%** |
+
 ## Key Features
 
 ### VM Management
