@@ -61,8 +61,8 @@ HowToSSHModal > #howto-ssh-dialog {
 }
 
 /* === SPECIFIC HEIGHT === */
-DeleteVMConfirmationDialog > #delete-vm-dialog,
 SnapshotNameDialog > #dialog { height: 12; }
+DeleteVMConfirmationDialog > #delete-vm-dialog,
 ConfirmationDialog > #dialog { 
   height: 15; 
   border: $error; 
