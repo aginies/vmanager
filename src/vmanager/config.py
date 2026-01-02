@@ -1,5 +1,5 @@
 """
-Maange the configuration of the tool
+Manage the configuration of the tool
 """
 import os
 from pathlib import Path
