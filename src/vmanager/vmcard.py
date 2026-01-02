@@ -47,6 +47,8 @@ class VMCard(Static):
     memory = reactive(0)
     vm = reactive(None)
     conn = reactive(None)
+    ip_addresses = reactive([])
+    boot_device = reactive("")
 
     webc_status_indicator = reactive("")
     graphics_type = reactive("vnc")
@@ -170,6 +172,7 @@ class VMCard(Static):
         """Cache widgets to avoid repeated queries."""
         try:
             self.ui = {
+                "vmname": self.query_one("#vmname"),
                 "status": self.query_one("#status"),
                 "checkbox": self.query_one("#vm-select-checkbox", Checkbox),
                 "top_label": self.query_one("#top-sparkline-label", Static),
@@ -200,6 +203,46 @@ class VMCard(Static):
         except NoMatches:
             logging.warning("Failed to cache some widgets in VMCard.")
 
+    def _update_tooltip(self) -> None:
+        """Updates the tooltip for the VM name using Markdown."""
+        if not self.ui or "vmname" not in self.ui:
+            return
+
+        try:
+            uuid = self.vm.UUIDString() if self.vm else "Unknown"
+        except libvirt.libvirtError:
+            uuid = "Unknown"
+
+        hypervisor = "Unknown"
+        if self.conn:
+            hypervisor = extract_server_name_from_uri(self.conn.getURI())
+
+        mem_display = f"{self.memory} MiB"
+        if self.memory >= 1024:
+            mem_display += f" ({self.memory / 1024:.2f} GiB)"
+
+        ip_display = "N/A"
+        if self.status == StatusText.RUNNING and self.ip_addresses:
+            ips = []
+            for iface in self.ip_addresses:
+                ips.extend(iface.get('ipv4', []))
+            if ips:
+                ip_display = ", ".join(ips)
+
+        tooltip_md = (
+            f"`{uuid}`  \n"
+            f"**Hypervisor:** {hypervisor}  \n"
+            f"**Name:** {self.name}  \n"
+            f"**Status:** {self.status}  \n"
+            f"**IP:** {ip_display}  \n"
+            f"**Boot:** {self.boot_device or 'N/A'}  \n"
+            f"**VCPUs:** {self.cpu}  \n"
+            f"**Memory:** {mem_display}"
+        )
+
+        from rich.markdown import Markdown as RichMarkdown
+        self.ui["vmname"].tooltip = RichMarkdown(tooltip_md)
+
     def on_mount(self) -> None:
         self.styles.background = "#323232"
         if self.is_selected:
@@ -213,6 +256,7 @@ class VMCard(Static):
         self._update_status_styling()
         self._update_webc_status()
         self.update_sparkline_display()
+        self._update_tooltip()
 
         if self.vm:
             try:
@@ -278,6 +322,27 @@ class VMCard(Static):
     def watch_vm(self, old_value, new_value) -> None:
         """Called when vm object changes."""
         self.call_later(self.update_button_layout)
+        self._update_tooltip()
+
+    def watch_name(self, value: str) -> None:
+        """Called when name changes."""
+        self._update_tooltip()
+
+    def watch_cpu(self, value: int) -> None:
+        """Called when cpu count changes."""
+        self._update_tooltip()
+
+    def watch_memory(self, value: int) -> None:
+        """Called when memory changes."""
+        self._update_tooltip()
+
+    def watch_ip_addresses(self, value: list) -> None:
+        """Called when IP addresses change."""
+        self._update_tooltip()
+
+    def watch_boot_device(self, value: str) -> None:
+        """Called when boot device changes."""
+        self._update_tooltip()
 
     def watch_status(self, old_value: str, new_value: str) -> None:
         """Called when status changes."""
@@ -285,6 +350,7 @@ class VMCard(Static):
             return
         self._update_status_styling()
         self.update_button_layout()
+        self._update_tooltip()
 
         status_widget = self.ui.get("status")
         if status_widget:
@@ -335,11 +401,28 @@ class VMCard(Static):
             return
 
         def update_worker():
+            from vm_queries import get_vm_network_ip, get_boot_info, _get_domain_root
             try:
                 stats = self.app.vm_service.get_vm_runtime_stats(self.vm)
+
+                # Fetch IPs if running
+                ips = []
+                if self.status == StatusText.RUNNING:
+                    ips = get_vm_network_ip(self.vm)
+
+                # Fetch boot info if not yet set or if we want to keep it fresh
+                boot_dev = self.boot_device
+                if not boot_dev:
+                    _, root = _get_domain_root(self.vm)
+                    boot_info = get_boot_info(self.conn, root)
+                    if boot_info['order']:
+                        boot_dev = boot_info['order'][0]
+
                 if not stats:
                     if self.status != StatusText.STOPPED:
                         self.app.call_from_thread(setattr, self, 'status', StatusText.STOPPED)
+                    self.app.call_from_thread(setattr, self, 'ip_addresses', [])
+                    self.app.call_from_thread(setattr, self, 'boot_device', boot_dev)
                     return
 
                 def apply_stats_to_ui():
@@ -347,6 +430,9 @@ class VMCard(Static):
                         return
                     if self.status != stats["status"]:
                         self.status = stats["status"]
+
+                    self.ip_addresses = ips
+                    self.boot_device = boot_dev
 
                     self.latest_disk_read = stats.get('disk_read_kbps', 0)
                     self.latest_disk_write = stats.get('disk_write_kbps', 0)
