@@ -29,8 +29,8 @@ from vmcard_dialog import (
         )
 from utils import extract_server_name_from_uri
 from constants import (
-    ButtonLabels, ButtonIds, TabTitles, StatusText, 
-    SparklineLabels, ErrorMessages, DialogMessages, VmStatus
+    ButtonLabels, ButtonIds, TabTitles, StatusText,
+    SparklineLabels, ErrorMessages, DialogMessages,
 )
 
 class VMCard(Static):
@@ -57,6 +57,7 @@ class VMCard(Static):
     latest_net_tx = reactive(0.0)
 
     def __init__(self, is_selected: bool = False) -> None:
+        self.ui = {}
         super().__init__()
         self.is_selected = is_selected
         self.timer = None
@@ -93,13 +94,12 @@ class VMCard(Static):
 
     def watch_webc_status_indicator(self, old_value: str, new_value: str) -> None:
         """Called when webc_status_indicator changes."""
-        try:
-            status_widget = self.query_one("#status")
+        if not self.ui:
+            return
+        status_widget = self.ui.get("status")
+        if status_widget:
             status_text = f"Status: {self.status}{new_value}"
             status_widget.update(status_text)
-        except NoMatches:
-            # The widget hasn't been composed yet, ignore.
-            pass
 
     def compose(self):
         with Vertical(id="info-container"):
@@ -154,12 +154,49 @@ class VMCard(Static):
                             yield Static(classes="button-separator")
                             yield Button(ButtonLabels.RENAME, id=ButtonIds.RENAME_BUTTON, variant="primary", classes="rename-button")
 
+    def _cache_widgets(self) -> None:
+        """Cache widgets to avoid repeated queries."""
+        try:
+            self.ui = {
+                "status": self.query_one("#status"),
+                "checkbox": self.query_one("#vm-select-checkbox", Checkbox),
+                "top_label": self.query_one("#top-sparkline-label", Static),
+                "bottom_label": self.query_one("#bottom-sparkline-label", Static),
+                "top_sparkline": self.query_one("#top-sparkline", Sparkline),
+                "bottom_sparkline": self.query_one("#bottom-sparkline", Sparkline),
+                "cpu_container": self.query_one("#cpu-sparkline-container"),
+                "mem_container": self.query_one("#mem-sparkline-container"),
+                "tabbed_content": self.query_one(TabbedContent),
+                
+                # Buttons
+                ButtonIds.START: self.query_one(f"#{ButtonIds.START}", Button),
+                ButtonIds.SHUTDOWN: self.query_one(f"#{ButtonIds.SHUTDOWN}", Button),
+                ButtonIds.STOP: self.query_one(f"#{ButtonIds.STOP}", Button),
+                ButtonIds.PAUSE: self.query_one(f"#{ButtonIds.PAUSE}", Button),
+                ButtonIds.RESUME: self.query_one(f"#{ButtonIds.RESUME}", Button),
+                ButtonIds.DELETE: self.query_one(f"#{ButtonIds.DELETE}", Button),
+                ButtonIds.CONNECT: self.query_one(f"#{ButtonIds.CONNECT}", Button),
+                ButtonIds.WEB_CONSOLE: self.query_one(f"#{ButtonIds.WEB_CONSOLE}", Button),
+                ButtonIds.SNAPSHOT_RESTORE: self.query_one(f"#{ButtonIds.SNAPSHOT_RESTORE}", Button),
+                ButtonIds.SNAPSHOT_DELETE: self.query_one(f"#{ButtonIds.SNAPSHOT_DELETE}", Button),
+                ButtonIds.CONFIGURE_BUTTON: self.query_one(f"#{ButtonIds.CONFIGURE_BUTTON}", Button),
+                ButtonIds.CLONE: self.query_one(f"#{ButtonIds.CLONE}", Button),
+                ButtonIds.MIGRATION: self.query_one(f"#{ButtonIds.MIGRATION}", Button),
+                ButtonIds.RENAME_BUTTON: self.query_one(f"#{ButtonIds.RENAME_BUTTON}", Button),
+                ButtonIds.XML: self.query_one(f"#{ButtonIds.XML}", Button),
+            }
+        except NoMatches:
+            logging.warning("Failed to cache some widgets in VMCard.")
+
     def on_mount(self) -> None:
         self.styles.background = "#323232"
         if self.is_selected:
             self.styles.border = ("panel", "white")
         else:
             self.styles.border = ("solid", self.server_border_color)
+
+        self._cache_widgets()
+
         self.update_button_layout()
         self._update_status_styling()
         self._update_webc_status()
@@ -178,57 +215,63 @@ class VMCard(Static):
 
     def watch_stats_view_mode(self, old_mode: str, new_mode: str) -> None:
         """Update sparklines when view mode changes."""
+        if not self.ui:
+            return
         self.update_sparkline_display()
 
     def update_sparkline_display(self) -> None:
         """Updates the labels and data of the sparklines based on the current view mode."""
-        try:
-            top_label = self.query_one("#top-sparkline-label", Static)
-            bottom_label = self.query_one("#bottom-sparkline-label", Static)
-            top_sparkline = self.query_one("#top-sparkline", Sparkline)
-            bottom_sparkline = self.query_one("#bottom-sparkline", Sparkline)
-        except NoMatches:
+        top_label = self.ui.get("top_label")
+        bottom_label = self.ui.get("bottom_label")
+        top_sparkline = self.ui.get("top_sparkline")
+        bottom_sparkline = self.ui.get("bottom_sparkline")
+
+        if not all([top_label, bottom_label, top_sparkline, bottom_sparkline]):
             return
 
         uuid = self.vm.UUIDString() if self.vm else None
-        if not uuid or not hasattr(self.app, 'sparkline_data') or uuid not in self.app.sparkline_data:
-             # Set default labels if no data is available
-            if self.stats_view_mode == "resources":
-                top_label.update(SparklineLabels.VCPU.format(cpu=self.cpu))
-                mem_gb = round(self.memory / 1024, 1)
-                bottom_label.update(SparklineLabels.MEMORY_GB.format(mem=mem_gb))
-            else:
-                top_label.update(SparklineLabels.DISK_RW.format(read=0.00, write=0.00))
-                bottom_label.update(SparklineLabels.NET_RX_TX.format(rx=0.00, tx=0.00))
-            return
 
-        sparkline_storage = self.app.sparkline_data[uuid]
+        # Determine data source
+        storage = {}
+        if uuid and hasattr(self.app, 'sparkline_data') and uuid in self.app.sparkline_data:
+            storage = self.app.sparkline_data[uuid]
 
         if self.stats_view_mode == "resources":
-            top_label.update(SparklineLabels.VCPU.format(cpu=self.cpu))
             mem_gb = round(self.memory / 1024, 1)
-            bottom_label.update(SparklineLabels.MEMORY_GB.format(mem=mem_gb))
-            top_sparkline.data = list(sparkline_storage.get("cpu", []))
-            bottom_sparkline.data = list(sparkline_storage.get("mem", []))
+            top_text = SparklineLabels.VCPU.format(cpu=self.cpu)
+            bottom_text = SparklineLabels.MEMORY_GB.format(mem=mem_gb)
+            top_data = list(storage.get("cpu", []))
+            bottom_data = list(storage.get("mem", []))
         else: # io mode
             disk_read_mb = self.latest_disk_read / 1024
             disk_write_mb = self.latest_disk_write / 1024
             net_rx_mb = self.latest_net_rx / 1024
             net_tx_mb = self.latest_net_tx / 1024
-            top_label.update(SparklineLabels.DISK_RW.format(read=disk_read_mb, write=disk_write_mb))
-            bottom_label.update(SparklineLabels.NET_RX_TX.format(rx=net_rx_mb, tx=net_tx_mb))
-            top_sparkline.data = list(sparkline_storage.get("disk", []))
-            bottom_sparkline.data = list(sparkline_storage.get("net", []))
+
+            top_text = SparklineLabels.DISK_RW.format(read=disk_read_mb, write=disk_write_mb)
+            bottom_text = SparklineLabels.NET_RX_TX.format(rx=net_rx_mb, tx=net_tx_mb)
+            top_data = list(storage.get("disk", []))
+            bottom_data = list(storage.get("net", []))
+
+        # Update UI
+        top_label.update(top_text)
+        bottom_label.update(bottom_text)
+
+        # Only update data if we have storage (avoids clearing if not needed, though empty list is fine)
+        # Actually existing logic updated data even if empty, which clears the sparkline.
+        top_sparkline.data = top_data
+        bottom_sparkline.data = bottom_data
 
     def watch_status(self, old_value: str, new_value: str) -> None:
         """Called when status changes."""
+        if not self.ui:
+            return
         self._update_status_styling()
         self.update_button_layout()
-        try:
-            status_widget = self.query_one("#status")
+
+        status_widget = self.ui.get("status")
+        if status_widget:
             status_widget.update(f"Status: {new_value}{self.webc_status_indicator}")
-        except NoMatches:
-            pass
 
     def watch_server_border_color(self, old_color: str, new_color: str) -> None:
         """Called when server_border_color changes."""
@@ -247,11 +290,11 @@ class VMCard(Static):
 
     def watch_is_selected(self, old_value: bool, new_value: bool) -> None:
         """Called when is_selected changes to update the checkbox."""
-        try:
-            checkbox = self.query_one("#vm-select-checkbox", Checkbox)
+        if not self.ui:
+            return
+        checkbox = self.ui.get("checkbox")
+        if checkbox:
             checkbox.value = new_value
-        except NoMatches:
-            pass
 
         if new_value:
             self.styles.border = ("panel", "white")
@@ -289,6 +332,9 @@ class VMCard(Static):
                     self.latest_net_rx = stats.get('net_rx_kbps', 0)
                     self.latest_net_tx = stats.get('net_tx_kbps', 0)
 
+                    # Update web console status here instead of every cycle
+                    self._update_webc_status()
+
                     if hasattr(self.app, "sparkline_data") and uuid in self.app.sparkline_data:
                         storage = self.app.sparkline_data[uuid]
 
@@ -316,7 +362,6 @@ class VMCard(Static):
             except Exception as e:
                 logging.error(f"Unexpected error in update_stats worker for {self.name}: {e}", exc_info=True)
 
-        self._update_webc_status()
         self.app.worker_manager.run(update_worker, name=f"update_stats_{uuid}")
 
     @on(Click, "#top-sparkline, #bottom-sparkline")
@@ -327,26 +372,8 @@ class VMCard(Static):
 
     def update_button_layout(self):
         """Update the button layout based on current VM status."""
-        try:
-            start_button = self.query_one(f"#{ButtonIds.START}", Button)
-            shutdown_button = self.query_one(f"#{ButtonIds.SHUTDOWN}", Button)
-            stop_button = self.query_one(f"#{ButtonIds.STOP}", Button)
-            pause_button = self.query_one(f"#{ButtonIds.PAUSE}", Button)
-            resume_button = self.query_one(f"#{ButtonIds.RESUME}", Button)
-            delete_button = self.query_one(f"#{ButtonIds.DELETE}", Button)
-            connect_button = self.query_one(f"#{ButtonIds.CONNECT}", Button)
-            web_console_button = self.query_one(f"#{ButtonIds.WEB_CONSOLE}", Button)
-            restore_button = self.query_one(f"#{ButtonIds.SNAPSHOT_RESTORE}", Button)
-            snapshot_delete_button = self.query_one(f"#{ButtonIds.SNAPSHOT_DELETE}", Button)
-            info_button = self.query_one(f"#{ButtonIds.CONFIGURE_BUTTON}", Button)
-            clone_button = self.query_one(f"#{ButtonIds.CLONE}", Button)
-            migration_button = self.query_one(f"#{ButtonIds.MIGRATION}", Button)
-            rename_button = self.query_one(f"#{ButtonIds.RENAME_BUTTON}", Button)
-            cpu_sparkline_container = self.query_one("#cpu-sparkline-container")
-            mem_sparkline_container = self.query_one("#mem-sparkline-container")
-            xml_button = self.query_one(f"#{ButtonIds.XML}", Button)
-        except NoMatches:
-            return
+        rename_button = self.ui.get(ButtonIds.RENAME_BUTTON)
+        if not rename_button: return # Assume if one is missing, others might be too or we are not cached yet.
 
         is_stopped = self.status == StatusText.STOPPED
         is_running = self.status == StatusText.RUNNING
@@ -361,33 +388,31 @@ class VMCard(Static):
                 return
             logging.warning(f"Could not get snapshot count for {self.name}: {e}")
 
-        try:
-            tabbed_content = self.query_one(TabbedContent)
-            if tabbed_content.is_mounted:
-                snapshot_tab_pane = tabbed_content.get_pane("snapshot-tab")
-                if snapshot_tab_pane and self.is_mounted:
-                    snapshot_tab_pane.title = self._get_snapshot_tab_title()
-        except NoMatches:
-            pass
+        tabbed_content = self.ui.get("tabbed_content")
+        if tabbed_content and tabbed_content.is_mounted:
+            snapshot_tab_pane = tabbed_content.get_pane("snapshot-tab")
+            if snapshot_tab_pane and self.is_mounted:
+                snapshot_tab_pane.title = self._get_snapshot_tab_title()
 
-        start_button.display = is_stopped
-        shutdown_button.display = is_running
-        stop_button.display = is_running or is_paused
-        delete_button.display = is_running or is_paused or is_stopped
-        clone_button.display = is_stopped
-        migration_button.display = True
-        rename_button.display = is_stopped
-        pause_button.display = is_running
-        resume_button.display = is_paused
-        connect_button.display = (is_running or is_paused) and self.app.virt_viewer_available
-        web_console_button.display = (is_running or is_paused) and self.graphics_type == "vnc" and self.app.websockify_available and self.app.novnc_available
-        restore_button.display = has_snapshots
-        snapshot_delete_button.display = has_snapshots
-        info_button.display = True
+        self.ui[ButtonIds.START].display = is_stopped
+        self.ui[ButtonIds.SHUTDOWN].display = is_running
+        self.ui[ButtonIds.STOP].display = is_running or is_paused
+        self.ui[ButtonIds.DELETE].display = is_running or is_paused or is_stopped
+        self.ui[ButtonIds.CLONE].display = is_stopped
+        self.ui[ButtonIds.MIGRATION].display = True
+        self.ui[ButtonIds.RENAME_BUTTON].display = is_stopped
+        self.ui[ButtonIds.PAUSE].display = is_running
+        self.ui[ButtonIds.RESUME].display = is_paused
+        self.ui[ButtonIds.CONNECT].display = (is_running or is_paused) and self.app.virt_viewer_available
+        self.ui[ButtonIds.WEB_CONSOLE].display = (is_running or is_paused) and self.graphics_type == "vnc" and self.app.websockify_available and self.app.novnc_available
+        self.ui[ButtonIds.SNAPSHOT_RESTORE].display = has_snapshots
+        self.ui[ButtonIds.SNAPSHOT_DELETE].display = has_snapshots
+        self.ui[ButtonIds.CONFIGURE_BUTTON].display = True
 
-        cpu_sparkline_container.display = not is_stopped
-        mem_sparkline_container.display = not is_stopped
+        self.ui["cpu_container"].display = not is_stopped
+        self.ui["mem_container"].display = not is_stopped
 
+        xml_button = self.ui[ButtonIds.XML]
         if is_stopped:
             xml_button.label = "Edit XML"
             self.stats_view_mode = "resources" # Reset to default when stopped
@@ -395,12 +420,10 @@ class VMCard(Static):
             xml_button.label = "View XML"
 
     def _update_status_styling(self):
-        try:
-            status_widget = self.query_one("#status")
+        status_widget = self.ui.get("status")
+        if status_widget:
             status_widget.remove_class("stopped", "running", "paused")
             status_widget.add_class(self.status.lower())
-        except NoMatches:
-            pass
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""

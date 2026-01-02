@@ -17,7 +17,10 @@ from textual.widgets import (
 from textual.worker import Worker, WorkerState
 
 from config import load_config, save_config, get_log_path
-from constants import VmAction, VmStatus, ButtonLabels, ButtonIds, StatusText, ErrorMessages, AppInfo
+from constants import (
+        VmAction, VmStatus, ButtonLabels, ButtonIds,
+        ErrorMessages, AppInfo
+        )
 from events import VmActionRequest, VMNameClicked, VMSelectionChanged
 from libvirt_error_handler import register_error_handler
 from libvirt_utils import _get_vm_names_from_uuids
@@ -178,25 +181,24 @@ class VMManagerTUI(App):
         self.webconsole_manager = WebConsoleManager(self)
         self.server_color_map = {}
         self._color_index = 0
+        self.ui = {}
         self.devel = "(Devel v" + AppInfo.version + ")"
         self.vm_cards: dict[str, VMCard] = {}
         self._resize_timer = None
 
-    @on(Worker.StateChanged)
-    def _on_worker_state_changed(self, event: Worker.StateChanged) -> None:
-        """Removes finished workers from the manager's tracking dictionary."""
-        worker_name = event.worker.name
-        if not worker_name:
-            return
-
-        if event.state in (
-            WorkerState.SUCCESS,
-            WorkerState.CANCELLED,
-            WorkerState.ERROR,
-        ):
-            if worker_name in self.worker_manager.workers:
-                del self.worker_manager.workers[worker_name]
-
+    def _cache_widgets(self) -> None:
+        """Cache frequently accessed widgets."""
+        try:
+            self.ui = {
+                "vms_container": self.query_one("#vms-container"),
+                "error_footer": self.query_one("#error-footer"),
+                "page_info": self.query_one("#page-info"),
+                "pagination_controls": self.query_one("#pagination-controls"),
+                "prev_button": self.query_one(f"#{ButtonIds.PREV_BUTTON}"),
+                "next_button": self.query_one(f"#{ButtonIds.NEXT_BUTTON}"),
+            }
+        except Exception as e:
+            logging.error(f"Failed to cache widgets: {e}")
 
     def get_server_color(self, uri: str) -> str:
         """Assigns and returns a consistent color for a given server URI."""
@@ -284,12 +286,18 @@ class VMManagerTUI(App):
                 self.show_error_message(message)
 
         self.sparkline_data = {}
-        error_footer = self.query_one("#error-footer")
-        error_footer.styles.height = 0
-        error_footer.styles.overflow = "hidden"
-        error_footer.styles.padding = 0
-        vms_container = self.query_one("#vms-container")
-        vms_container.styles.grid_size_columns = 2
+
+        self._cache_widgets()
+
+        error_footer = self.ui.get("error_footer")
+        if error_footer:
+            error_footer.styles.height = 0
+            error_footer.styles.overflow = "hidden"
+            error_footer.styles.padding = 0
+
+        vms_container = self.ui.get("vms_container")
+        if vms_container:
+            vms_container.styles.grid_size_columns = 2
         # self._update_layout_for_size()
 
         if not self.servers:
@@ -303,7 +311,14 @@ class VMManagerTUI(App):
 
     def _update_layout_for_size(self):
         """Update the layout based on the terminal size."""
-        vms_container = self.query_one("#vms-container")
+        vms_container = self.ui.get("vms_container")
+        if not vms_container:
+            # Fallback if UI not cached yet
+            try:
+                vms_container = self.query_one("#vms-container")
+            except Exception:
+                return
+
         width = self.size.width
         height = self.size.height
         cols = 2
@@ -537,7 +552,7 @@ class VMManagerTUI(App):
             """Worker function to fetch VM details via the service."""
             try:
                 result = self.vm_service.get_vm_details(self.active_uris, message.vm_uuid)
-                
+
                 if not result:
                     self.call_from_thread(
                         self.show_error_message,
@@ -546,7 +561,7 @@ class VMManagerTUI(App):
                     return
 
                 vm_info, domain, conn_for_domain = result
-                
+
                 def on_detail_modal_dismissed(result: None):
                     self.refresh_vm_list(force=True)
 
@@ -568,13 +583,13 @@ class VMManagerTUI(App):
     @on(VmActionRequest)
     def on_vm_action_request(self, message: VmActionRequest) -> None:
         """Handles a request to perform an action on a VM."""
-        
+
         def action_worker():
             domain = self.vm_service.find_domain_by_uuid(self.active_uris, message.vm_uuid)
             if not domain:
                 self.call_from_thread(self.show_error_message, f"Could not find VM with UUID {message.vm_uuid}")
                 return
-            
+
             vm_name = domain.name()
             try:
                 if message.action == VmAction.START:
@@ -700,7 +715,7 @@ class VMManagerTUI(App):
 
     def _perform_bulk_action_worker(self, action_type: str, vm_uuids: list[str], delete_storage_flag: bool = False) -> None:
         """Worker function to orchestrate a bulk action using the VMService."""
-        
+
         # Define a dummy progress callback
         def dummy_progress_callback(event_type: str, *args, **kwargs):
             pass
@@ -721,7 +736,7 @@ class VMManagerTUI(App):
                 self.call_from_thread(self.show_success_message, f"Bulk action '{action_type}' successful for {len(successful_vms)} VMs.")
             if failed_vms:
                 self.call_from_thread(self.show_error_message, f"Bulk action '{action_type}' failed for {len(failed_vms)} VMs.")
-        
+
         except Exception as e:
             logging.error(f"An unexpected error occurred during bulk action service call: {e}", exc_info=True)
             self.call_from_thread(self.show_error_message, f"A fatal error occurred during bulk action: {e}")
@@ -820,7 +835,7 @@ class VMManagerTUI(App):
                         pass
                     self.call_from_thread(self.show_error_message, f"Error getting info for VM '{vm_name}': {e}")
                     continue
-        
+
         # Cleanup cache: remove cards for VMs that no longer exist at all
         all_uuids_from_libvirt = {dom.UUIDString() for dom, conn in domains_to_display}
         cached_uuids = set(self.vm_cards.keys())
@@ -836,7 +851,9 @@ class VMManagerTUI(App):
                 del self.sparkline_data[uuid]
 
         def update_ui():
-            vms_container = self.query_one("#vms-container")
+            vms_container = self.ui.get("vms_container")
+            if not vms_container:
+                return
 
             # Remove cards from container that are not in the new page layout
             for card in vms_container.query(VMCard):
@@ -857,7 +874,10 @@ class VMManagerTUI(App):
 
 
     def update_pagination_controls(self, total_filtered_vms: int, total_vms_unfiltered: int):
-        pagination_controls = self.query_one("#pagination-controls")
+        pagination_controls = self.ui.get("pagination_controls")
+        if not pagination_controls:
+            return
+
         if total_vms_unfiltered <= self.VMS_PER_PAGE:
             pagination_controls.styles.display = "none"
             return
@@ -867,14 +887,17 @@ class VMManagerTUI(App):
         num_pages = (total_filtered_vms + self.VMS_PER_PAGE - 1) // self.VMS_PER_PAGE
         self.num_pages = num_pages
 
-        page_info = self.query_one("#page-info", Label)
-        page_info.update(f" [ {self.current_page + 1}/{num_pages} ]")
+        page_info = self.ui.get("page_info")
+        if page_info:
+            page_info.update(f" [ {self.current_page + 1}/{num_pages} ]")
 
-        prev_button = self.query_one("#prev-button", Button)
-        prev_button.disabled = self.current_page == 0
+        prev_button = self.ui.get("prev_button")
+        if prev_button:
+            prev_button.disabled = self.current_page == 0
 
-        next_button = self.query_one("#next-button", Button)
-        next_button.disabled = self.current_page >= num_pages - 1
+        next_button = self.ui.get("next_button")
+        if next_button:
+            next_button.disabled = self.current_page >= num_pages - 1
 
     @on(Button.Pressed, "#prev-button")
     def action_previous_page(self) -> None:
