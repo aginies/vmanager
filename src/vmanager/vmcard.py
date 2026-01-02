@@ -266,7 +266,7 @@ class VMCard(Static):
 
     def watch_vm(self, old_value, new_value) -> None:
         """Called when vm object changes."""
-        self.update_button_layout()
+        self.call_later(self.update_button_layout)
 
     def watch_status(self, old_value: str, new_value: str) -> None:
         """Called when status changes."""
