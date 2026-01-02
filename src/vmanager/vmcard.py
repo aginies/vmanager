@@ -624,6 +624,7 @@ class VMCard(Static):
                     self.app.show_success_message(f"Snapshot '{name}' created successfully.")
                     self.app.vm_service.invalidate_vm_cache(self.vm.UUIDString())
                     self.app.refresh_vm_list()
+                    self.update_button_layout()
                 except Exception as e:
                     self.app.show_error_message(f"Snapshot error for {self.name}: {e}")
 
@@ -667,6 +668,7 @@ class VMCard(Static):
                             self.app.show_success_message(f"Snapshot '{snapshot_name}' deleted successfully.")
                             self.app.vm_service.invalidate_vm_cache(self.vm.UUIDString())
                             self.app.refresh_vm_list()
+                            self.update_button_layout()
                             logging.info(f"Successfully deleted snapshot '{snapshot_name}' for VM: {self.name}")
                         except Exception as e:
                             self.app.show_error_message(f"Error on VM {self.name} during 'snapshot delete': {e}")
