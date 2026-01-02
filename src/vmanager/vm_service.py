@@ -193,38 +193,61 @@ class VMService:
 
             # Get XML to find devices
             xml_content = self._get_domain_xml(domain)
-            if xml_content:
+
+            # Use cached devices list if available and XML hasn't changed
+            self._vm_data_cache.setdefault(uuid, {})
+            vm_cache = self._vm_data_cache[uuid]
+
+            # Check if we have a valid cached device list
+            # We rely on xml_ts being updated when XML is refreshed
+            current_xml_ts = vm_cache.get('xml_ts', 0)
+            cached_devices_ts = vm_cache.get('devices_ts', 0)
+
+            devices_list = vm_cache.get('devices_list')
+
+            if devices_list is None or cached_devices_ts != current_xml_ts:
+                # Parse XML and cache devices
+                devices_list = {'disks': [], 'interfaces': []}
+                if xml_content:
+                    try:
+                        root = ET.fromstring(xml_content)
+                        # Disks
+                        for disk in root.findall(".//devices/disk"):
+                            target = disk.find("target")
+                            if target is not None:
+                                dev = target.get("dev")
+                                if dev:
+                                    devices_list['disks'].append(dev)
+                        # Networks
+                        for interface in root.findall(".//devices/interface"):
+                            target = interface.find("target")
+                            if target is not None:
+                                dev = target.get("dev")
+                                if dev:
+                                    devices_list['interfaces'].append(dev)
+                    except ET.ParseError:
+                        pass
+
+                vm_cache['devices_list'] = devices_list
+                vm_cache['devices_ts'] = current_xml_ts
+
+            # Use cached devices to query stats
+            for dev in devices_list['disks']:
                 try:
-                    root = ET.fromstring(xml_content)
+                    # blockStats returns (rd_req, rd_bytes, wr_req, wr_bytes, errs)
+                    b_stats = domain.blockStats(dev)
+                    disk_read_bytes += b_stats[1]
+                    disk_write_bytes += b_stats[3]
+                except libvirt.libvirtError:
+                    pass
 
-                    # Disks
-                    for disk in root.findall(".//devices/disk"):
-                        target = disk.find("target")
-                        if target is not None:
-                            dev = target.get("dev")
-                            if dev:
-                                try:
-                                    # blockStats returns (rd_req, rd_bytes, wr_req, wr_bytes, errs)
-                                    b_stats = domain.blockStats(dev)
-                                    disk_read_bytes += b_stats[1]
-                                    disk_write_bytes += b_stats[3]
-                                except libvirt.libvirtError:
-                                    pass
-
-                    # Networks
-                    for interface in root.findall(".//devices/interface"):
-                        target = interface.find("target")
-                        if target is not None:
-                            dev = target.get("dev")
-                            if dev:
-                                try:
-                                    # interfaceStats returns (rx_bytes, rx_packets, rx_errs, rx_drop, tx_bytes, tx_packets, tx_errs, tx_drop)
-                                    i_stats = domain.interfaceStats(dev)
-                                    net_rx_bytes += i_stats[0]
-                                    net_tx_bytes += i_stats[4]
-                                except libvirt.libvirtError:
-                                    pass
-                except ET.ParseError:
+            for dev in devices_list['interfaces']:
+                try:
+                    # interfaceStats returns (rx_bytes, rx_packets, rx_errs, rx_drop, tx_bytes, tx_packets, tx_errs, tx_drop)
+                    i_stats = domain.interfaceStats(dev)
+                    net_rx_bytes += i_stats[0]
+                    net_tx_bytes += i_stats[4]
+                except libvirt.libvirtError:
                     pass
 
             # Calculate I/O Rates
