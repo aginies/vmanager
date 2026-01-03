@@ -399,31 +399,40 @@ Select:focus {
     height: auto;
     margin-top: 1;
 }
+.boot-main-container {
+    width: 42%;
+    height: 14;
+    border: none;
+}
 
 .boot-list-container {
-    width: 42%;
-    height: 8;
+    width: 100%;
+    height: 10;
     border: round $primary;
-    padding: 0 1;
 }
 
 .boot-list-container ListView {
+    width: 41%;
     height: 10;
     border: none;
 }
 
-.boot-buttons {
-    width: 15%;
-    height: 8;
+.boot-buttons-container {
+    height: 12;
     align: center middle;
     padding: 0 0;
 }
-
-.boot-buttons Button {
-    width: 1;
-    margin: 1 0;
+#attach-usb-btn,
+#detach-usb-btn,
+#attach-pci-btn,
+#detach-pci-btn,
+#boot-add,
+#boot-remove,
+#boot-up,
+#boot-down {
+    width: 3%;
+    height: 1;
 }
-
 
 /* --- Utility & Common Component Styles --- */
 

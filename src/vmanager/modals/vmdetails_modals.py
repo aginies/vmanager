@@ -1298,21 +1298,22 @@ class VMDetailModal(ModalScreen):
                             yield Button("Edit", id="edit-machine-type", classes="edit-detail-btn", disabled=not self.is_vm_stopped)
 
                 with TabPane("Boot", id="detail-boot-tab"):
-                    with Vertical(classes="info-details"):
+                    with Vertical():
                         yield Checkbox("Enable boot menu", id="boot-menu-enable", disabled=not self.is_vm_stopped)
                         with Horizontal(classes="boot-manager"):
-                            with Vertical(classes="boot-list-container"):
+                            with Vertical(classes="boot-main-container"):
                                 yield Label("Boot Order")
-                                yield ListView(id="boot-order-list")
-                            with Vertical(classes="boot-buttons"):
+                                yield ListView(id="boot-order-list", classes="boot-list-container")
+                            with Vertical(classes="boot-buttons-container"):
+                                yield Label("")
                                 yield Button("<", id="boot-add", disabled=not self.is_vm_stopped)
                                 yield Button(">", id="boot-remove", disabled=not self.is_vm_stopped)
                                 yield Button("Up", id="boot-up", disabled=not self.is_vm_stopped)
                                 yield Button("Down", id="boot-down", disabled=not self.is_vm_stopped)
-                            with Vertical(classes="boot-list-container"):
+                            with Vertical(classes="boot-main-container"):
                                 yield Label("Available Devices")
-                                yield ListView(id="available-devices-list")
-                    yield Button("Save Boot Order", id="save-boot-order", disabled=not self.is_vm_stopped, variant="primary")
+                                yield ListView(id="available-devices-list", classes="boot-list-container")
+                        yield Button("Save Boot Order", id="save-boot-order", disabled=not self.is_vm_stopped, variant="primary")
 
                 with TabPane("Disks", id="detail-disk-tab"):
                     with ScrollableContainer(classes="info-details"):
@@ -1604,26 +1605,26 @@ class VMDetailModal(ModalScreen):
                             yield Button("Remove", id="remove-controller-btn", variant="error", disabled=True)
                 with TabPane("USB Host", id="detail-usbhost-tab"):
                     with Horizontal(classes="boot-manager"):
-                        with Vertical(classes="boot-list-container"):
+                        with Vertical(classes="boot-main-container"):
                             yield Label("Available Host USB Devices")
-                            yield ListView(id="available-usb-list")
-                        with Vertical(classes="boot-buttons"):
+                            yield ListView(id="available-usb-list", classes="boot-list-container")
+                        with Vertical(classes="boot-buttons-container"):
                             yield Button("Attach >", id="attach-usb-btn", disabled=True)
                             yield Button("< Detach", id="detach-usb-btn", disabled=True)
-                        with Vertical(classes="boot-list-container"):
+                        with Vertical(classes="boot-main-container"):
                             yield Label("Attached to VM")
-                            yield ListView(id="attached-usb-list")
+                            yield ListView(id="attached-usb-list", classes="boot-list-container")
                 with TabPane("PCI Host", id="detail-PCIhost-tab"):
                     with Horizontal(classes="boot-manager"):
-                        with Vertical(classes="boot-list-container"):
+                        with Vertical(classes="boot-main-container"):
                             yield Label("Available Host PCI Devices")
-                            yield ListView(id="available-pci-list")
-                        with Vertical(classes="boot-buttons"):
+                            yield ListView(id="available-pci-list", classes="boot-list-container")
+                        with Vertical(classes="boot-buttons-container"):
                             yield Button("Attach >", id="attach-pci-btn", disabled=True)
                             yield Button("< Detach", id="detach-pci-btn", disabled=True)
-                        with Vertical(classes="boot-list-container"):
+                        with Vertical(classes="boot-main-container"):
                             yield Label("Attached to VM")
-                            yield ListView(id="attached-pci-list")
+                            yield ListView(id="attached-pci-list", classes="boot-list-container")
                 #with TabPane("PCIe", id="detail-pcie-tab"):
                 #    yield Label("PCIe")
                 #with TabPane("SATA", id="detail-sata-tab"):
