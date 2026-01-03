@@ -29,7 +29,7 @@ class AddEditNetworkInterfaceModal(BaseDialog[dict | None]):
 
         network_value = None
         model_value = "virtio"
-        mac_value = ""
+        mac_value = "52:54:00:" if not self.is_edit else ""
 
         if self.is_edit and self.interface_info:
             network_value = self.interface_info.get("network")
@@ -50,9 +50,13 @@ class AddEditNetworkInterfaceModal(BaseDialog[dict | None]):
                 yield Select([], id="network-select", disabled=True, prompt="No networks available")
 
             yield Select(model_options, id="model-select", value=model_value)
-
-            if self.is_edit:
-                yield Input(value=mac_value, id="mac-input", disabled=True)
+            # Add Input for MAC address, enabled for both add and edit
+            yield Input(
+                placeholder="MAC Address (e.g., 52:54:00:xx:xx:xx)",
+                id="mac-input",
+                value=mac_value,
+                disabled=False # Always enabled so user can edit or set
+            )
 
             with Horizontal(id="dialog-buttons"):
                 yield Button("Save" if self.is_edit else "Add", variant="success", id="save")
