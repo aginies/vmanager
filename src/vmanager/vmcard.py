@@ -68,6 +68,7 @@ class VMCard(Static):
         super().__init__()
         self.is_selected = is_selected
         self.timer = None
+        self._boot_device_checked = False
 
     def _get_vm_display_name(self) -> str:
         """Returns the formatted VM name including server name if available."""
@@ -417,13 +418,14 @@ class VMCard(Static):
                 if self.status == StatusText.RUNNING:
                     ips = get_vm_network_ip(self.vm)
 
-                # Fetch boot info if not yet set or if we want to keep it fresh
+                # Fetch boot info if not yet set. Only check once per lifecycle to save CPU.
                 boot_dev = self.boot_device
-                if not boot_dev:
+                if not boot_dev and not getattr(self, "_boot_device_checked", False):
                     _, root = _get_domain_root(self.vm)
                     boot_info = get_boot_info(self.conn, root)
                     if boot_info['order']:
                         boot_dev = boot_info['order'][0]
+                    self._boot_device_checked = True
 
                 if not stats:
                     if self.status != StatusText.STOPPED:

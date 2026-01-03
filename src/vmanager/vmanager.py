@@ -793,19 +793,24 @@ class VMManagerTUI(App):
                 uuid = domain.UUIDString()
                 page_uuids.add(uuid)
                 is_vm_selected = uuid in self.selected_vm_uuids
-
-                # Get XML info efficiently
-                _, root = _get_domain_root(domain)
-                cpu_details = get_vm_cpu_details(root)
-                graphics_info = get_vm_graphics_info(root) # root is element, function expects element if updated properly or string if not.
-                # get_vm_graphics_info expects element in vm_queries.py based on previous reads.
-                # Let's verify get_vm_graphics_info signature. It takes root: ET.Element.
                 
                 vm_card = self.vm_cards.get(uuid)
 
+                # Fetch info once
+                info = domain.info()
+
+                # Optimization: Only parse XML if strictly necessary (new card or forced refresh)
+                cpu_details = None
+                graphics_info = {}
+                need_xml_parsing = not vm_card or force
+
+                if need_xml_parsing:
+                    _, root = _get_domain_root(domain)
+                    cpu_details = get_vm_cpu_details(root)
+                    graphics_info = get_vm_graphics_info(root)
+
                 if vm_card:
                     # Update existing card
-                    info = domain.info()
                     vm_card.name = domain.name() # Ensure name is updated
                     vm_card.status = get_status(domain, state=info[0])
                     vm_card.cpu = info[3]
@@ -814,11 +819,12 @@ class VMManagerTUI(App):
                     vm_card.vm = domain
                     vm_card.conn = conn
                     vm_card.server_border_color = self.get_server_color(conn.getURI())
-                    vm_card.cpu_model = cpu_details or ""
-                    vm_card.graphics_type = graphics_info.get("type", "vnc")
+                    
+                    if need_xml_parsing:
+                        vm_card.cpu_model = cpu_details or ""
+                        vm_card.graphics_type = graphics_info.get("type", "vnc")
                 else:
                     # Create new card
-                    info = domain.info()
                     if uuid not in self.sparkline_data:
                         self.sparkline_data[uuid] = {"cpu": [], "mem": [], "disk": [], "net": []}
 
