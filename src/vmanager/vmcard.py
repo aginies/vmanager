@@ -257,13 +257,6 @@ class VMCard(Static):
 
         self._cache_widgets()
 
-        if self.vm:
-            try:
-                _, root = _get_domain_root(self.vm)
-                self.cpu_model = get_vm_cpu_details(root) or ""
-            except (libvirt.libvirtError, Exception):
-                pass
-
         self.update_button_layout()
         self._update_status_styling()
         self._update_webc_status()
@@ -415,7 +408,7 @@ class VMCard(Static):
             return
 
         def update_worker():
-            from vm_queries import get_vm_network_ip, get_boot_info, _get_domain_root, get_vm_cpu_details
+            from vm_queries import get_vm_network_ip, get_boot_info, _get_domain_root
             try:
                 stats = self.app.vm_service.get_vm_runtime_stats(self.vm)
 
@@ -424,12 +417,10 @@ class VMCard(Static):
                 if self.status == StatusText.RUNNING:
                     ips = get_vm_network_ip(self.vm)
 
-                _, root = _get_domain_root(self.vm)
-                cpu_details = get_vm_cpu_details(root)
-
                 # Fetch boot info if not yet set or if we want to keep it fresh
                 boot_dev = self.boot_device
                 if not boot_dev:
+                    _, root = _get_domain_root(self.vm)
                     boot_info = get_boot_info(self.conn, root)
                     if boot_info['order']:
                         boot_dev = boot_info['order'][0]
@@ -439,7 +430,6 @@ class VMCard(Static):
                         self.app.call_from_thread(setattr, self, 'status', StatusText.STOPPED)
                     self.app.call_from_thread(setattr, self, 'ip_addresses', [])
                     self.app.call_from_thread(setattr, self, 'boot_device', boot_dev)
-                    self.app.call_from_thread(setattr, self, 'cpu_model', cpu_details or "")
                     return
 
                 def apply_stats_to_ui():
@@ -450,7 +440,6 @@ class VMCard(Static):
 
                     self.ip_addresses = ips
                     self.boot_device = boot_dev
-                    self.cpu_model = cpu_details or ""
 
                     self.latest_disk_read = stats.get('disk_read_kbps', 0)
                     self.latest_disk_write = stats.get('disk_write_kbps', 0)

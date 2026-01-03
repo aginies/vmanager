@@ -46,6 +46,8 @@ from vm_queries import (
     check_for_spice_vms,
     get_status,
     get_vm_graphics_info,
+    _get_domain_root,
+    get_vm_cpu_details,
 )
 from vm_service import VMService
 from vmcard import VMCard
@@ -792,6 +794,13 @@ class VMManagerTUI(App):
                 page_uuids.add(uuid)
                 is_vm_selected = uuid in self.selected_vm_uuids
 
+                # Get XML info efficiently
+                _, root = _get_domain_root(domain)
+                cpu_details = get_vm_cpu_details(root)
+                graphics_info = get_vm_graphics_info(root) # root is element, function expects element if updated properly or string if not.
+                # get_vm_graphics_info expects element in vm_queries.py based on previous reads.
+                # Let's verify get_vm_graphics_info signature. It takes root: ET.Element.
+                
                 vm_card = self.vm_cards.get(uuid)
 
                 if vm_card:
@@ -805,6 +814,8 @@ class VMManagerTUI(App):
                     vm_card.vm = domain
                     vm_card.conn = conn
                     vm_card.server_border_color = self.get_server_color(conn.getURI())
+                    vm_card.cpu_model = cpu_details or ""
+                    vm_card.graphics_type = graphics_info.get("type", "vnc")
                 else:
                     # Create new card
                     info = domain.info()
@@ -818,10 +829,9 @@ class VMManagerTUI(App):
                     vm_card.memory = info[1] // 1024
                     vm_card.vm = domain
                     vm_card.conn = conn
-                    xml_content = domain.XMLDesc(0)
-                    graphics_info = get_vm_graphics_info(xml_content)
                     vm_card.graphics_type = graphics_info.get("type", "vnc")
                     vm_card.server_border_color = self.get_server_color(conn.getURI())
+                    vm_card.cpu_model = cpu_details or ""
                     self.vm_cards[uuid] = vm_card
 
                 cards_to_mount.append(vm_card)
