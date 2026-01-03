@@ -158,7 +158,7 @@ class VMManagerTUI(App):
     sort_by = reactive(VmStatus.DEFAULT)
     search_text = reactive("")
     num_pages = reactive(1)
-    selected_vm_uuids: reactive[list[str]] = reactive(list)
+    selected_vm_uuids: reactive[set[str]] = reactive(set)
     bulk_operation_in_progress = reactive(False)
 
     SERVER_COLOR_PALETTE = [
@@ -649,11 +649,9 @@ class VMManagerTUI(App):
     def on_vm_selection_changed(self, message: VMSelectionChanged) -> None:
         """Handles when a VM's selection state changes."""
         if message.is_selected:
-            if message.vm_uuid not in self.selected_vm_uuids:
-                self.selected_vm_uuids.append(message.vm_uuid)
+            self.selected_vm_uuids.add(message.vm_uuid)
         else:
-            if message.vm_uuid in self.selected_vm_uuids:
-                self.selected_vm_uuids.remove(message.vm_uuid)
+            self.selected_vm_uuids.discard(message.vm_uuid)
 
     def handle_create_vm_result(self, result: dict | None) -> None:
         """Handle the result from the CreateVMModal and create the VM."""

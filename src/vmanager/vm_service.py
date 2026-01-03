@@ -526,7 +526,7 @@ class VMService:
             # Propagate the error to be handled by the caller
             raise
 
-    def get_vms(self, active_uris: list[str], servers: list[dict], sort_by: str, search_text: str, selected_vm_uuids: list[str], force: bool = False) -> tuple:
+    def get_vms(self, active_uris: list[str], servers: list[dict], sort_by: str, search_text: str, selected_vm_uuids: set[str], force: bool = False) -> tuple:
         """Fetch, filter, and return VM data without creating UI components."""
         self._update_domain_cache(active_uris, force=force)
 
@@ -560,23 +560,24 @@ class VMService:
             if sort_by == VmStatus.SELECTED:
                 domains_to_display = [(d, c) for d, c in domains_to_display if d.UUIDString() in selected_vm_uuids]
             else:
-                domains_to_display_filtered = []
-                for d, c in domains_to_display:
+                def status_match(d):
                     info = self._get_domain_info(d)
                     if not info:
-                        continue  # Skip if domain info can't be fetched
-
+                        return False
                     status = info[0]
-                    if sort_by == VmStatus.RUNNING and status == libvirt.VIR_DOMAIN_RUNNING:
-                        domains_to_display_filtered.append((d, c))
-                    elif sort_by == VmStatus.PAUSED and status == libvirt.VIR_DOMAIN_PAUSED:
-                        domains_to_display_filtered.append((d, c))
-                    elif sort_by == VmStatus.STOPPED and status not in [libvirt.VIR_DOMAIN_RUNNING, libvirt.VIR_DOMAIN_PAUSED]:
-                        domains_to_display_filtered.append((d, c))
-                domains_to_display = domains_to_display_filtered
+                    if sort_by == VmStatus.RUNNING:
+                        return status == libvirt.VIR_DOMAIN_RUNNING
+                    if sort_by == VmStatus.PAUSED:
+                        return status == libvirt.VIR_DOMAIN_PAUSED
+                    if sort_by == VmStatus.STOPPED:
+                        return status not in [libvirt.VIR_DOMAIN_RUNNING, libvirt.VIR_DOMAIN_PAUSED]
+                    return True
+
+                domains_to_display = [(d, c) for d, c in domains_to_display if status_match(d)]
 
         if search_text:
-            domains_to_display = [(d, c) for d, c in domains_to_display if search_text.lower() in d.name().lower()]
+            search_lower = search_text.lower()
+            domains_to_display = [(d, c) for d, c in domains_to_display if search_lower in d.name().lower()]
 
         total_filtered_vms = len(domains_to_display)
 
